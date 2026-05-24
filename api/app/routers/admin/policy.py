@@ -1101,9 +1101,13 @@ async def get_policy(
     )
     setting = result.scalar_one_or_none()
 
+    import json
     if setting:
-        import json
-        return json.loads(setting.value)
+        stored = json.loads(setting.value)
+        # Deep merge: fill missing top-level keys from defaults
+        merged = dict(DEFAULT_GOVERNANCE_POLICY)
+        merged.update(stored)
+        return merged
     else:
         # Return default policy if none configured
         return DEFAULT_GOVERNANCE_POLICY
