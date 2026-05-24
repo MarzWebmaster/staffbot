@@ -54,15 +54,24 @@ async def root():
     landing = os.path.join(os.path.dirname(__file__), "static", "landing.html")
     if os.path.exists(landing):
         return FileResponse(landing)
-    return RedirectResponse(url="/customer/login.html")
+    return RedirectResponse(url="/admin/login.html")
+
+
+@app.get("/policy-usage")
+async def policy_usage_page():
+    """Serve the policy usage page for customers."""
+    from fastapi.responses import FileResponse
+    import os
+    page = os.path.join(os.path.dirname(__file__), "static", "policy-usage.html")
+    if os.path.exists(page):
+        return FileResponse(page)
+    return {"error": "Page not found"}
 
 
 @app.get("/customer/{page}")
 async def customer_page(page: str):
-    file_path = os.path.join(static_dir, "customer", page)
-    if os.path.exists(file_path):
-        return FileResponse(file_path)
-    return RedirectResponse(url="/customer/login.html")
+    # Single admin system — redirect all customer pages to admin
+    return RedirectResponse(url="/admin/login.html")
 
 
 @app.get("/admin/{page}")
@@ -90,11 +99,11 @@ async def health_check():
 # Import and register routers
 from app.routers import auth, clients, subscriptions, containers, webhooks, notifications
 from app.routers.llm_providers import router as user_llm_providers_router
-from app.routers.admin import dashboard, packages, users, settings as admin_settings
+from app.routers.admin import dashboard, packages, users, settings as admin_settings, policy as admin_policy
 from app.routers.admin.llm_providers import router as admin_llm_providers_router
 from app.routers.affiliates import router as user_affiliates_router
 from app.routers.admin.affiliates import router as admin_affiliates_router
-from app.routers.admin.policy import router as admin_policy_router
+from app.routers.admin.payments import router as admin_payments_router
 
 app.include_router(auth.router, prefix="/api/v1/auth", tags=["Authentication"])
 app.include_router(clients.router, prefix="/api/v1/clients", tags=["Clients"])
@@ -108,6 +117,7 @@ app.include_router(users.router, prefix="/api/v1/admin/users", tags=["Admin User
 app.include_router(admin_settings.router, prefix="/api/v1/admin/settings", tags=["Admin Settings"])
 app.include_router(admin_llm_providers_router, prefix="/api/v1/admin/providers", tags=["Admin LLM Providers"])
 app.include_router(user_llm_providers_router, prefix="/api/v1/providers", tags=["LLM Providers"])
-app.include_router(admin_policy_router, prefix="/api/v1/admin/policy", tags=["Admin Policy"])
 app.include_router(admin_affiliates_router, prefix="/api/v1/admin/affiliates", tags=["Admin Affiliates"])
+app.include_router(admin_payments_router, prefix="/api/v1/admin", tags=["Admin Payments"])
+app.include_router(admin_policy.router, prefix="/api/v1/admin/policy", tags=["Admin Policy"])
 app.include_router(user_affiliates_router, prefix="/api/v1/affiliates", tags=["Affiliates"])
