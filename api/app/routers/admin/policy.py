@@ -1,191 +1,1201 @@
-"""
-Admin policy router — skills, toolsets, governance policy.
-Stored locally as Setting key-value (JSON blobs).
-"""
-import json
+"""Admin policy router — Skills, Tools & Governance Policy management."""
+
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
-from typing import Optional
+from sqlalchemy import select, delete
 
 from app.database import get_db
 from app.models.client import Client
 from app.models.setting import Setting
+from app.schemas.admin import SettingUpdate
 from app.middleware.auth import get_current_admin
 
 router = APIRouter()
 
+# ── Built-in skills registry ────────────────────────────────────────
+# Curated from The CEO system, Anthropic/skills, hoodini/ai-agents-skills,
+# DataCamp top-100, agentskills.io, skills.sh, OpenAI Codex, and MS Agent Framework.
+# Each skill is a specific, individual capability — broken down for granular control.
+BUILTIN_SKILLS = [
+    # ── CORE BUSINESS SKILLS (174) ──────────────────────────────
+    # Curated from The CEO system, Anthropic/skills, hoodini,
+    # DataCamp top-100, agentskills.io, skills.sh, OpenAI Codex,
+    # MS Agent Framework, Hermes ecosystem
 
-# ── Default/static data ────────────────────────────────────────────
+    {"id": "lead-qualification", "name": "Lead Qualification", "category": "sales-marketing", "desc": "Nilai lead masuk dan ranking keutamaan ikut ICP, urgency, dan peluang close", "default": True},
+    {"id": "proposal-builder", "name": "Proposal Builder", "category": "sales-marketing", "desc": "Hasilkan proposal jualan kemas berdasarkan objektif, skop, dan timeline", "default": True},
+    {"id": "client-followup-automation", "name": "Client Follow-Up Automation", "category": "sales-marketing", "desc": "Rancang follow-up bertahap dan mesej susulan ikut status funnel", "default": True},
+    {"id": "price-negotiation-assistant", "name": "Price Negotiation Assistant", "category": "sales-marketing", "desc": "Sokong rundingan harga dengan analisis kos, margin, dan cadangan data-driven", "default": False},
+    {"id": "sales-jv-partner-liaison", "name": "Sales & JV Partner Liaison", "category": "sales-marketing", "desc": "Urus komunikasi prospek/partner, follow-up JV, dan koordinasi peluang kerjasama", "default": False},
+    {"id": "tender-quotation-builder", "name": "Tender & Quotation Builder", "category": "sales-marketing", "desc": "Jana sebutharga atau dokumen tender lengkap berdasarkan skop kerja dan harga semasa", "default": False},
+    {"id": "referral-program-manager", "name": "Referral Program Manager", "category": "sales-marketing", "desc": "Jejaki rujukan klien, kira insentif, dan hantar notifikasi ganjaran automatik", "default": False},
+    {"id": "marketing-omnichannel", "name": "Omnichannel Marketing", "category": "sales-marketing", "desc": "Hubungkan social media, email, dan sistem pihak ketiga untuk kempen end-to-end", "default": False},
+    {"id": "social-media-content-scheduler", "name": "Social Media Content Scheduler", "category": "sales-marketing", "desc": "Rancang, jana, dan jadualkan kandungan untuk Facebook, Instagram, LinkedIn", "default": False},
+    {"id": "event-promotion-planner", "name": "Event & Promotion Planner", "category": "sales-marketing", "desc": "Rancang dan jadualkan promosi, kempen, dan acara pemasaran dengan timeline", "default": False},
+    {"id": "loyalty-program-tracker", "name": "Loyalty Program Tracker", "category": "sales-marketing", "desc": "Jejaki mata kesetiaan pelanggan, tahap tier, dan cadang hadiah eksklusif", "default": False},
+    {"id": "bilingual-content-writer", "name": "Bilingual Content Writer (BM/EN)", "category": "sales-marketing", "desc": "Hasilkan kandungan pemasaran dalam BM dan Inggeris untuk pasaran Malaysia", "default": True},
+    {"id": "meta-ads-manager", "name": "Meta Ads Manager", "category": "sales-marketing", "desc": "Pull, analyze, manage, and create Meta ads (Facebook, Instagram, WhatsApp)", "default": False},
+    {"id": "wordpress-publishing", "name": "WordPress Publishing", "category": "sales-marketing", "desc": "Publish content to WordPress from agent workflows", "default": False},
+    {"id": "aisa-twitter-api", "name": "X/Twitter Search & Post", "category": "sales-marketing", "desc": "Search X (Twitter) in real time and extract relevant posts", "default": False},
+    {"id": "social-scheduler-extended", "name": "Social Post Scheduler", "category": "sales-marketing", "desc": "Schedule and manage social media posts across platforms", "default": False},
+    {"id": "customer-support-ticketing", "name": "Customer Support & Ticketing", "category": "customer-support", "desc": "Kendali aduan pelanggan, SLA, dan routing tiket secara automatik", "default": True},
+    {"id": "sentiment-feedback-analyzer", "name": "Sentiment & Feedback Analyzer", "category": "customer-support", "desc": "Analisis sentimen pelanggan dari ulasan, tiket, dan mesej untuk kenal pasti isu", "default": True},
+    {"id": "booking-confirmation-handler", "name": "Booking Confirmation Handler", "category": "customer-support", "desc": "Hantar pengesahan tempahan, peringatan, dan notifikasi perubahan kepada pelanggan", "default": True},
+    {"id": "appointment-booking-manager", "name": "Appointment & Booking Manager", "category": "customer-support", "desc": "Urus tempahan dan temujanji pelanggan, hantar peringatan, update jadual automatik", "default": False},
+    {"id": "client-onboarding-guide", "name": "Client Onboarding Guide", "category": "customer-support", "desc": "Pandu klien baharu melalui onboarding, hantar dokumen welcome, pantau kemajuan", "default": True},
+    {"id": "testimonial-review-collector", "name": "Testimonial & Review Collector", "category": "customer-support", "desc": "Minta ulasan pelanggan selepas transaksi dan simpan ke CRM", "default": False},
+    {"id": "faq-builder", "name": "FAQ Builder", "category": "customer-support", "desc": "Bina dan selenggara pangkalan FAQ syarikat dari soalan berulang", "default": True},
+    {"id": "autonomous-task-delegation", "name": "Autonomous Task Delegation", "category": "operations", "desc": "Pecah tugasan, agih kerja antara staff, dan kemas kini status task berstruktur", "default": True},
+    {"id": "schedule-optimization", "name": "Schedule Optimisation", "category": "operations", "desc": "Cadang jadual mesyuarat optimum berdasarkan konflik, keutamaan, ketersediaan", "default": True},
+    {"id": "smart-scheduling", "name": "Smart Scheduling", "category": "operations", "desc": "Auto-book mesyuarat staff, kesan konflik jadual, cadang masa terbaik", "default": True},
+    {"id": "project-status-chaser", "name": "Project Status Chaser", "category": "operations", "desc": "Kumpul update berkala dari staff dan hasilkan ringkasan kemajuan projek", "default": True},
+    {"id": "sprint-planner", "name": "Sprint Planner", "category": "operations", "desc": "Bina sprint plan dengan kapasiti staff, kebergantungan tugasan, dan milestone", "default": False},
+    {"id": "escalation-router", "name": "Escalation Router", "category": "operations", "desc": "Auto-route isu kritikal kepada owner betul ikut severity dan domain", "default": True},
+    {"id": "task-scheduler-recurring", "name": "Recurring Task Scheduler", "category": "operations", "desc": "Buat dan urus task berulangan (daily, weekly, monthly)", "default": True},
+    {"id": "background-job-manager", "name": "Background Job Manager", "category": "operations", "desc": "Urus job panjang di background dengan progress tracking dan retry logic", "default": False},
+    {"id": "meeting-prep-brief", "name": "Meeting Prep Brief", "category": "operations", "desc": "Sediakan ringkasan pra-mesyuarat: objektif, isu kritikal, keputusan diperlukan", "default": True},
+    {"id": "executive-decision-support", "name": "Executive Decision Support", "category": "operations", "desc": "Bina opsyen keputusan dengan pro/cons, risiko, dan impak operasi", "default": True},
+    {"id": "blocker-detection", "name": "Blocker Detection", "category": "operations", "desc": "Kenal pasti bottleneck, blocker, dan risiko tertunggak berdasarkan konteks semasa", "default": True},
+    {"id": "vendor-performance-scorecard", "name": "Vendor Performance Scorecard", "category": "operations", "desc": "Nilai prestasi vendor pada kualiti, ketepatan masa, dan kepuasan", "default": False},
+    {"id": "vendor-contract-tracker", "name": "Vendor Contract Tracker", "category": "operations", "desc": "Jejak kontrak vendor dengan tarikh tamat, syarat bayaran, dan SLA", "default": False},
+    {"id": "hr-operations", "name": "HR Operations", "category": "hr", "desc": "Sokong urusan staff, jadual onboarding, dokumen HR, dan pematuhan", "default": True},
+    {"id": "leave-attendance-tracker", "name": "Leave & Attendance Tracker", "category": "hr", "desc": "Rekod cuti, kehadiran, MC staff serta jana laporan ringkasan bulanan", "default": False},
+    {"id": "payroll-processing", "name": "Payroll Processing", "category": "hr", "desc": "Kira gaji, EPF, SOCSO, EIS staff serta jana slip gaji", "default": False},
+    {"id": "onboarding-workflow-manager", "name": "Onboarding Workflow Manager", "category": "hr", "desc": "Urus proses onboarding staff baharu dari hari pertama hingga probation", "default": False},
+    {"id": "performance-review-assistant", "name": "Performance Review Assistant", "category": "hr", "desc": "Bantu semakan prestasi KPI, kumpul maklum balas, hasilkan draf laporan", "default": False},
+    {"id": "skills-gap-analyzer", "name": "Skills Gap Analyzer", "category": "hr", "desc": "Bandingkan kemahiran staff dengan keperluan organisasi, cadangkan latihan", "default": False},
+    {"id": "attrition-risk-assessor", "name": "Attrition Risk Assessor", "category": "hr", "desc": "Kenal pasti staff berisiko tinggi keluar berdasarkan performance dan engagement", "default": False},
+    {"id": "headcount-planner", "name": "Headcount Planner", "category": "hr", "desc": "Pelan keperluan tenaga kerja berdasarkan pertumbuhan revenue dan workload", "default": False},
+    {"id": "compensation-benchmarker", "name": "Compensation Benchmarker", "category": "hr", "desc": "Bandingkan struktur gaji dengan data pasaran industri", "default": False},
+    {"id": "team-workload-burnout-detector", "name": "Team Workload & Burnout Detector", "category": "hr", "desc": "Pantau beban kerja per staff, kenal pasti risiko burnout", "default": False},
+    {"id": "training-content-creator", "name": "Training Content Creator", "category": "hr", "desc": "Bina modul latihan, bahan onboarding, dan e-pembelajaran untuk staff", "default": False},
+    {"id": "accounting-operations", "name": "Accounting Operations", "category": "finance", "desc": "Sokong rekod kewangan, invois, reconciliation, dan laporan operasi", "default": True},
+    {"id": "financial-insight-reporting", "name": "Financial Insight Reporting", "category": "finance", "desc": "Analisis data kewangan/jualan dan hasilkan ringkasan prestasi", "default": True},
+    {"id": "invoice-receipt-auto-entry", "name": "Invoice & Receipt Auto-Entry", "category": "finance", "desc": "Auto-key data resit/invois dari PDF/imej ke sistem perakaunan", "default": False},
+    {"id": "expense-claim-processor", "name": "Expense Claim Processor", "category": "finance", "desc": "Proses tuntutan perbelanjaan staff, semak had polisi, lulus/tolak", "default": False},
+    {"id": "budget-tracking", "name": "Budget Tracking", "category": "finance", "desc": "Jejaki penggunaan bajet jabatan berbanding peruntukan, flag melebihi had", "default": False},
+    {"id": "budget-variance-analyzer", "name": "Budget Variance Analyzer", "category": "finance", "desc": "Analisis perbezaan anggaran vs realisasi, kenal pasti punca varians", "default": False},
+    {"id": "cost-reduction-recommender", "name": "Cost Reduction Recommender", "category": "finance", "desc": "Deteksi peluang penjimatan kos, konsolidasi vendor, otomasi", "default": False},
+    {"id": "cashflow-risk-alert", "name": "Cashflow Risk Alert", "category": "finance", "desc": "Kenal pasti risiko aliran tunai dan beri amaran awal", "default": False},
+    {"id": "tax-analysis", "name": "Tax Analysis (TaxHacker)", "category": "finance", "desc": "Analisis data kewangan untuk isu cukai, unjuran liabiliti, cadangan penjimatan", "default": False},
+    {"id": "cost-center-allocator", "name": "Cost Center Allocator", "category": "finance", "desc": "Agih kos operasi kepada pusat kos berdasarkan penggunaan sumber sebenar", "default": False},
+    {"id": "procurement-request-handler", "name": "Procurement Request Handler", "category": "finance", "desc": "Kendali permintaan pembelian, aliran kelulusan, jana PO automatik", "default": False},
+    {"id": "inventory-stock-monitoring", "name": "Inventory & Stock Monitoring", "category": "finance", "desc": "Pantau paras stok, kesan item hampir habis, hantar amaran", "default": False},
+    {"id": "contract-renewal-monitor", "name": "Contract Renewal Monitor", "category": "finance", "desc": "Pantau tarikh luput kontrak vendor dan hantar peringatan awal", "default": False},
+    {"id": "email-management", "name": "Email Management", "category": "communication", "desc": "Akses IMAP/SMTP untuk urus inbox, draf emel, dan penghantaran", "default": True},
+    {"id": "email-composer-responder", "name": "Email Composer & Responder", "category": "communication", "desc": "Jana draf email reply profesional siap untuk human review", "default": True},
+    {"id": "email-monitoring-automation", "name": "Email Monitoring Automation", "category": "communication", "desc": "Setup pemantauan email berkala dengan filter, triage, auto-action rules", "default": False},
+    {"id": "email-content-analyzer", "name": "Email Content Analyzer", "category": "communication", "desc": "Analisis email: maksud utama, sentimen, urgency, kategori, action items", "default": False},
+    {"id": "messaging-integration", "name": "Messaging Integration", "category": "communication", "desc": "Baca/balas mesej di WhatsApp, Telegram, Discord, atau Slack", "default": True},
+    {"id": "contextual-messaging", "name": "Contextual Messaging", "category": "communication", "desc": "Hasilkan mesej kontekstual ikut persona dan saluran komunikasi sesuai", "default": True},
+    {"id": "announcement-crafter", "name": "Announcement Crafter", "category": "communication", "desc": "Hasilkan announcement dalaman/luaran yang jelas dan action-oriented", "default": True},
+    {"id": "executive-brief-writer", "name": "Executive Brief Writer", "category": "communication", "desc": "Padatkan isu kompleks menjadi briefing 1-halaman untuk keputusan pantas", "default": True},
+    {"id": "multilingual-rewrite", "name": "Multilingual Rewrite", "category": "communication", "desc": "Tulis semula mesej dalam bahasa dan nada berbeza tanpa ubah maksud", "default": True},
+    {"id": "negotiation-drafting", "name": "Negotiation Drafting", "category": "communication", "desc": "Sediakan skrip dan draf rundingan berasaskan objektif dan leverage", "default": False},
+    {"id": "meeting-scribe", "name": "Meeting Scribe (Minutes)", "category": "communication", "desc": "Tukar perbincangan mesyuarat ke minit, action items, ringkasan keputusan", "default": True},
+    {"id": "whatsapp-rpa-automation", "name": "WhatsApp RPA Automation", "category": "communication", "desc": "Automasi bacaan/balasan mesej WhatsApp Web melalui AgentZero", "default": False},
+    {"id": "contact-sync-outreach", "name": "Contact Sync & Outreach", "category": "communication", "desc": "Segerak senarai kenalan Google Contacts dan hantar outreach berkala", "default": False},
+    {"id": "company-brain-access", "name": "Company Brain Access", "category": "knowledge", "desc": "Cari SOP, keputusan meeting, konteks syarikat melalui knowledge/memory", "default": True},
+    {"id": "document-comprehension", "name": "Document Comprehension", "category": "knowledge", "desc": "Baca dan faham dokumen operasi/projek untuk ekstrak konteks dan tindakan", "default": True},
+    {"id": "rag-answer-synthesis", "name": "RAG Answer Synthesis", "category": "knowledge", "desc": "Gabung pelbagai rujukan dalaman jadi jawapan padat yang ada sumber", "default": True},
+    {"id": "semantic-memory-writer", "name": "Semantic Memory Writer", "category": "knowledge", "desc": "Tukar hasil kerja kepada ringkasan pengalaman untuk disimpan dalam knowledge", "default": True},
+    {"id": "policy-qa", "name": "Policy Q&A", "category": "knowledge", "desc": "Jawab soalan polisi dalaman berdasarkan teks rujukan yang diberikan", "default": True},
+    {"id": "summarization", "name": "Summarization", "category": "knowledge", "desc": "Ringkaskan dokumen panjang, transkrip audio, emel jadi poin penting", "default": True},
+    {"id": "sop-generator", "name": "SOP Generator", "category": "knowledge", "desc": "Jana draf SOP berstruktur dari penerangan proses atau rakaman prosedur", "default": False},
+    {"id": "staff-action-pattern-learner", "name": "Staff Action Pattern Learner", "category": "knowledge", "desc": "Analisis aksi staff untuk kenal pasti pattern, frequency, success rate", "default": False},
+    {"id": "experience-precedent-suggester", "name": "Experience Precedent Suggester", "category": "knowledge", "desc": "Cari situasi serupa dari historical records, suggest aksi yang pernah berjaya", "default": False},
+    {"id": "work-template-generator", "name": "Work Template Generator", "category": "knowledge", "desc": "Deteksi pekerjaan berulang, auto-generate template standard", "default": False},
+    {"id": "staff-knowledge-synthesizer", "name": "Staff Knowledge Synthesizer", "category": "knowledge", "desc": "Setiap hujung hari sinthesize semua aksi staff jadi laporan pengetahuan", "default": False},
+    {"id": "arxiv-watcher", "name": "ArXiv Research", "category": "knowledge", "desc": "Search and summarize papers from ArXiv", "default": False},
+    {"id": "google-search", "name": "Web Search", "category": "knowledge", "desc": "Search the web using Google Custom Search Engine", "default": True},
+    {"id": "company-health-scorecard", "name": "Company Health Scorecard", "category": "business-intelligence", "desc": "Bina dashboard kesihatan syarikat: revenue, cost, profit, cash flow, trend", "default": False},
+    {"id": "kpi-anomaly-detection", "name": "KPI Anomaly Detection", "category": "business-intelligence", "desc": "Kesan perubahan metrik luar biasa dan cadang punca berkemungkinan", "default": False},
+    {"id": "forecast-generation", "name": "Forecast Generation", "category": "business-intelligence", "desc": "Bina unjuran jualan, permintaan, dan kapasiti pendek/pertengahan", "default": False},
+    {"id": "customer-segment-analysis", "name": "Customer Segment Analysis", "category": "business-intelligence", "desc": "Kelaskan pelanggan ikut behavior, nilai, dan kebarangkalian churn", "default": False},
+    {"id": "competitive-benchmarking", "name": "Competitive Benchmarking", "category": "business-intelligence", "desc": "Bandingkan metrik syarikat dengan kompetitor industri serupa", "default": False},
+    {"id": "market-trend-intelligence", "name": "Market Trend Intelligence", "category": "business-intelligence", "desc": "Pantau trend pasaran, demand, shift teknologi, produk baru di industri", "default": False},
+    {"id": "competitor-intelligence-tracker", "name": "Competitor Intelligence Tracker", "category": "business-intelligence", "desc": "Jejak aktiviti kompetitor: produk baru, kempen, pricing, ekspansi", "default": False},
+    {"id": "report-export", "name": "Report Export (PDF/Excel)", "category": "business-intelligence", "desc": "Jana dan eksport laporan analitik dalam format PDF atau Excel", "default": True},
+    {"id": "market-competitor-intelligence", "name": "Market & Competitor Intelligence", "category": "business-intelligence", "desc": "Pantau pesaing, harga, trend, dan berita melalui web browsing", "default": False},
+    {"id": "scenario-forecasting", "name": "Scenario Forecasting", "category": "business-intelligence", "desc": "Buat analisis skenario optimistic/realistic/pessimistic untuk perancangan", "default": False},
+    {"id": "document-filing-organizer", "name": "Document Filing & Organizer", "category": "documents", "desc": "Auto-susun dan failkan dokumen masuk ke folder betul ikut jenis dan tarikh", "default": True},
+    {"id": "ocr-document-extraction", "name": "OCR Document Extraction", "category": "documents", "desc": "Ekstrak teks dari gambar/PDF (resit, invois, borang) guna OCR", "default": True},
+    {"id": "pdf-skills", "name": "PDF Tools", "category": "documents", "desc": "Extract PDF text, fill forms, merge files, OCR scanned PDFs", "default": True},
+    {"id": "docx-skills", "name": "Word Document Tools", "category": "documents", "desc": "Create, read, edit Word documents with formatting", "default": True},
+    {"id": "pptx-skills", "name": "PowerPoint Tools", "category": "documents", "desc": "Create and edit slide decks and presentations", "default": False},
+    {"id": "xlsx-skills", "name": "Spreadsheet Tools", "category": "documents", "desc": "Create, read, edit Excel spreadsheets and CSV files", "default": False},
+    {"id": "frontend-design", "name": "Frontend Design", "category": "creative-design", "desc": "Create production-grade frontend interfaces with high design quality", "default": False},
+    {"id": "excalidraw-diagrams", "name": "Excalidraw Diagrams", "category": "creative-design", "desc": "Create hand-drawn style architecture diagrams and sketches", "default": True},
+    {"id": "mermaid-diagrams", "name": "Mermaid Diagrams", "category": "creative-design", "desc": "Create flowcharts, sequence diagrams, class diagrams, ERDs", "default": True},
+    {"id": "image-generation", "name": "Image Generation", "category": "creative-design", "desc": "Generate AI images with multiple model support", "default": False},
+    {"id": "video-production", "name": "Video Production", "category": "creative-design", "desc": "Produce AI avatar videos and video content", "default": False},
+    {"id": "brand-guidelines", "name": "Brand Guidelines", "category": "creative-design", "desc": "Apply brand colors, typography, and design standards to artifacts", "default": False},
+    {"id": "humanizer-text", "name": "Humanizer", "category": "creative-design", "desc": "Strip AI-isms from content and add natural voice", "default": True},
+    {"id": "code-generation-review", "name": "Code Generation & Review", "category": "technical", "desc": "Bantu jana snippet kod, semak logic, cadang refactor selamat", "default": True},
+    {"id": "api-orchestration", "name": "API Orchestration", "category": "technical", "desc": "Susun aliran multi-API call dengan retries, fallback, validasi output", "default": False},
+    {"id": "workflow-automation-builder", "name": "Workflow Automation Builder", "category": "technical", "desc": "Bina workflow otomatis chain multiple actions berdasarkan trigger", "default": False},
+    {"id": "data-migration-planner", "name": "Data Migration Planner", "category": "technical", "desc": "Rancang dan sahkan migrasi data antara sistem", "default": False},
+    {"id": "api-health-checker", "name": "API Health Checker", "category": "technical", "desc": "Monitor endpoint API pihak ketiga untuk ketersediaan, latensi, ralat", "default": False},
+    {"id": "webhook-configurator", "name": "Webhook Configurator", "category": "technical", "desc": "Setup, uji, dan debug webhook antara platform", "default": False},
+    {"id": "database-schema-advisor", "name": "Database Schema Advisor", "category": "technical", "desc": "Cadang penambahbaikan skema DB, indeks optimum, normalisasi", "default": False},
+    {"id": "test-automation-helper", "name": "Test Automation Helper", "category": "technical", "desc": "Jana kes ujian, skrip automasi ujian, laporan coverage", "default": False},
+    {"id": "webapp-testing", "name": "Web App Testing", "category": "technical", "desc": "Test local web apps using Playwright, capture screenshots, debug UI", "default": False},
+    {"id": "mcp-builder", "name": "MCP Server Builder", "category": "technical", "desc": "Create high-quality MCP servers for LLM-tool integration", "default": False},
+    {"id": "sop-enforcement", "name": "SOP Enforcement", "category": "security", "desc": "Semak arahan kerja ikut SOP syarikat dan flag pelanggaran proses", "default": True},
+    {"id": "policy-compliance-auditor", "name": "Policy & Compliance Auditor", "category": "security", "desc": "Audit ringkas pematuhan dalaman dan hasilkan checklist tindakan pembetulan", "default": True},
+    {"id": "compliance-audit-tracker", "name": "Compliance & Audit Tracker", "category": "security", "desc": "Jejak pematuhan regulatori (PDPA, SST, Akta Kerja, LHDN)", "default": False},
+    {"id": "security-posture-review", "name": "Security Posture Review", "category": "security", "desc": "Semak baseline keselamatan operasi dan keluarkan checklist hardening", "default": False},
+    {"id": "security-audit-scanner", "name": "Security Audit Scanner", "category": "security", "desc": "Semak konfigurasi sistem untuk kelemahan biasa OWASP, exposed keys", "default": False},
+    {"id": "prompt-guard", "name": "Prompt Injection Guard", "category": "security", "desc": "Defend against prompt injection and unsafe instruction following", "default": True},
+    {"id": "owasp-security", "name": "OWASP Secure Coding", "category": "security", "desc": "Implement secure coding practices following OWASP Top 10", "default": False},
+    {"id": "sop-adherence-auditor", "name": "SOP Adherence Auditor", "category": "security", "desc": "Audit kepatuhan SOP berkala, kenal pasti pelanggaran, laporan penambahbaikan", "default": False},
+    {"id": "change-impact-assessor", "name": "Change Impact Assessor", "category": "security", "desc": "Nilai impak perubahan organisasi kepada operasi, staff, kewangan", "default": False},
+    {"id": "audit-trail-logger", "name": "Audit Trail Logger", "category": "security", "desc": "Log semua tindakan signifikan untuk tujuan pematuhan dan audit dalaman", "default": True},
+    {"id": "strategic-planning-facilitator", "name": "Strategic Planning Facilitator", "category": "governance", "desc": "Bantu pelan strategik dengan misi, visi, objektif, milestones", "default": False},
+    {"id": "quality-metrics-dashboard", "name": "Quality Metrics Dashboard", "category": "governance", "desc": "Bina dashboard kualiti: defect rate, satisfaction, first-pass yield", "default": False},
+    {"id": "ai-strategic-advisor", "name": "AI Strategic Advisor", "category": "governance", "desc": "Guna ML untuk cadangkan keputusan strategik: pricing, market expansion", "default": False},
+    {"id": "executive-daily-brief", "name": "Executive Daily Brief", "category": "governance", "desc": "Hasilkan laporan ringkas harian: KPI utama, alert kritis, aksi disyorkan", "default": False},
+    {"id": "headcount-planner", "name": "Headcount & Org Planning", "category": "governance", "desc": "Pelan keperluan tenaga kerja berdasarkan revenue growth dan workload", "default": False},
+    {"id": "regulatory-compliance-checker", "name": "Regulatory Compliance Checker (MY)", "category": "governance", "desc": "Semak aktiviti perniagaan terhadap peraturan Malaysia (SST, PDPA, LHDN)", "default": False},
+    {"id": "integration-connection-manager", "name": "Integration Connection Manager", "category": "integrations", "desc": "Urus SEMUA sambungan integrasi: ERP, CRM, Email, Google, WhatsApp, n8n", "default": True},
+    {"id": "integration-diagnostics", "name": "Integration Diagnostics", "category": "integrations", "desc": "Diagnos isu sambungan antara platform dan cadang langkah pembaikan", "default": False},
+    {"id": "database-querying", "name": "Database Querying", "category": "integrations", "desc": "Menulis dan jalankan SQL untuk tarik data perniagaan", "default": True},
+    {"id": "web-browsing-scraping", "name": "Web Browsing/Scraping", "category": "integrations", "desc": "Melayari web live untuk cari maklumat atau monitor harga/berita", "default": True},
+    {"id": "workflow-triggering", "name": "Workflow Triggering (n8n/Make)", "category": "integrations", "desc": "Trigger rantaian automasi pada n8n atau Make.com", "default": False},
+    {"id": "google-workspace-skills", "name": "Google Workspace Automation", "category": "integrations", "desc": "Interact with Gmail, Calendar, Drive, Docs, Sheets via gws CLI", "default": False},
+    {"id": "notion-integration", "name": "Notion Integration", "category": "integrations", "desc": "Read/write Notion pages and databases from agent", "default": False},
+    {"id": "spa-clinic-booking", "name": "Spa & Clinic Booking Manager", "category": "industry", "desc": "Urus tempahan rawatan spa/klinik termasuk pilihan terapis dan bilik", "default": False},
+    {"id": "spa-membership-package", "name": "Spa Membership Package Manager", "category": "industry", "desc": "Urus pakej keahlian, baki rawatan, tarikh luput, pembaharuan", "default": False},
+    {"id": "agri-crop-cycle", "name": "Agritech Crop Cycle Tracker", "category": "industry", "desc": "Rekod dan jejak kitaran tanaman dari penanaman hingga tuaian", "default": False},
+    {"id": "agri-harvest-planner", "name": "Agritech Harvest Planner", "category": "industry", "desc": "Rancang jadual tuaian berdasarkan jangkaan hasil dan keperluan pasaran", "default": False},
+    {"id": "ngo-donation-tracker", "name": "NGO Donation & Zakat Tracker", "category": "industry", "desc": "Rekod sumbangan, zakat, wakaf dengan resit rasmi dan laporan", "default": False},
+    {"id": "ngo-beneficiary-register", "name": "NGO Beneficiary Register", "category": "industry", "desc": "Urus senarai penerima manfaat, kelayakan, rekod pengagihan bantuan", "default": False},
+    {"id": "security-guard-duty-scheduler", "name": "Security Guard Duty Scheduler", "category": "industry", "desc": "Jadualkan giliran jaga, gantian, kehadiran anggota keselamatan", "default": False},
+    {"id": "security-incident-log", "name": "Security Incident Log Manager", "category": "industry", "desc": "Rekod laporan insiden keselamatan dan trigger siasatan", "default": False},
+    {"id": "media-editorial-calendar", "name": "Media Editorial Calendar", "category": "industry", "desc": "Rancang kalendar editorial merentas penerbitan, platform, penulis", "default": False},
+    {"id": "media-press-release", "name": "Press Release Writer", "category": "industry", "desc": "Tulis kenyataan media profesional untuk pelancaran produk dan acara", "default": False},
+    {"id": "insurance-policy-renewal", "name": "Insurance Policy Renewal Tracker", "category": "industry", "desc": "Jejak tarikh luput polisi dan hantar peringatan pembaharuan", "default": False},
+    {"id": "insurance-claim-handler", "name": "Insurance Claim Handler", "category": "industry", "desc": "Bantu klien mengemukakan tuntutan insurans dengan betul", "default": False},
+    {"id": "it-hardware-diagnostic", "name": "IT Hardware Diagnostic Triage", "category": "industry", "desc": "Triage awal kerosakan komputer berdasarkan simptom dan log", "default": False},
+    {"id": "it-desktop-repair", "name": "Desktop Repair Work Order", "category": "industry", "desc": "Urus work order pembaikan desktop termasuk status dan ETA", "default": False},
+    {"id": "procurement-rfq-manager", "name": "Procurement RFQ/RFP Manager", "category": "industry", "desc": "Urus proses permintaan sebutan harga dari pembekal", "default": False},
+    {"id": "procurement-spend-analytics", "name": "Procurement Spend Analytics", "category": "industry", "desc": "Analisis perbelanjaan perolehan mengikut kategori dan vendor", "default": False},
+    {"id": "server-health-watchdog", "name": "Server Health Watchdog", "category": "dev-infra", "desc": "Pantau kesihatan sistem dan trigger automasi pemulihan awal", "default": False},
+    {"id": "devops-automator", "name": "DevOps Automator", "category": "dev-infra", "desc": "Sokong aliran CI/CD, deployment, dan operasi automasi teknikal", "default": False},
+    {"id": "incident-triage", "name": "Incident Triage", "category": "dev-infra", "desc": "Klasifikasikan insiden teknikal ikut impak, urgency, dan owner", "default": False},
+    {"id": "backup-restore-governor", "name": "Backup & Restore Governor", "category": "dev-infra", "desc": "Jadualkan backup, pantau status, sahkan readiness untuk restore", "default": False},
+    {"id": "uptime-sla-monitor", "name": "Uptime & SLA Monitor", "category": "dev-infra", "desc": "Pantau uptime servis dan log pelanggaran SLA", "default": False},
+    {"id": "docker-essentials", "name": "Docker Management", "category": "dev-infra", "desc": "Build, tag, and run containers with production-ready workflows", "default": False},
+    {"id": "cloud-cost-optimizer", "name": "Cloud Cost Optimizer", "category": "dev-infra", "desc": "Optimumkan kos cloud melalui rightsizing dan pengesanan idle resources", "default": False},
+    {"id": "log-analysis", "name": "Log Analysis", "category": "dev-infra", "desc": "Parse log sistem untuk kenal pasti corak ralat, prestasi, anomali", "default": False},
+    {"id": "peft-fine-tuning", "name": "LLM Fine-Tuning (PEFT/LoRA)", "category": "aiml", "desc": "Fine-tune LLMs with LoRA/QLoRA adapters, merge/swap adapters", "default": False},
+    {"id": "huggingface-model-trainer", "name": "HuggingFace Model Trainer", "category": "aiml", "desc": "Train/fine-tune LLMs with TRL methods (SFT/DPO/GRPO)", "default": False},
+    {"id": "huggingface-datasets", "name": "HuggingFace Datasets Manager", "category": "aiml", "desc": "Create/manage datasets on Hub, SQL-based querying/transforms", "default": False},
+    {"id": "huggingface-evaluation", "name": "Model Evaluation & Benchmarks", "category": "aiml", "desc": "Add structured eval results to model cards, run benchmarks", "default": False},
+    {"id": "wandb-monitor", "name": "W&B Experiment Monitor", "category": "aiml", "desc": "Monitor Weights & Biases runs to spot training issues", "default": False},
+    {"id": "aiml-model-registry", "name": "AI/ML Model Registry", "category": "aiml", "desc": "Urus daftar model produksi termasuk versi dan rollback policy", "default": False},
+    {"id": "aiml-data-drift-detector", "name": "Data Drift Detector", "category": "aiml", "desc": "Kesan drift data input model dan trigger retraining", "default": False},
+    {"id": "prompt-evaluation", "name": "Prompt Evaluation Suite", "category": "aiml", "desc": "Nilai kualiti prompt LLM berdasarkan ketepatan dan keselamatan", "default": False},
 
-DEFAULT_SKILLS = [
-    {"id": "web-search", "name": "Web Search", "desc": "Search the web via DuckDuckGo", "category": "web", "enabled": True},
-    {"id": "terminal", "name": "Terminal", "desc": "Execute shell commands", "category": "system", "enabled": True},
-    {"id": "file-ops", "name": "File Operations", "desc": "Read, write, search files", "category": "system", "enabled": True},
-    {"id": "code-exec", "name": "Code Execution", "desc": "Execute Python scripts", "category": "development", "enabled": True},
-    {"id": "image-gen", "name": "Image Generation", "desc": "Generate images via AI", "category": "creative", "enabled": True},
-    {"id": "memory", "name": "Memory", "desc": "Persistent cross-session memory", "category": "system", "enabled": True},
-    {"id": "vision", "name": "Vision", "desc": "Analyze images", "category": "ai", "enabled": True},
-    {"id": "browser", "name": "Browser", "desc": "Navigate and interact with web pages", "category": "web", "enabled": True},
+    # ── HERMES INSTALLED (89) ──────────────────────────────────
+
+    {"id": "notion", "name": "Notion", "category": "hermes-productivity", "desc": "Notion API + ntn CLI: pages, databases, markdown, Workers.", "default": False},
+    {"id": "maps", "name": "Maps", "category": "hermes-productivity", "desc": "Geocode, POIs, routes, timezones via OpenStreetMap/OSRM.", "default": False},
+    {"id": "google-workspace", "name": "Google Workspace", "category": "hermes-productivity", "desc": "Gmail, Calendar, Drive, Docs, Sheets via gws CLI or Python.", "default": False},
+    {"id": "teams-meeting-pipeline", "name": "Teams Meeting Pipeline", "category": "hermes-productivity", "desc": "Operate the Teams meeting summary pipeline via Hermes CLI — summarize meetings, inspect pipeline status, replay jobs, ma", "default": False},
+    {"id": "powerpoint", "name": "Powerpoint", "category": "hermes-productivity", "desc": "Create, read, edit .pptx decks, slides, notes, templates.", "default": False},
+    {"id": "nano-pdf", "name": "Nano Pdf", "category": "hermes-productivity", "desc": "Edit PDF text/typos/titles via nano-pdf CLI (NL prompts).", "default": False},
+    {"id": "airtable", "name": "Airtable", "category": "hermes-productivity", "desc": "Airtable REST API via curl. Records CRUD, filters, upserts.", "default": False},
+    {"id": "ocr-and-documents", "name": "Ocr And Documents", "category": "hermes-productivity", "desc": "Extract text from PDFs/scans (pymupdf, marker-pdf).", "default": False},
+    {"id": "linear", "name": "Linear", "category": "hermes-productivity", "desc": "Linear: manage issues, projects, teams via GraphQL + curl.", "default": False},
+    {"id": "opencode", "name": "Opencode", "category": "hermes-autonomous-ai-agents", "desc": "Delegate coding to OpenCode CLI (features, PR review).", "default": False},
+    {"id": "hermes-agent", "name": "Hermes Agent", "category": "hermes-autonomous-ai-agents", "desc": "Configure, extend, or contribute to Hermes Agent.", "default": False},
+    {"id": "kanban-codex-lane", "name": "Kanban Codex Lane", "category": "hermes-autonomous-ai-agents", "desc": "Use when a Hermes Kanban worker wants to run Codex CLI as an isolated implementation lane while Hermes keeps ownership o", "default": False},
+    {"id": "codex", "name": "Codex", "category": "hermes-autonomous-ai-agents", "desc": "Delegate coding to OpenAI Codex CLI (features, PRs).", "default": False},
+    {"id": "claude-code", "name": "Claude Code", "category": "hermes-autonomous-ai-agents", "desc": "Delegate coding to Claude Code CLI (features, PRs).", "default": False},
+    {"id": "kanban-worker", "name": "Kanban Worker", "category": "hermes-devops", "desc": "Pitfalls, examples, and edge cases for Hermes Kanban workers. The lifecycle itself is auto-injected into every worker's ", "default": False},
+    {"id": "kanban-orchestrator", "name": "Kanban Orchestrator", "category": "hermes-devops", "desc": "Decomposition playbook + anti-temptation rules for an orchestrator profile routing work through Kanban. The 'don't do th", "default": False},
+    {"id": "webhook-subscriptions", "name": "Webhook Subscriptions", "category": "hermes-devops", "desc": "Webhook subscriptions: event-driven agent runs.", "default": False},
+    {"id": "minecraft-modpack-server", "name": "Minecraft Modpack Server", "category": "hermes-gaming", "desc": "Host modded Minecraft servers (CurseForge, Modrinth).", "default": False},
+    {"id": "pokemon-player", "name": "Pokemon Player", "category": "hermes-gaming", "desc": "Play Pokemon via headless emulator + RAM reads.", "default": False},
+    {"id": "himalaya", "name": "Himalaya", "category": "hermes-email", "desc": "Himalaya CLI: IMAP/SMTP email from terminal.", "default": False},
+    {"id": "imessage", "name": "Imessage", "category": "hermes-apple", "desc": "Send and receive iMessages/SMS via the imsg CLI on macOS.", "default": False},
+    {"id": "apple-notes", "name": "Apple Notes", "category": "hermes-apple", "desc": "Manage Apple Notes via memo CLI: create, search, edit.", "default": False},
+    {"id": "findmy", "name": "Findmy", "category": "hermes-apple", "desc": "Track Apple devices/AirTags via FindMy.app on macOS.", "default": False},
+    {"id": "apple-reminders", "name": "Apple Reminders", "category": "hermes-apple", "desc": "Apple Reminders via remindctl: add, list, complete.", "default": False},
+    {"id": "macos-computer-use", "name": "Macos Computer Use", "category": "hermes-apple", "desc": "|", "default": False},
+    {"id": "openhue", "name": "Openhue", "category": "hermes-smart-home", "desc": "Control Philips Hue lights, scenes, rooms via OpenHue CLI.", "default": False},
+    {"id": "touchdesigner-mcp", "name": "Touchdesigner Mcp", "category": "hermes-creative", "desc": "Control a running TouchDesigner instance via twozero MCP — create operators, set parameters, wire connections, execute P", "default": False},
+    {"id": "ascii-video", "name": "Ascii Video", "category": "hermes-creative", "desc": "ASCII video: convert video/audio to colored ASCII MP4/GIF.", "default": False},
+    {"id": "design-md", "name": "Design Md", "category": "hermes-creative", "desc": "Author/validate/export Google's DESIGN.md token spec files.", "default": False},
+    {"id": "ascii-art", "name": "Ascii Art", "category": "hermes-creative", "desc": "ASCII art: pyfiglet, cowsay, boxes, image-to-ascii.", "default": False},
+    {"id": "humanizer", "name": "Humanizer", "category": "hermes-creative", "desc": "Humanize text: strip AI-isms and add real voice.", "default": False},
+    {"id": "baoyu-article-illustrator", "name": "Baoyu Article Illustrator", "category": "hermes-creative", "desc": "Article illustrations: type × style × palette consistency.", "default": False},
+    {"id": "sketch", "name": "Sketch", "category": "hermes-creative", "desc": "Throwaway HTML mockups: 2-3 design variants to compare.", "default": False},
+    {"id": "creative-ideation", "name": "Creative Ideation", "category": "hermes-creative", "desc": "Generate project ideas via creative constraints.", "default": False},
+    {"id": "p5js", "name": "P5Js", "category": "hermes-creative", "desc": "p5.js sketches: gen art, shaders, interactive, 3D.", "default": False},
+    {"id": "popular-web-designs", "name": "Popular Web Designs", "category": "hermes-creative", "desc": "54 real design systems (Stripe, Linear, Vercel) as HTML/CSS.", "default": False},
+    {"id": "baoyu-infographic", "name": "Baoyu Infographic", "category": "hermes-creative", "desc": "Infographics: 21 layouts x 21 styles (信息图, 可视化).", "default": False},
+    {"id": "claude-design", "name": "Claude Design", "category": "hermes-creative", "desc": "Design one-off HTML artifacts (landing, deck, prototype).", "default": False},
+    {"id": "architecture-diagram", "name": "Architecture Diagram", "category": "hermes-creative", "desc": "Dark-themed SVG architecture/cloud/infra diagrams as HTML.", "default": False},
+    {"id": "baoyu-comic", "name": "Baoyu Comic", "category": "hermes-creative", "desc": "Knowledge comics (知识漫画): educational, biography, tutorial.", "default": False},
+    {"id": "songwriting-and-ai-music", "name": "Songwriting And Ai Music", "category": "hermes-creative", "desc": "Songwriting craft and Suno AI music prompts.", "default": False},
+    {"id": "excalidraw", "name": "Excalidraw", "category": "hermes-creative", "desc": "Hand-drawn Excalidraw JSON diagrams (arch, flow, seq).", "default": False},
+    {"id": "manim-video", "name": "Manim Video", "category": "hermes-creative", "desc": "Manim CE animations: 3Blue1Brown math/algo videos.", "default": False},
+    {"id": "comfyui", "name": "Comfyui", "category": "hermes-creative", "desc": "Generate images, video, and audio with ComfyUI — install, launch, manage nodes/models, run workflows with parameter inje", "default": False},
+    {"id": "pretext", "name": "Pretext", "category": "hermes-creative", "desc": "Use when building creative browser demos with @chenglou/pretext — DOM-free text layout for ASCII art, typographic flow a", "default": False},
+    {"id": "pixel-art", "name": "Pixel Art", "category": "hermes-creative", "desc": "Pixel art w/ era palettes (NES, Game Boy, PICO-8).", "default": False},
+    {"id": "writing-plans", "name": "Writing Plans", "category": "hermes-software-development", "desc": "Write implementation plans: bite-sized tasks, paths, code.", "default": False},
+    {"id": "node-inspect-debugger", "name": "Node Inspect Debugger", "category": "hermes-software-development", "desc": "Debug Node.js via --inspect + Chrome DevTools Protocol CLI.", "default": False},
+    {"id": "plan", "name": "Plan", "category": "hermes-software-development", "desc": "Plan mode: write markdown plan to .hermes/plans/, no exec.", "default": False},
+    {"id": "test-driven-development", "name": "Test Driven Development", "category": "hermes-software-development", "desc": "TDD: enforce RED-GREEN-REFACTOR, tests before code.", "default": False},
+    {"id": "debugging-hermes-tui-commands", "name": "Debugging Hermes Tui Commands", "category": "hermes-software-development", "desc": "Debug Hermes TUI slash commands: Python, gateway, Ink UI.", "default": False},
+    {"id": "spike", "name": "Spike", "category": "hermes-software-development", "desc": "Throwaway experiments to validate an idea before build.", "default": False},
+    {"id": "hermes-agent-skill-authoring", "name": "Hermes Agent Skill Authoring", "category": "hermes-software-development", "desc": "Author in-repo SKILL.md: frontmatter, validator, structure.", "default": False},
+    {"id": "python-debugpy", "name": "Python Debugpy", "category": "hermes-software-development", "desc": "Debug Python: pdb REPL + debugpy remote (DAP).", "default": False},
+    {"id": "systematic-debugging", "name": "Systematic Debugging", "category": "hermes-software-development", "desc": "4-phase root cause debugging: understand bugs before fixing.", "default": False},
+    {"id": "requesting-code-review", "name": "Requesting Code Review", "category": "hermes-software-development", "desc": "Pre-commit review: security scan, quality gates, auto-fix.", "default": False},
+    {"id": "subagent-driven-development", "name": "Subagent Driven Development", "category": "hermes-software-development", "desc": "Execute plans via delegate_task subagents (2-stage review).", "default": False},
+    {"id": "yuanbao", "name": "Yuanbao", "category": "hermes-skills", "desc": "Yuanbao (元宝) groups: @mention users, query info/members.", "default": False},
+    {"id": "gif-search", "name": "Gif Search", "category": "hermes-media", "desc": "Search/download GIFs from Tenor via curl + jq.", "default": False},
+    {"id": "youtube-content", "name": "Youtube Content", "category": "hermes-media", "desc": "YouTube transcripts to summaries, threads, blogs.", "default": False},
+    {"id": "songsee", "name": "Songsee", "category": "hermes-media", "desc": "Audio spectrograms/features (mel, chroma, MFCC) via CLI.", "default": False},
+    {"id": "spotify", "name": "Spotify", "category": "hermes-media", "desc": "Spotify: play, search, queue, manage playlists and devices.", "default": False},
+    {"id": "heartmula", "name": "Heartmula", "category": "hermes-media", "desc": "HeartMuLa: Suno-like song generation from lyrics + tags.", "default": False},
+    {"id": "jupyter-live-kernel", "name": "Jupyter Live Kernel", "category": "hermes-data-science", "desc": "Iterative Python via live Jupyter kernel (hamelnb).", "default": False},
+    {"id": "native-mcp", "name": "Native Mcp", "category": "hermes-mcp", "desc": "MCP client: connect servers, register tools (stdio/HTTP).", "default": False},
+    {"id": "weights-and-biases", "name": "Weights And Biases", "category": "hermes-evaluation", "desc": "W&B: log ML experiments, sweeps, model registry, dashboards.", "default": False},
+    {"id": "lm-evaluation-harness", "name": "Lm Evaluation Harness", "category": "hermes-evaluation", "desc": "lm-eval-harness: benchmark LLMs (MMLU, GSM8K, etc.).", "default": False},
+    {"id": "audiocraft", "name": "Audiocraft", "category": "hermes-models", "desc": "AudioCraft: MusicGen text-to-music, AudioGen text-to-sound.", "default": False},
+    {"id": "segment-anything", "name": "Segment Anything", "category": "hermes-models", "desc": "SAM: zero-shot image segmentation via points, boxes, masks.", "default": False},
+    {"id": "llama-cpp", "name": "Llama Cpp", "category": "hermes-inference", "desc": "llama.cpp local GGUF inference + HF Hub model discovery.", "default": False},
+    {"id": "obliteratus", "name": "Obliteratus", "category": "hermes-inference", "desc": "OBLITERATUS: abliterate LLM refusals (diff-in-means).", "default": False},
+    {"id": "vllm", "name": "Vllm", "category": "hermes-inference", "desc": "vLLM: high-throughput LLM serving, OpenAI API, quantization.", "default": False},
+    {"id": "huggingface-hub", "name": "Huggingface Hub", "category": "hermes-mlops", "desc": "HuggingFace hf CLI: search/download/upload models, datasets.", "default": False},
+    {"id": "dspy", "name": "Dspy", "category": "hermes-research", "desc": "DSPy: declarative LM programs, auto-optimize prompts, RAG.", "default": False},
+    {"id": "obsidian", "name": "Obsidian", "category": "hermes-note-taking", "desc": "Read, search, create, and edit notes in the Obsidian vault.", "default": False},
+    {"id": "github-code-review", "name": "Github Code Review", "category": "hermes-github", "desc": "Review PRs: diffs, inline comments via gh or REST.", "default": False},
+    {"id": "github-repo-management", "name": "Github Repo Management", "category": "hermes-github", "desc": "Clone/create/fork repos; manage remotes, releases.", "default": False},
+    {"id": "github-auth", "name": "Github Auth", "category": "hermes-github", "desc": "GitHub auth setup: HTTPS tokens, SSH keys, gh CLI login.", "default": False},
+    {"id": "github-pr-workflow", "name": "Github Pr Workflow", "category": "hermes-github", "desc": "GitHub PR lifecycle: branch, commit, open, CI, merge.", "default": False},
+    {"id": "codebase-inspection", "name": "Codebase Inspection", "category": "hermes-github", "desc": "Inspect codebases w/ pygount: LOC, languages, ratios.", "default": False},
+    {"id": "github-issues", "name": "Github Issues", "category": "hermes-github", "desc": "Create, triage, label, assign GitHub issues via gh or REST.", "default": False},
+    {"id": "dogfood", "name": "Dogfood", "category": "hermes-skills", "desc": "Exploratory QA of web apps: find bugs, evidence, reports.", "default": False},
+    {"id": "godmode", "name": "Godmode", "category": "hermes-red-teaming", "desc": "Jailbreak LLMs: Parseltongue, GODMODE, ULTRAPLINIAN.", "default": False},
+    {"id": "xurl", "name": "Xurl", "category": "hermes-social-media", "desc": "X/Twitter via xurl CLI: post, search, DM, media, v2 API.", "default": False},
+    {"id": "research-paper-writing", "name": "Research Paper Writing", "category": "hermes-research", "desc": "Write ML papers for NeurIPS/ICML/ICLR: design→submit.", "default": False},
+    {"id": "llm-wiki", "name": "Llm Wiki", "category": "hermes-research", "desc": "Karpathy's LLM Wiki: build/query interlinked markdown KB.", "default": False},
+    {"id": "blogwatcher", "name": "Blogwatcher", "category": "hermes-research", "desc": "Monitor blogs and RSS/Atom feeds via blogwatcher-cli tool.", "default": False},
+    {"id": "arxiv", "name": "Arxiv", "category": "hermes-research", "desc": "Search arXiv papers by keyword, author, category, or ID.", "default": False},
+    {"id": "polymarket", "name": "Polymarket", "category": "hermes-research", "desc": "Query Polymarket: markets, prices, orderbooks, history.", "default": False},
+
+    # ── HERMES OPTIONAL (77) ───────────────────────────────────
+
+    {"id": "opt-blackbox", "name": "Blackbox", "category": "autonomous-ai-agents", "desc": "Delegate coding tasks to Blackbox AI CLI agent. Multi-model agent with built-in judge that runs tasks through multiple L", "default": False},
+    {"id": "opt-honcho", "name": "Honcho", "category": "autonomous-ai-agents", "desc": "Configure and use Honcho memory with Hermes -- cross-session user modeling, multi-profile peer isolation, observation co", "default": False},
+    {"id": "opt-evm", "name": "Evm", "category": "blockchain", "desc": "Read-only EVM client: wallets, tokens, gas across 8 chains.", "default": False},
+    {"id": "opt-hyperliquid", "name": "Hyperliquid", "category": "blockchain", "desc": "Hyperliquid market data, account history, trade review.", "default": False},
+    {"id": "opt-solana", "name": "Solana", "category": "blockchain", "desc": "Query Solana blockchain data with USD pricing — wallet balances, token portfolios with values, transaction details, NFTs", "default": False},
+    {"id": "opt-one-three-one-rule", "name": "One Three One Rule", "category": "communication", "desc": ">", "default": False},
+    {"id": "opt-blender-mcp", "name": "Blender Mcp", "category": "creative", "desc": "Control Blender directly from Hermes via socket connection to the blender-mcp addon. Create 3D objects, materials, anima", "default": False},
+    {"id": "opt-concept-diagrams", "name": "Concept Diagrams", "category": "creative", "desc": "Generate flat, minimal light/dark-aware SVG diagrams as standalone HTML files, using a unified educational visual langua", "default": False},
+    {"id": "opt-hyperframes", "name": "Hyperframes", "category": "creative", "desc": "Create HTML-based video compositions, animated title cards, social overlays, captioned talking-head videos, audio-reacti", "default": False},
+    {"id": "opt-kanban-video-orchestrator", "name": "Kanban Video Orchestrator", "category": "creative", "desc": "Plan, set up, and monitor a multi-agent video production pipeline backed by Hermes Kanban. Use when the user wants to ma", "default": False},
+    {"id": "opt-meme-generation", "name": "Meme Generation", "category": "creative", "desc": "Generate real meme images by picking a template and overlaying text with Pillow. Produces actual .png meme files.", "default": False},
+    {"id": "opt-cli", "name": "Cli", "category": "devops", "desc": "Run 150+ AI apps via inference.sh CLI (infsh) — image generation, video creation, LLMs, search, 3D, social automation. U", "default": False},
+    {"id": "opt-docker-management", "name": "Docker Management", "category": "devops", "desc": "Manage Docker containers, images, volumes, networks, and Compose stacks — lifecycle ops, debugging, cleanup, and Dockerf", "default": False},
+    {"id": "opt-pinggy-tunnel", "name": "Pinggy Tunnel", "category": "devops", "desc": "Zero-install localhost tunnels over SSH via Pinggy.", "default": False},
+    {"id": "opt-watchers", "name": "Watchers", "category": "devops", "desc": "Poll RSS, JSON APIs, and GitHub with watermark dedup.", "default": False},
+    {"id": "opt-adversarial-ux-test", "name": "Adversarial Ux Test", "category": "dogfood", "desc": "Roleplay the most difficult, tech-resistant user for your product. Browse the app as that persona, find every UX pain po", "default": False},
+    {"id": "opt-agentmail", "name": "Agentmail", "category": "email", "desc": "Give the agent its own dedicated email inbox via AgentMail. Send, receive, and manage email autonomously using agent-own", "default": False},
+    {"id": "opt-3-statement-model", "name": "3 Statement Model", "category": "finance", "desc": "Build fully-integrated 3-statement models (IS, BS, CF) in Excel with working capital schedules, D&A roll-forwards, debt ", "default": False},
+    {"id": "opt-comps-analysis", "name": "Comps Analysis", "category": "finance", "desc": "Build comparable company analysis in Excel — operating metrics, valuation multiples, statistical benchmarking vs peer se", "default": False},
+    {"id": "opt-dcf-model", "name": "Dcf Model", "category": "finance", "desc": "Build institutional-quality DCF valuation models in Excel — revenue projections, FCF build, WACC, terminal value, Bear/B", "default": False},
+    {"id": "opt-excel-author", "name": "Excel Author", "category": "finance", "desc": "Build auditable Excel workbooks headless with openpyxl — blue/black/green cell conventions, formulas over hardcodes, nam", "default": False},
+    {"id": "opt-lbo-model", "name": "Lbo Model", "category": "finance", "desc": "Build leveraged buyout models in Excel — sources & uses, debt schedule, cash sweep, exit multiple, IRR/MOIC sensitivity.", "default": False},
+    {"id": "opt-merger-model", "name": "Merger Model", "category": "finance", "desc": "Build accretion/dilution (merger) models in Excel — pro-forma P&L, synergies, financing mix, EPS impact. Pairs with exce", "default": False},
+    {"id": "opt-pptx-author", "name": "Pptx Author", "category": "finance", "desc": "Build PowerPoint decks headless with python-pptx. Pairs with excel-author for model-backed decks where every number trac", "default": False},
+    {"id": "opt-stocks", "name": "Stocks", "category": "finance", "desc": "Stock quotes, history, search, compare, crypto via Yahoo.", "default": False},
+    {"id": "opt-fitness-nutrition", "name": "Fitness Nutrition", "category": "health", "desc": ">", "default": False},
+    {"id": "opt-neuroskill-bci", "name": "Neuroskill Bci", "category": "health", "desc": ">", "default": False},
+    {"id": "opt-fastmcp", "name": "Fastmcp", "category": "mcp", "desc": "Build, test, inspect, install, and deploy MCP servers with FastMCP in Python. Use when creating a new MCP server, wrappi", "default": False},
+    {"id": "opt-mcporter", "name": "Mcporter", "category": "mcp", "desc": "Use the mcporter CLI to list, configure, auth, and call MCP servers/tools directly (HTTP or stdio), including ad-hoc ser", "default": False},
+    {"id": "opt-openclaw-migration", "name": "Openclaw Migration", "category": "migration", "desc": "Migrate a user's OpenClaw customization footprint into Hermes Agent. Imports Hermes-compatible memories, SOUL.md, comman", "default": False},
+    {"id": "opt-accelerate", "name": "Accelerate", "category": "mlops", "desc": "Simplest distributed training API. 4 lines to add distributed support to any PyTorch script. Unified API for DeepSpeed/F", "default": False},
+    {"id": "opt-chroma", "name": "Chroma", "category": "mlops", "desc": "Open-source embedding database for AI applications. Store embeddings and metadata, perform vector and full-text search, ", "default": False},
+    {"id": "opt-clip", "name": "Clip", "category": "mlops", "desc": "OpenAI's model connecting vision and language. Enables zero-shot image classification, image-text matching, and cross-mo", "default": False},
+    {"id": "opt-faiss", "name": "Faiss", "category": "mlops", "desc": "Facebook's library for efficient similarity search and clustering of dense vectors. Supports billions of vectors, GPU ac", "default": False},
+    {"id": "opt-flash-attention", "name": "Flash Attention", "category": "mlops", "desc": "Optimizes transformer attention with Flash Attention for 2-4x speedup and 10-20x memory reduction. Use when training/run", "default": False},
+    {"id": "opt-guidance", "name": "Guidance", "category": "mlops", "desc": "Control LLM output with regex and grammars, guarantee valid JSON/XML/code generation, enforce structured formats, and bu", "default": False},
+    {"id": "opt-huggingface-tokenizers", "name": "Huggingface Tokenizers", "category": "mlops", "desc": "Fast tokenizers optimized for research and production. Rust-based implementation tokenizes 1GB in <20 seconds. Supports ", "default": False},
+    {"id": "opt-instructor", "name": "Instructor", "category": "mlops", "desc": "Extract structured data from LLM responses with Pydantic validation, retry failed extractions automatically, parse compl", "default": False},
+    {"id": "opt-lambda-labs", "name": "Lambda Labs", "category": "mlops", "desc": "Reserved and on-demand GPU cloud instances for ML training and inference. Use when you need dedicated GPU instances with", "default": False},
+    {"id": "opt-llava", "name": "Llava", "category": "mlops", "desc": "Large Language and Vision Assistant. Enables visual instruction tuning and image-based conversations. Combines CLIP visi", "default": False},
+    {"id": "opt-modal", "name": "Modal", "category": "mlops", "desc": "Serverless GPU cloud platform for running ML workloads. Use when you need on-demand GPU access without infrastructure ma", "default": False},
+    {"id": "opt-nemo-curator", "name": "Nemo Curator", "category": "mlops", "desc": "GPU-accelerated data curation for LLM training. Supports text/image/video/audio. Features fuzzy deduplication (16× faste", "default": False},
+    {"id": "opt-peft", "name": "Peft", "category": "mlops", "desc": "Parameter-efficient fine-tuning for LLMs using LoRA, QLoRA, and 25+ methods. Use when fine-tuning large models (7B-70B) ", "default": False},
+    {"id": "opt-pinecone", "name": "Pinecone", "category": "mlops", "desc": "Managed vector database for production AI applications. Fully managed, auto-scaling, with hybrid search (dense + sparse)", "default": False},
+    {"id": "opt-pytorch-fsdp", "name": "Pytorch Fsdp", "category": "mlops", "desc": "Expert guidance for Fully Sharded Data Parallel training with PyTorch FSDP - parameter sharding, mixed precision, CPU of", "default": False},
+    {"id": "opt-pytorch-lightning", "name": "Pytorch Lightning", "category": "mlops", "desc": "High-level PyTorch framework with Trainer class, automatic distributed training (DDP/FSDP/DeepSpeed), callbacks system, ", "default": False},
+    {"id": "opt-qdrant", "name": "Qdrant", "category": "mlops", "desc": "High-performance vector similarity search engine for RAG and semantic search. Use when building production RAG systems r", "default": False},
+    {"id": "opt-saelens", "name": "Saelens", "category": "mlops", "desc": "Provides guidance for training and analyzing Sparse Autoencoders (SAEs) using SAELens to decompose neural network activa", "default": False},
+    {"id": "opt-simpo", "name": "Simpo", "category": "mlops", "desc": "Simple Preference Optimization for LLM alignment. Reference-free alternative to DPO with better performance (+6.4 points", "default": False},
+    {"id": "opt-slime", "name": "Slime", "category": "mlops", "desc": "Provides guidance for LLM post-training with RL using slime, a Megatron+SGLang framework. Use when training GLM models, ", "default": False},
+    {"id": "opt-stable-diffusion", "name": "Stable Diffusion", "category": "mlops", "desc": "State-of-the-art text-to-image generation with Stable Diffusion models via HuggingFace Diffusers. Use when generating im", "default": False},
+    {"id": "opt-tensorrt-llm", "name": "Tensorrt Llm", "category": "mlops", "desc": "Optimizes LLM inference with NVIDIA TensorRT for maximum throughput and lowest latency. Use for production deployment on", "default": False},
+    {"id": "opt-torchtitan", "name": "Torchtitan", "category": "mlops", "desc": "Provides PyTorch-native distributed LLM pretraining using torchtitan with 4D parallelism (FSDP2, TP, PP, CP). Use when p", "default": False},
+    {"id": "opt-whisper", "name": "Whisper", "category": "mlops", "desc": "OpenAI's general-purpose speech recognition model. Supports 99 languages, transcription, translation to English, and lan", "default": False},
+    {"id": "opt-canvas", "name": "Canvas", "category": "productivity", "desc": "Canvas LMS integration — fetch enrolled courses and assignments using API token authentication.", "default": False},
+    {"id": "opt-here-now", "name": "Here Now", "category": "productivity", "desc": "Publish static sites to {slug}.here.now and store private files in cloud Drives for agent-to-agent handoff.", "default": False},
+    {"id": "opt-memento-flashcards", "name": "Memento Flashcards", "category": "productivity", "desc": ">-", "default": False},
+    {"id": "opt-shop-app", "name": "Shop App", "category": "productivity", "desc": "Shop.app: product search, order tracking, returns, reorder.", "default": False},
+    {"id": "opt-shopify", "name": "Shopify", "category": "productivity", "desc": "Shopify Admin & Storefront GraphQL APIs via curl. Products, orders, customers, inventory, metafields.", "default": False},
+    {"id": "opt-siyuan", "name": "Siyuan", "category": "productivity", "desc": "SiYuan Note API for searching, reading, creating, and managing blocks and documents in a self-hosted knowledge base via ", "default": False},
+    {"id": "opt-telephony", "name": "Telephony", "category": "productivity", "desc": "Give Hermes phone capabilities without core tool changes. Provision and persist a Twilio number, send and receive SMS/MM", "default": False},
+    {"id": "opt-bioinformatics", "name": "Bioinformatics", "category": "research", "desc": "Gateway to 400+ bioinformatics skills from bioSkills and ClawBio. Covers genomics, transcriptomics, single-cell, variant", "default": False},
+    {"id": "opt-darwinian-evolver", "name": "Darwinian Evolver", "category": "research", "desc": "Evolve prompts/regex/SQL/code with Imbue's evolution loop.", "default": False},
+    {"id": "opt-domain-intel", "name": "Domain Intel", "category": "research", "desc": "Passive domain reconnaissance using Python stdlib. Subdomain discovery, SSL certificate inspection, WHOIS lookups, DNS r", "default": False},
+    {"id": "opt-drug-discovery", "name": "Drug Discovery", "category": "research", "desc": ">", "default": False},
+    {"id": "opt-duckduckgo-search", "name": "Duckduckgo Search", "category": "research", "desc": "Free web search via DuckDuckGo — text, news, images, videos. No API key needed. Prefer the `ddgs` CLI when installed; us", "default": False},
+    {"id": "opt-gitnexus-explorer", "name": "Gitnexus Explorer", "category": "research", "desc": "Index a codebase with GitNexus and serve an interactive knowledge graph via web UI + Cloudflare tunnel.", "default": False},
+    {"id": "opt-osint-investigation", "name": "Osint Investigation", "category": "research", "desc": "Public-records OSINT investigation framework — SEC EDGAR filings, USAspending contracts, Senate lobbying, OFAC sanctions", "default": False},
+    {"id": "opt-parallel-cli", "name": "Parallel Cli", "category": "research", "desc": "Optional vendor skill for Parallel CLI — agent-native web search, extraction, deep research, enrichment, FindAll, and mo", "default": False},
+    {"id": "opt-qmd", "name": "Qmd", "category": "research", "desc": "Search personal knowledge bases, notes, docs, and meeting transcripts locally using qmd — a hybrid retrieval engine with", "default": False},
+    {"id": "opt-scrapling", "name": "Scrapling", "category": "research", "desc": "Web scraping with Scrapling - HTTP fetching, stealth browser automation, Cloudflare bypass, and spider crawling via CLI ", "default": False},
+    {"id": "opt-searxng-search", "name": "Searxng Search", "category": "research", "desc": "Free meta-search via SearXNG — aggregates results from 70+ search engines. Self-hosted or use a public instance. No API ", "default": False},
+    {"id": "opt-1password", "name": "1Password", "category": "security", "desc": "Set up and use 1Password CLI (op). Use when installing the CLI, enabling desktop app integration, signing in, and readin", "default": False},
+    {"id": "opt-oss-forensics", "name": "Oss Forensics", "category": "security", "desc": "|", "default": False},
+    {"id": "opt-sherlock", "name": "Sherlock", "category": "security", "desc": "OSINT username search across 400+ social networks. Hunt down social media accounts by username.", "default": False},
+    {"id": "opt-rest-graphql-debug", "name": "Rest Graphql Debug", "category": "software-development", "desc": "Debug REST/GraphQL APIs: status codes, auth, schemas, repro.", "default": False},
+    {"id": "opt-page-agent", "name": "Page Agent", "category": "web-development", "desc": "Embed alibaba/page-agent into your own web application — a pure-JavaScript in-page GUI agent that ships as a single <scr", "default": False},
+
+    # ── COMMUNITY HUB (99) ─────────────────────────────────────
+
+    {"id": "hub-apple-notes", "name": "Apple Notes", "category": "hub-apple", "desc": "Manage Apple Notes via memo CLI: create, search, edit.", "default": False},
+    {"id": "hub-apple-reminders", "name": "Apple Reminders", "category": "hub-apple", "desc": "Apple Reminders via remindctl: add, list, complete.", "default": False},
+    {"id": "hub-findmy", "name": "Findmy", "category": "hub-apple", "desc": "Track Apple devices/AirTags via FindMy.app on macOS.", "default": False},
+    {"id": "hub-imessage", "name": "Imessage", "category": "hub-apple", "desc": "Send and receive iMessages/SMS via the imsg CLI on macOS.", "default": False},
+    {"id": "hub-macos-computer-use", "name": "Macos Computer Use", "category": "hub-apple", "desc": "|", "default": False},
+    {"id": "hub-claude-code", "name": "Claude Code", "category": "hub-autonomous-ai-agents", "desc": "Delegate coding to Claude Code CLI (features, PRs).", "default": False},
+    {"id": "hub-codex", "name": "Codex", "category": "hub-autonomous-ai-agents", "desc": "Delegate coding to OpenAI Codex CLI (features, PRs).", "default": False},
+    {"id": "hub-hermes-agent", "name": "Hermes Agent", "category": "hub-autonomous-ai-agents", "desc": "Configure, extend, or contribute to Hermes Agent.", "default": False},
+    {"id": "hub-opencode", "name": "Opencode", "category": "hub-autonomous-ai-agents", "desc": "Delegate coding to OpenCode CLI (features, PR review).", "default": False},
+    {"id": "hub-bid-document-generator", "name": "Bid Document Generator", "category": "hub-business-development", "desc": "Generate professional bid documents — cover letters, technical proposals, pricing schedules, and declaration forms — for", "default": False},
+    {"id": "hub-deadline-alert", "name": "Deadline Alert", "category": "hub-business-development", "desc": "Monitor tender closing dates, generate deadline alerts, and send reminders to ensure no tender deadline is missed.", "default": False},
+    {"id": "hub-pricing-database", "name": "Pricing Database", "category": "hub-business-development", "desc": "Central pricing knowledge base for Marz Technology & Trading — store and retrieve past bid prices, vendor quotes, markup", "default": False},
+    {"id": "hub-tender-filtering", "name": "Tender Filtering", "category": "hub-business-development", "desc": "Filter tenders by ICT relevance, location, budget range, and company capability. Auto-classify and prioritise which tend", "default": False},
+    {"id": "hub-tender-scoring", "name": "Tender Scoring", "category": "hub-business-development", "desc": "Score, rank, and prioritise tenders based on ICT fit, budget, urgency, location, and company capability. Produce a ranke", "default": False},
+    {"id": "hub-tender-scraper-master", "name": "Tender Scraper Master", "category": "hub-business-development", "desc": "Master scraper for all 33 Malaysian tender portals. Uses requests+BS4 to scrape government, GLC, and university portals.", "default": False},
+    {"id": "hub-tender-tracker", "name": "Tender Tracker", "category": "hub-business-development", "desc": "Full lifecycle tracking for tenders — from discovery to completion. Track status, deadlines, documents, and decisions fo", "default": False},
+    {"id": "hub-whatsapp-integration", "name": "Whatsapp Integration", "category": "hub-business-development", "desc": "WhatsApp integration for Marz Technology & Trading — covers all generations (Wasap API, Baileys, WAHA). Multi-instance a", "default": False},
+    {"id": "hub-architecture-diagram", "name": "Architecture Diagram", "category": "hub-creative", "desc": "Dark-themed SVG architecture/cloud/infra diagrams as HTML.", "default": False},
+    {"id": "hub-ascii-art", "name": "Ascii Art", "category": "hub-creative", "desc": "ASCII art: pyfiglet, cowsay, boxes, image-to-ascii.", "default": False},
+    {"id": "hub-ascii-video", "name": "Ascii Video", "category": "hub-creative", "desc": "ASCII video: convert video/audio to colored ASCII MP4/GIF.", "default": False},
+    {"id": "hub-baoyu-comic", "name": "Baoyu Comic", "category": "hub-creative", "desc": "Knowledge comics (知识漫画): educational, biography, tutorial.", "default": False},
+    {"id": "hub-baoyu-infographic", "name": "Baoyu Infographic", "category": "hub-creative", "desc": "Infographics: 21 layouts x 21 styles (信息图, 可视化).", "default": False},
+    {"id": "hub-claude-design", "name": "Claude Design", "category": "hub-creative", "desc": "Design one-off HTML artifacts (landing, deck, prototype).", "default": False},
+    {"id": "hub-comfyui", "name": "Comfyui", "category": "hub-creative", "desc": "Generate images, video, and audio with ComfyUI — install, launch, manage nodes/models, run workflows with parameter inje", "default": False},
+    {"id": "hub-design", "name": "Design", "category": "hub-creative", "desc": "Comprehensive design skill: brand identity, design tokens, UI styling, logo generation (55 styles, Gemini AI), corporate", "default": False},
+    {"id": "hub-design-md", "name": "Design Md", "category": "hub-creative", "desc": "Author/validate/export Google's DESIGN.md token spec files.", "default": False},
+    {"id": "hub-excalidraw", "name": "Excalidraw", "category": "hub-creative", "desc": "Hand-drawn Excalidraw JSON diagrams (arch, flow, seq).", "default": False},
+    {"id": "hub-humanizer", "name": "Humanizer", "category": "hub-creative", "desc": "Humanize text: strip AI-isms and add real voice.", "default": False},
+    {"id": "hub-manim-video", "name": "Manim Video", "category": "hub-creative", "desc": "Manim CE animations: 3Blue1Brown math/algo videos.", "default": False},
+    {"id": "hub-p5js", "name": "P5Js", "category": "hub-creative", "desc": "p5.js sketches: gen art, shaders, interactive, 3D.", "default": False},
+    {"id": "hub-pixel-art", "name": "Pixel Art", "category": "hub-creative", "desc": "Pixel art w/ era palettes (NES, Game Boy, PICO-8).", "default": False},
+    {"id": "hub-popular-web-designs", "name": "Popular Web Designs", "category": "hub-creative", "desc": "54 real design systems (Stripe, Linear, Vercel) as HTML/CSS.", "default": False},
+    {"id": "hub-pretext", "name": "Pretext", "category": "hub-creative", "desc": "Use when building creative browser demos with @chenglou/pretext — DOM-free text layout for ASCII art, typographic flow a", "default": False},
+    {"id": "hub-sketch", "name": "Sketch", "category": "hub-creative", "desc": "Throwaway HTML mockups: 2-3 design variants to compare.", "default": False},
+    {"id": "hub-songwriting-and-ai-music", "name": "Songwriting And Ai Music", "category": "hub-creative", "desc": "Songwriting craft and Suno AI music prompts.", "default": False},
+    {"id": "hub-touchdesigner-mcp", "name": "Touchdesigner Mcp", "category": "hub-creative", "desc": "Control a running TouchDesigner instance via twozero MCP — create operators, set parameters, wire connections, execute P", "default": False},
+    {"id": "hub-jupyter-live-kernel", "name": "Jupyter Live Kernel", "category": "hub-data-science", "desc": "Iterative Python via live Jupyter kernel (hamelnb).", "default": False},
+    {"id": "hub-agent-orchestration", "name": "Agent Orchestration", "category": "hub-devops", "desc": "Deploy and orchestrate multiple Hermes agent profiles with separate Telegram bots, role-specific toolsets, and inter-age", "default": False},
+    {"id": "hub-hermes-operations", "name": "Hermes Operations", "category": "hub-devops", "desc": "Hermes system operations — backup and disaster recovery, system resource monitoring and dashboards, OCR watchdog for ima", "default": False},
+    {"id": "hub-kanban-orchestrator", "name": "Kanban Orchestrator", "category": "hub-devops", "desc": "Decomposition playbook + specialist-roster conventions + anti-temptation rules for an orchestrator profile routing work ", "default": False},
+    {"id": "hub-kanban-worker", "name": "Kanban Worker", "category": "hub-devops", "desc": "Pitfalls, examples, and edge cases for Hermes Kanban workers. The lifecycle itself is auto-injected into every worker's ", "default": False},
+    {"id": "hub-vps-management", "name": "Vps Management", "category": "hub-devops", "desc": "Provision, diagnose, and manage VPS/cloud servers — network troubleshooting, API-driven lifecycle, support escalation, a", "default": False},
+    {"id": "hub-webhook-subscriptions", "name": "Webhook Subscriptions", "category": "hub-devops", "desc": "Webhook subscriptions: event-driven agent runs.", "default": False},
+    {"id": "hub-himalaya", "name": "Himalaya", "category": "hub-email", "desc": "Himalaya CLI: IMAP/SMTP email from terminal.", "default": False},
+    {"id": "hub-minecraft-modpack-server", "name": "Minecraft Modpack Server", "category": "hub-gaming", "desc": "Host modded Minecraft servers (CurseForge, Modrinth).", "default": False},
+    {"id": "hub-pokemon-player", "name": "Pokemon Player", "category": "hub-gaming", "desc": "Play Pokemon via headless emulator + RAM reads.", "default": False},
+    {"id": "hub-codebase-inspection", "name": "Codebase Inspection", "category": "hub-github", "desc": "Inspect codebases w/ pygount: LOC, languages, ratios.", "default": False},
+    {"id": "hub-github-auth", "name": "Github Auth", "category": "hub-github", "desc": "GitHub auth setup: HTTPS tokens, SSH keys, gh CLI login.", "default": False},
+    {"id": "hub-github-code-review", "name": "Github Code Review", "category": "hub-github", "desc": "Review PRs: diffs, inline comments via gh or REST.", "default": False},
+    {"id": "hub-github-issues", "name": "Github Issues", "category": "hub-github", "desc": "Create, triage, label, assign GitHub issues via gh or REST.", "default": False},
+    {"id": "hub-github-pr-workflow", "name": "Github Pr Workflow", "category": "hub-github", "desc": "GitHub PR lifecycle: branch, commit, open, CI, merge.", "default": False},
+    {"id": "hub-github-repo-management", "name": "Github Repo Management", "category": "hub-github", "desc": "Clone/create/fork repos; manage remotes, releases.", "default": False},
+    {"id": "hub-native-mcp", "name": "Native Mcp", "category": "hub-mcp", "desc": "MCP client: connect servers, register tools (stdio/HTTP).", "default": False},
+    {"id": "hub-gif-search", "name": "Gif Search", "category": "hub-media", "desc": "Search/download GIFs from Tenor via curl + jq.", "default": False},
+    {"id": "hub-heartmula", "name": "Heartmula", "category": "hub-media", "desc": "HeartMuLa: Suno-like song generation from lyrics + tags.", "default": False},
+    {"id": "hub-songsee", "name": "Songsee", "category": "hub-media", "desc": "Audio spectrograms/features (mel, chroma, MFCC) via CLI.", "default": False},
+    {"id": "hub-spotify", "name": "Spotify", "category": "hub-media", "desc": "Spotify: play, search, queue, manage playlists and devices.", "default": False},
+    {"id": "hub-youtube-content", "name": "Youtube Content", "category": "hub-media", "desc": "YouTube transcripts to summaries, threads, blogs.", "default": False},
+    {"id": "hub-huggingface-hub", "name": "Huggingface Hub", "category": "hub-mlops", "desc": "HuggingFace hf CLI: search/download/upload models, datasets.", "default": False},
+    {"id": "hub-obsidian", "name": "Obsidian", "category": "hub-note-taking", "desc": "Read, search, create, and edit notes in the Obsidian vault.", "default": False},
+    {"id": "hub-accounting-reconciliation", "name": "Accounting Reconciliation", "category": "hub-productivity", "desc": "Bank statement reconciliation — OCR bank PDFs, extract transactions by column position, cross-reference with ERPNext, an", "default": False},
+    {"id": "hub-airtable", "name": "Airtable", "category": "hub-productivity", "desc": "Airtable REST API via curl. Records CRUD, filters, upserts.", "default": False},
+    {"id": "hub-audio-transcription", "name": "Audio Transcription", "category": "hub-productivity", "desc": "Download audio from Google Drive, transcribe with faster-whisper, format as meeting transcript — supports mixed Malay/En", "default": False},
+    {"id": "hub-erpnext-management", "name": "Erpnext Management", "category": "hub-productivity", "desc": "Set up and manage ERPNext REST API access for AI agents — authentication, CRUD operations, user permission testing, and ", "default": False},
+    {"id": "hub-google-workspace", "name": "Google Workspace", "category": "hub-productivity", "desc": "Gmail, Calendar, Drive, Docs, Sheets via gws CLI or Python.", "default": False},
+    {"id": "hub-linear", "name": "Linear", "category": "hub-productivity", "desc": "Linear: manage issues, projects, teams via GraphQL + curl.", "default": False},
+    {"id": "hub-maintenance-project-management", "name": "Maintenance Project Management", "category": "hub-productivity", "desc": "Manage CSD (Computer Service & Distribution) maintenance projects — structured client data, equipment inventories, PM sc", "default": False},
+    {"id": "hub-maps", "name": "Maps", "category": "hub-productivity", "desc": "Geocode, POIs, routes, timezones via OpenStreetMap/OSRM.", "default": False},
+    {"id": "hub-nano-pdf", "name": "Nano Pdf", "category": "hub-productivity", "desc": "Edit PDF text/typos/titles via nano-pdf CLI (NL prompts).", "default": False},
+    {"id": "hub-notion", "name": "Notion", "category": "hub-productivity", "desc": "Notion API + ntn CLI: pages, databases, markdown, Workers.", "default": False},
+    {"id": "hub-ocr-and-documents", "name": "Ocr And Documents", "category": "hub-productivity", "desc": "Extract text from PDFs, scanned docs, and images (screenshots/photos). pymupdf for text PDFs, marker-pdf for scans, Easy", "default": False},
+    {"id": "hub-powerpoint", "name": "Powerpoint", "category": "hub-productivity", "desc": "Create, read, edit .pptx decks, slides, notes, templates.", "default": False},
+    {"id": "hub-teams-meeting-pipeline", "name": "Teams Meeting Pipeline", "category": "hub-productivity", "desc": "Operate the Teams meeting summary pipeline via Hermes CLI — summarize meetings, inspect pipeline status, replay jobs, ma", "default": False},
+    {"id": "hub-universal-doc-reader", "name": "Universal Doc Reader", "category": "hub-productivity", "desc": "Universal document reader for ALL Marz agents — PDF, DOCX, XLSX/XLS, TXT, MD, CSV, URL, OCR. Single shared script ~/.her", "default": False},
+    {"id": "hub-godmode", "name": "Godmode", "category": "hub-red-teaming", "desc": "Jailbreak LLMs: Parseltongue, GODMODE, ULTRAPLINIAN.", "default": False},
+    {"id": "hub-arxiv", "name": "Arxiv", "category": "hub-research", "desc": "Search arXiv papers by keyword, author, category, or ID.", "default": False},
+    {"id": "hub-blogwatcher", "name": "Blogwatcher", "category": "hub-research", "desc": "Monitor blogs and RSS/Atom feeds via blogwatcher-cli tool.", "default": False},
+    {"id": "hub-llm-wiki", "name": "Llm Wiki", "category": "hub-research", "desc": "Karpathy's LLM Wiki: build/query interlinked markdown KB.", "default": False},
+    {"id": "hub-polymarket", "name": "Polymarket", "category": "hub-research", "desc": "Query Polymarket: markets, prices, orderbooks, history.", "default": False},
+    {"id": "hub-portal-reconnaissance", "name": "Portal Reconnaissance", "category": "hub-research", "desc": "Systematically explore business/organisation portals AND physical businesses — classify entities, track accessibility in", "default": False},
+    {"id": "hub-research-paper-writing", "name": "Research Paper Writing", "category": "hub-research", "desc": "Write ML papers for NeurIPS/ICML/ICLR: design→submit.", "default": False},
+    {"id": "hub-openhue", "name": "Openhue", "category": "hub-smart-home", "desc": "Control Philips Hue lights, scenes, rooms via OpenHue CLI.", "default": False},
+    {"id": "hub-xurl", "name": "Xurl", "category": "hub-social-media", "desc": "X/Twitter via xurl CLI: post, search, DM, media, v2 API.", "default": False},
+    {"id": "hub-brainstorming", "name": "Brainstorming", "category": "hub-software-development", "desc": "You MUST use this before any creative work - creating features, building components, adding functionality, or modifying ", "default": False},
+    {"id": "hub-debugging-hermes-tui-commands", "name": "Debugging Hermes Tui Commands", "category": "hub-software-development", "desc": "Debug Hermes TUI slash commands: Python, gateway, Ink UI.", "default": False},
+    {"id": "hub-dispatching-parallel-agents", "name": "Dispatching Parallel Agents", "category": "hub-software-development", "desc": "Use when facing 2+ independent tasks that can be worked on without shared state or sequential dependencies. Dispatch spe", "default": False},
+    {"id": "hub-finishing-a-development-branch", "name": "Finishing A Development Branch", "category": "hub-software-development", "desc": "Use when implementation is complete, all tests pass, and you need to decide how to integrate the work - guides completio", "default": False},
+    {"id": "hub-hermes-agent-skill-authoring", "name": "Hermes Agent Skill Authoring", "category": "hub-software-development", "desc": "Author in-repo SKILL.md: frontmatter, validator, structure.", "default": False},
+    {"id": "hub-node-inspect-debugger", "name": "Node Inspect Debugger", "category": "hub-software-development", "desc": "Debug Node.js via --inspect + Chrome DevTools Protocol CLI.", "default": False},
+    {"id": "hub-plan", "name": "Plan", "category": "hub-software-development", "desc": "Plan mode: write markdown plan to .hermes/plans/, no exec.", "default": False},
+    {"id": "hub-python-debugpy", "name": "Python Debugpy", "category": "hub-software-development", "desc": "Debug Python: pdb REPL + debugpy remote (DAP).", "default": False},
+    {"id": "hub-requesting-code-review", "name": "Requesting Code Review", "category": "hub-software-development", "desc": "Pre-commit review: security scan, quality gates, auto-fix.", "default": False},
+    {"id": "hub-spike", "name": "Spike", "category": "hub-software-development", "desc": "Throwaway experiments to validate an idea before build.", "default": False},
+    {"id": "hub-subagent-driven-development", "name": "Subagent Driven Development", "category": "hub-software-development", "desc": "Execute plans via delegate_task subagents (2-stage review).", "default": False},
+    {"id": "hub-systematic-debugging", "name": "Systematic Debugging", "category": "hub-software-development", "desc": "4-phase root cause debugging: understand bugs before fixing.", "default": False},
+    {"id": "hub-test-driven-development", "name": "Test Driven Development", "category": "hub-software-development", "desc": "TDD: enforce RED-GREEN-REFACTOR, tests before code.", "default": False},
+    {"id": "hub-using-git-worktrees", "name": "Using Git Worktrees", "category": "hub-software-development", "desc": "Use when starting feature work that needs isolation from current workspace or before executing implementation plans - en", "default": False},
+    {"id": "hub-verification-before-completion", "name": "Verification Before Completion", "category": "hub-software-development", "desc": "Use when about to claim work is complete, fixed, or passing, before committing or creating PRs - requires running verifi", "default": False},
+    {"id": "hub-writing-plans", "name": "Writing Plans", "category": "hub-software-development", "desc": "Write implementation plans: bite-sized tasks, paths, code.", "default": False},
+    # ── EXTENDED BUSINESS SKILLS (500+) ────────────────────────
+    # Sales, Marketing, Branding, Finance, Economy, Accounting,
+    # Management, Operations, Warehouse, Manufacturing, Factory,
+    # E-commerce, Real Estate, Startup, Education, Technology,
+    # Hospitality, Agriculture, Construction, Logistics
+
+    {"id": "lead-generation-strategy", "name": "Lead Generation Strategy", "category": "sales", "desc": "Develop lead generation strategies for B2B and B2C markets", "default": False},
+    {"id": "cold-calling-script-writer", "name": "Cold Calling Script Writer", "category": "sales", "desc": "Write cold calling scripts for telemarketing and outreach", "default": False},
+    {"id": "sales-funnel-builder", "name": "Sales Funnel Builder", "category": "sales", "desc": "Design multi-stage sales funnels", "default": False},
+    {"id": "sales-pitch-creator", "name": "Sales Pitch Creator", "category": "sales", "desc": "Craft sales pitches for buyer personas", "default": False},
+    {"id": "objection-handling-guide", "name": "Objection Handling Guide", "category": "sales", "desc": "Prepare responses to common sales objections", "default": False},
+    {"id": "closing-technique-advisor", "name": "Closing Technique Advisor", "category": "sales", "desc": "Recommend closing techniques by context", "default": False},
+    {"id": "upsell-cross-sell-strategist", "name": "Upsell and Cross-sell Strategist", "category": "sales", "desc": "Identify upsell and cross-sell opportunities", "default": False},
+    {"id": "sales-territory-planner", "name": "Sales Territory Planner", "category": "sales", "desc": "Plan sales territory allocation", "default": False},
+    {"id": "sales-quota-setting-assistant", "name": "Sales Quota Setting Assistant", "category": "sales", "desc": "Calculate quotas from data", "default": False},
+    {"id": "sales-commission-calculator", "name": "Sales Commission Calculator", "category": "sales", "desc": "Design commission structures", "default": False},
+    {"id": "sales-proposal-generator", "name": "Sales Proposal Generator", "category": "sales", "desc": "Create professional proposals", "default": False},
+    {"id": "sales-script-writer", "name": "Sales Script Writer", "category": "sales", "desc": "Write structured sales scripts", "default": False},
+    {"id": "sales-followup-sequence", "name": "Sales Follow-up Sequence", "category": "sales", "desc": "Design automated follow-ups", "default": False},
+    {"id": "sales-performance-analyzer", "name": "Sales Performance Analyzer", "category": "sales", "desc": "Analyze sales metrics", "default": False},
+    {"id": "sales-training-module-creator", "name": "Sales Training Module Creator", "category": "sales", "desc": "Create training content", "default": False},
+    {"id": "win-loss-analysis-tool", "name": "Win-Loss Analysis Tool", "category": "sales", "desc": "Analyze won and lost deals", "default": False},
+    {"id": "sales-pipeline-reviewer", "name": "Sales Pipeline Reviewer", "category": "sales", "desc": "Review pipeline health", "default": False},
+    {"id": "sales-forecasting-assistant", "name": "Sales Forecasting Assistant", "category": "sales", "desc": "Generate accurate forecasts", "default": False},
+    {"id": "sales-playbook-creator", "name": "Sales Playbook Creator", "category": "sales", "desc": "Develop sales playbooks", "default": False},
+    {"id": "value-proposition-designer", "name": "Value Proposition Designer", "category": "sales", "desc": "Craft unique value propositions", "default": False},
+    {"id": "roi-calculator-builder", "name": "ROI Calculator Builder", "category": "sales", "desc": "Build prospect ROI calculators", "default": False},
+    {"id": "sales-battle-card-creator", "name": "Sales Battle Card Creator", "category": "sales", "desc": "Create competitive battle cards", "default": False},
+    {"id": "referral-program-designer", "name": "Referral Program Designer", "category": "sales", "desc": "Design customer referral programs", "default": False},
+    {"id": "sales-email-template-writer", "name": "Sales Email Template Writer", "category": "sales", "desc": "Write cold email templates", "default": False},
+    {"id": "linkedin-sales-navigator", "name": "LinkedIn Sales Navigator Guide", "category": "sales", "desc": "Optimize LinkedIn prospecting", "default": False},
+    {"id": "enterprise-sales-strategy", "name": "Enterprise Sales Strategy", "category": "sales", "desc": "Develop complex B2B strategies", "default": False},
+    {"id": "smb-sales-strategy", "name": "SMB Sales Strategy", "category": "sales", "desc": "Develop high-volume SMB strategies", "default": False},
+    {"id": "sales-negotiation-coach", "name": "Sales Negotiation Coach", "category": "sales", "desc": "Provide negotiation coaching", "default": False},
+    {"id": "channel-partner-program", "name": "Channel Partner Sales Program", "category": "sales", "desc": "Design indirect sales programs", "default": False},
+    {"id": "sales-onboarding-program", "name": "Sales Onboarding Program", "category": "sales", "desc": "Design sales onboarding", "default": False},
+    {"id": "sales-coaching-planner", "name": "Sales Coaching Session Planner", "category": "sales", "desc": "Plan coaching sessions", "default": False},
+    {"id": "digital-marketing-strategy", "name": "Digital Marketing Strategy", "category": "marketing", "desc": "Develop comprehensive digital marketing strategies", "default": False},
+    {"id": "seo-content-writer", "name": "SEO Content Writer", "category": "marketing", "desc": "Write search-engine-optimized content", "default": False},
+    {"id": "google-ads-manager", "name": "Google Ads Campaign Manager", "category": "marketing", "desc": "Optimize Google Ads campaigns", "default": False},
+    {"id": "facebook-ads-strategist", "name": "Facebook Ads Strategist", "category": "marketing", "desc": "Design Facebook ad campaigns", "default": False},
+    {"id": "instagram-marketing-planner", "name": "Instagram Marketing Planner", "category": "marketing", "desc": "Plan Instagram content strategy", "default": False},
+    {"id": "tiktok-content-creator", "name": "TikTok Content Creator", "category": "marketing", "desc": "Create TikTok brand strategies", "default": False},
+    {"id": "linkedin-marketing-guide", "name": "LinkedIn Marketing Guide", "category": "marketing", "desc": "Optimize LinkedIn B2B marketing", "default": False},
+    {"id": "email-marketing-designer", "name": "Email Marketing Campaign Designer", "category": "marketing", "desc": "Design email campaigns", "default": False},
+    {"id": "content-marketing-strategist", "name": "Content Marketing Strategist", "category": "marketing", "desc": "Develop content marketing plans", "default": False},
+    {"id": "video-marketing-producer", "name": "Video Marketing Producer", "category": "marketing", "desc": "Plan video content", "default": False},
+    {"id": "influencer-marketing-coordinator", "name": "Influencer Marketing Coordinator", "category": "marketing", "desc": "Manage influencer partnerships", "default": False},
+    {"id": "affiliate-program-designer", "name": "Affiliate Marketing Program Designer", "category": "marketing", "desc": "Design affiliate programs", "default": False},
+    {"id": "marketing-automation-workflow", "name": "Marketing Automation Workflow", "category": "marketing", "desc": "Build automation workflows", "default": False},
+    {"id": "landing-page-copywriter", "name": "Landing Page Copywriter", "category": "marketing", "desc": "Write high-converting landing page copy", "default": False},
+    {"id": "marketing-funnel-optimizer", "name": "Marketing Funnel Optimizer", "category": "marketing", "desc": "Optimize funnel conversion rates", "default": False},
+    {"id": "ab-testing-strategist", "name": "A/B Testing Strategist", "category": "marketing", "desc": "Design conversion optimization tests", "default": False},
+    {"id": "marketing-budget-planner", "name": "Marketing Budget Planner", "category": "marketing", "desc": "Plan budgets with ROI calculations", "default": False},
+    {"id": "marketing-roi-calculator", "name": "Marketing ROI Calculator", "category": "marketing", "desc": "Calculate channel ROI", "default": False},
+    {"id": "customer-journey-mapper", "name": "Customer Journey Mapper", "category": "marketing", "desc": "Map customer touchpoints", "default": False},
+    {"id": "buyer-persona-developer", "name": "Buyer Persona Developer", "category": "marketing", "desc": "Develop detailed buyer personas", "default": False},
+    {"id": "market-segmentation-analyst", "name": "Market Segmentation Analyst", "category": "marketing", "desc": "Segment target markets", "default": False},
+    {"id": "brand-awareness-campaign-planner", "name": "Brand Awareness Campaign Planner", "category": "marketing", "desc": "Plan awareness campaigns", "default": False},
+    {"id": "event-marketing-planner", "name": "Event Marketing Planner", "category": "marketing", "desc": "Plan corporate events", "default": False},
+    {"id": "print-ad-copywriter", "name": "Print Ad Copywriter", "category": "marketing", "desc": "Write print advertisements", "default": False},
+    {"id": "retargeting-campaign-builder", "name": "Retargeting Campaign Builder", "category": "marketing", "desc": "Build retargeting campaigns", "default": False},
+    {"id": "sms-marketing-designer", "name": "SMS Marketing Campaign Designer", "category": "marketing", "desc": "Design SMS campaigns", "default": False},
+    {"id": "push-notification-strategist", "name": "Push Notification Strategist", "category": "marketing", "desc": "Plan push campaigns", "default": False},
+    {"id": "podcast-marketing-planner", "name": "Podcast Marketing Planner", "category": "marketing", "desc": "Plan podcast strategy", "default": False},
+    {"id": "webinar-marketing-coordinator", "name": "Webinar Marketing Coordinator", "category": "marketing", "desc": "Plan webinar promotion", "default": False},
+    {"id": "community-marketing-builder", "name": "Community Marketing Builder", "category": "marketing", "desc": "Build brand communities", "default": False},
+    {"id": "google-analytics-interpreter", "name": "Google Analytics Interpreter", "category": "marketing", "desc": "Analyze data for insights", "default": False},
+    {"id": "marketing-report-generator", "name": "Marketing Report Generator", "category": "marketing", "desc": "Generate marketing reports", "default": False},
+    {"id": "competitive-ad-analysis", "name": "Competitive Ad Analysis", "category": "marketing", "desc": "Analyze competitor ads", "default": False},
+    {"id": "marketing-calendar-creator", "name": "Marketing Calendar Creator", "category": "marketing", "desc": "Create annual calendars", "default": False},
+    {"id": "product-launch-marketing-plan", "name": "Product Launch Marketing Plan", "category": "marketing", "desc": "Develop go-to-market plans", "default": False},
+    {"id": "seasonal-campaign-planner", "name": "Seasonal Campaign Planner", "category": "marketing", "desc": "Plan seasonal campaigns", "default": False},
+    {"id": "flash-sale-designer", "name": "Flash Sale Campaign Designer", "category": "marketing", "desc": "Design flash sales with urgency", "default": False},
+    {"id": "cart-abandonment-recovery", "name": "Cart Abandonment Recovery", "category": "marketing", "desc": "Design recovery sequences", "default": False},
+    {"id": "google-my-business-optimizer", "name": "Google My Business Optimizer", "category": "marketing", "desc": "Optimize GMB profile", "default": False},
+    {"id": "local-seo-strategist", "name": "Local SEO Strategist", "category": "marketing", "desc": "Develop local SEO strategies", "default": False},
+    {"id": "ecommerce-seo-guide", "name": "E-commerce SEO Guide", "category": "marketing", "desc": "Optimize e-commerce search", "default": False},
+    {"id": "backlink-building-strategist", "name": "Backlink Building Strategist", "category": "marketing", "desc": "Develop ethical backlink strategies", "default": False},
+    {"id": "brand-ambassador-program", "name": "Brand Ambassador Program", "category": "marketing", "desc": "Design ambassador programs", "default": False},
+    {"id": "brand-strategy-developer", "name": "Brand Strategy Developer", "category": "branding", "desc": "Develop brand strategies", "default": False},
+    {"id": "brand-identity-brief", "name": "Brand Identity Designer Brief", "category": "branding", "desc": "Write identity design briefs", "default": False},
+    {"id": "brand-name-generator", "name": "Brand Name Generator", "category": "branding", "desc": "Generate brand name ideas", "default": False},
+    {"id": "brand-tagline-creator", "name": "Brand Tagline Creator", "category": "branding", "desc": "Create brand taglines", "default": False},
+    {"id": "brand-mission-statement-writer", "name": "Brand Mission Statement Writer", "category": "branding", "desc": "Write mission statements", "default": False},
+    {"id": "brand-vision-statement-writer", "name": "Brand Vision Statement Writer", "category": "branding", "desc": "Craft vision statements", "default": False},
+    {"id": "brand-values-definition", "name": "Brand Values Definition", "category": "branding", "desc": "Define core brand values", "default": False},
+    {"id": "brand-voice-guide-creator", "name": "Brand Voice Guide Creator", "category": "branding", "desc": "Develop voice guidelines", "default": False},
+    {"id": "visual-brand-guidelines-creator", "name": "Visual Brand Guidelines Creator", "category": "branding", "desc": "Create visual guidelines", "default": False},
+    {"id": "logo-design-brief-writer", "name": "Logo Design Brief Writer", "category": "branding", "desc": "Write design briefs", "default": False},
+    {"id": "brand-storyteller", "name": "Brand Storyteller", "category": "branding", "desc": "Craft brand stories", "default": False},
+    {"id": "brand-positioning-statement", "name": "Brand Positioning Statement", "category": "branding", "desc": "Write positioning statements", "default": False},
+    {"id": "brand-architecture-designer", "name": "Brand Architecture Designer", "category": "branding", "desc": "Design brand portfolios", "default": False},
+    {"id": "brand-audit-facilitator", "name": "Brand Audit Facilitator", "category": "branding", "desc": "Conduct brand audits", "default": False},
+    {"id": "brand-consistency-checker", "name": "Brand Consistency Checker", "category": "branding", "desc": "Audit touchpoint consistency", "default": False},
+    {"id": "employer-branding-strategist", "name": "Employer Branding Strategist", "category": "branding", "desc": "Develop employer branding", "default": False},
+    {"id": "personal-branding-coach", "name": "Personal Branding Coach", "category": "branding", "desc": "Guide personal branding", "default": False},
+    {"id": "brand-style-guide-writer", "name": "Brand Style Guide Writer", "category": "branding", "desc": "Write style guides", "default": False},
+    {"id": "brand-crisis-comms-plan", "name": "Brand Crisis Communication Plan", "category": "branding", "desc": "Develop crisis plans", "default": False},
+    {"id": "financial-statement-analyst", "name": "Financial Statement Analyst", "category": "finance", "desc": "Analyze P&L, balance sheet, cash flow", "default": False},
+    {"id": "business-valuation-calculator", "name": "Business Valuation Calculator", "category": "finance", "desc": "Calculate valuations", "default": False},
+    {"id": "investment-proposal-writer", "name": "Investment Proposal Writer", "category": "finance", "desc": "Write investment proposals", "default": False},
+    {"id": "loan-application-assistant", "name": "Loan Application Assistant", "category": "finance", "desc": "Prepare loan applications", "default": False},
+    {"id": "grant-application-writer", "name": "Grant Application Writer", "category": "finance", "desc": "Write grant applications", "default": False},
+    {"id": "financial-projections-modeler", "name": "Financial Projections Modeler", "category": "finance", "desc": "Build financial models", "default": False},
+    {"id": "breakeven-analysis-tool", "name": "Break-even Analysis Tool", "category": "finance", "desc": "Calculate break-even points", "default": False},
+    {"id": "pricing-strategy-advisor", "name": "Pricing Strategy Advisor", "category": "finance", "desc": "Develop pricing strategies", "default": False},
+    {"id": "cost-benefit-analyst", "name": "Cost-benefit Analyst", "category": "finance", "desc": "Conduct cost-benefit analysis", "default": False},
+    {"id": "working-capital-manager", "name": "Working Capital Manager", "category": "finance", "desc": "Optimize working capital", "default": False},
+    {"id": "cash-flow-forecaster", "name": "Cash Flow Forecaster", "category": "finance", "desc": "Forecast cash flow", "default": False},
+    {"id": "debt-management-planner", "name": "Debt Management Planner", "category": "finance", "desc": "Plan debt strategies", "default": False},
+    {"id": "tax-planning-assistant", "name": "Tax Planning Assistant", "category": "finance", "desc": "Plan tax strategies", "default": False},
+    {"id": "gst-sst-compliance-guide", "name": "GST SST Compliance Guide", "category": "finance", "desc": "Guide Malaysian tax compliance", "default": False},
+    {"id": "epf-socso-calculator", "name": "EPF SOCSO Calculator", "category": "finance", "desc": "Calculate statutory contributions", "default": False},
+    {"id": "corporate-tax-return-preparer", "name": "Corporate Tax Return Preparer", "category": "finance", "desc": "Prepare corporate tax", "default": False},
+    {"id": "financial-ratio-analyzer", "name": "Financial Ratio Analyzer", "category": "finance", "desc": "Calculate financial ratios", "default": False},
+    {"id": "profit-margin-optimizer", "name": "Profit Margin Optimizer", "category": "finance", "desc": "Optimize margins by segment", "default": False},
+    {"id": "cost-accounting-specialist", "name": "Cost Accounting Specialist", "category": "finance", "desc": "Implement cost accounting", "default": False},
+    {"id": "accounts-receivable-manager", "name": "Accounts Receivable Manager", "category": "finance", "desc": "Optimize AR processes", "default": False},
+    {"id": "accounts-payable-optimizer", "name": "Accounts Payable Optimizer", "category": "finance", "desc": "Optimize AP processes", "default": False},
+    {"id": "financial-risk-assessor", "name": "Financial Risk Assessor", "category": "finance", "desc": "Identify financial risks", "default": False},
+    {"id": "currency-risk-manager", "name": "Currency Risk Manager", "category": "finance", "desc": "Manage FX exposure", "default": False},
+    {"id": "mergers-acquisitions-advisor", "name": "Mergers and Acquisitions Advisor", "category": "finance", "desc": "Advise on M&A strategy", "default": False},
+    {"id": "due-diligence-checklist-creator", "name": "Due Diligence Checklist Creator", "category": "finance", "desc": "Create due diligence checklists", "default": False},
+    {"id": "fraud-detection-analyst", "name": "Fraud Detection Analyst", "category": "finance", "desc": "Detect fraud indicators", "default": False},
+    {"id": "personal-financial-planner", "name": "Personal Financial Planner", "category": "finance", "desc": "Create personal financial plans", "default": False},
+    {"id": "insurance-needs-analyzer", "name": "Insurance Needs Analyzer", "category": "finance", "desc": "Analyze business insurance", "default": False},
+    {"id": "startup-financial-modeler", "name": "Startup Financial Modeler", "category": "finance", "desc": "Build fundraising models", "default": False},
+    {"id": "financial-dashboard-designer", "name": "Financial Dashboard Designer", "category": "finance", "desc": "Design financial dashboards", "default": False},
+    {"id": "payroll-manager", "name": "Payroll Manager", "category": "finance", "desc": "Manage payroll processes", "default": False},
+    {"id": "expense-policy-writer", "name": "Expense Policy Writer", "category": "finance", "desc": "Write expense policies", "default": False},
+    {"id": "revenue-recognition-specialist", "name": "Revenue Recognition Specialist", "category": "finance", "desc": "Apply revenue standards", "default": False},
+    {"id": "economic-indicator-analyst", "name": "Economic Indicator Analyst", "category": "economy", "desc": "Analyze GDP, inflation, unemployment", "default": False},
+    {"id": "market-research-analyst", "name": "Market Research Analyst", "category": "economy", "desc": "Conduct secondary research", "default": False},
+    {"id": "industry-trend-forecaster", "name": "Industry Trend Forecaster", "category": "economy", "desc": "Forecast industry trends", "default": False},
+    {"id": "consumer-behavior-analyst", "name": "Consumer Behavior Analyst", "category": "economy", "desc": "Analyze spending patterns", "default": False},
+    {"id": "inflation-impact-assessor", "name": "Inflation Impact Assessor", "category": "economy", "desc": "Assess inflation on business", "default": False},
+    {"id": "exchange-rate-forecaster", "name": "Exchange Rate Forecaster", "category": "economy", "desc": "Forecast currency movements", "default": False},
+    {"id": "global-trade-analyst", "name": "Global Trade Analyst", "category": "economy", "desc": "Analyze trade dynamics", "default": False},
+    {"id": "supply-demand-analyst", "name": "Supply and Demand Analyst", "category": "economy", "desc": "Analyze supply-demand", "default": False},
+    {"id": "labor-market-analyst", "name": "Labor Market Analyst", "category": "economy", "desc": "Analyze labor trends", "default": False},
+    {"id": "competitive-landscape-analyst", "name": "Competitive Landscape Analyst", "category": "economy", "desc": "Map competitive landscape", "default": False},
+    {"id": "pestel-analysis-facilitator", "name": "PESTEL Analysis Facilitator", "category": "economy", "desc": "Conduct PESTEL analysis", "default": False},
+    {"id": "swot-analysis-facilitator", "name": "SWOT Analysis Facilitator", "category": "economy", "desc": "Facilitate SWOT workshops", "default": False},
+    {"id": "porter-five-forces-analyst", "name": "Porter Five Forces Analyst", "category": "economy", "desc": "Apply Five Forces framework", "default": False},
+    {"id": "value-chain-analyst", "name": "Value Chain Analyst", "category": "economy", "desc": "Analyze value chains", "default": False},
+    {"id": "blue-ocean-strategy-advisor", "name": "Blue Ocean Strategy Advisor", "category": "economy", "desc": "Guide blue ocean strategy", "default": False},
+    {"id": "esg-reporting-specialist", "name": "ESG Reporting Specialist", "category": "economy", "desc": "Prepare ESG reports", "default": False},
+    {"id": "carbon-footprint-calculator", "name": "Carbon Footprint Calculator", "category": "economy", "desc": "Calculate carbon footprint", "default": False},
+    {"id": "sustainability-report-writer", "name": "Sustainability Report Writer", "category": "economy", "desc": "Write sustainability reports", "default": False},
+    {"id": "circular-economy-consultant", "name": "Circular Economy Consultant", "category": "economy", "desc": "Advise circular economy", "default": False},
+    {"id": "bookkeeping-guide", "name": "Bookkeeping Guide", "category": "accounting", "desc": "Guide small business bookkeeping", "default": False},
+    {"id": "chart-of-accounts-designer", "name": "Chart of Accounts Designer", "category": "accounting", "desc": "Design chart of accounts", "default": False},
+    {"id": "trial-balance-preparer", "name": "Trial Balance Preparer", "category": "accounting", "desc": "Prepare trial balances", "default": False},
+    {"id": "profit-loss-statement-writer", "name": "Profit and Loss Statement Writer", "category": "accounting", "desc": "Prepare P&L statements", "default": False},
+    {"id": "balance-sheet-preparer", "name": "Balance Sheet Preparer", "category": "accounting", "desc": "Prepare balance sheets", "default": False},
+    {"id": "cash-flow-statement-preparer", "name": "Cash Flow Statement Preparer", "category": "accounting", "desc": "Prepare cash flow statements", "default": False},
+    {"id": "bank-reconciliation-specialist", "name": "Bank Reconciliation Specialist", "category": "accounting", "desc": "Perform bank reconciliations", "default": False},
+    {"id": "depreciation-calculator", "name": "Depreciation Calculator", "category": "accounting", "desc": "Calculate depreciation", "default": False},
+    {"id": "inventory-valuation-specialist", "name": "Inventory Valuation Specialist", "category": "accounting", "desc": "Apply FIFO, LIFO methods", "default": False},
+    {"id": "cogs-calculator", "name": "Cost of Goods Sold Calculator", "category": "accounting", "desc": "Calculate COGS", "default": False},
+    {"id": "month-end-close-coordinator", "name": "Month-end Close Coordinator", "category": "accounting", "desc": "Manage month-end closing", "default": False},
+    {"id": "year-end-close-preparer", "name": "Year-end Close Preparer", "category": "accounting", "desc": "Prepare year-end entries", "default": False},
+    {"id": "accrual-accounting-guide", "name": "Accrual Accounting Guide", "category": "accounting", "desc": "Apply accrual principles", "default": False},
+    {"id": "lease-accounting-guide", "name": "Lease Accounting Guide", "category": "accounting", "desc": "Apply lease standards", "default": False},
+    {"id": "deferred-tax-calculator", "name": "Deferred Tax Calculator", "category": "accounting", "desc": "Calculate deferred tax", "default": False},
+    {"id": "consolidated-accountant", "name": "Consolidated Accountant", "category": "accounting", "desc": "Prepare consolidated statements", "default": False},
+    {"id": "xero-accounting-guide", "name": "Xero Accounting Guide", "category": "accounting", "desc": "Guide Xero accounting", "default": False},
+    {"id": "quickbooks-guide", "name": "QuickBooks Guide", "category": "accounting", "desc": "Guide QuickBooks setup", "default": False},
+    {"id": "myob-accounting-guide", "name": "MYOB Accounting Guide", "category": "accounting", "desc": "Guide MYOB accounting", "default": False},
+    {"id": "accounting-internal-controls", "name": "Accounting Internal Controls", "category": "accounting", "desc": "Design internal controls", "default": False},
+    {"id": "sme-accounting-guide", "name": "SME Accounting Guide", "category": "accounting", "desc": "Guide MPERS standards", "default": False},
+    {"id": "company-secretary-compliance", "name": "Company Secretary Compliance", "category": "accounting", "desc": "Guide SSM compliance", "default": False},
+    {"id": "annual-return-preparer", "name": "Annual Return Preparer", "category": "accounting", "desc": "Prepare annual returns", "default": False},
+    {"id": "audit-schedule-preparer", "name": "Audit Schedule Preparer", "category": "accounting", "desc": "Prepare audit schedules", "default": False},
+    {"id": "strategic-planning-facilitator", "name": "Strategic Planning Facilitator", "category": "management", "desc": "Facilitate planning sessions", "default": False},
+    {"id": "okr-setting-facilitator", "name": "OKR Setting Facilitator", "category": "management", "desc": "Guide OKR development", "default": False},
+    {"id": "kpi-definition-guide", "name": "KPI Definition Guide", "category": "management", "desc": "Define meaningful KPIs", "default": False},
+    {"id": "performance-management-designer", "name": "Performance Management Designer", "category": "management", "desc": "Design performance systems", "default": False},
+    {"id": "change-management-plan", "name": "Change Management Plan", "category": "management", "desc": "Develop change plans", "default": False},
+    {"id": "succession-planning-facilitator", "name": "Succession Planning Facilitator", "category": "management", "desc": "Develop succession plans", "default": False},
+    {"id": "talent-management-strategist", "name": "Talent Management Strategist", "category": "management", "desc": "Develop talent strategies", "default": False},
+    {"id": "leadership-development-planner", "name": "Leadership Development Planner", "category": "management", "desc": "Plan leadership programs", "default": False},
+    {"id": "team-building-facilitator", "name": "Team Building Facilitator", "category": "management", "desc": "Plan team building", "default": False},
+    {"id": "conflict-resolution-mediator", "name": "Conflict Resolution Mediator", "category": "management", "desc": "Guide conflict resolution", "default": False},
+    {"id": "employee-engagement-planner", "name": "Employee Engagement Planner", "category": "management", "desc": "Plan engagement initiatives", "default": False},
+    {"id": "culture-building-guide", "name": "Culture Building Guide", "category": "management", "desc": "Guide culture development", "default": False},
+    {"id": "remote-team-manager", "name": "Remote Team Manager", "category": "management", "desc": "Guide remote management", "default": False},
+    {"id": "time-management-coach", "name": "Time Management Coach", "category": "management", "desc": "Coach time management", "default": False},
+    {"id": "delegation-skills-trainer", "name": "Delegation Skills Trainer", "category": "management", "desc": "Train delegation skills", "default": False},
+    {"id": "coaching-skills-developer", "name": "Coaching Skills Developer", "category": "management", "desc": "Develop coaching skills", "default": False},
+    {"id": "mentorship-program-designer", "name": "Mentorship Program Designer", "category": "management", "desc": "Design mentorship programs", "default": False},
+    {"id": "new-manager-onboarding-guide", "name": "New Manager Onboarding Guide", "category": "management", "desc": "Guide first-time managers", "default": False},
+    {"id": "board-meeting-preparer", "name": "Board Meeting Preparer", "category": "management", "desc": "Prepare board materials", "default": False},
+    {"id": "crisis-management-plan", "name": "Crisis Management Plan", "category": "management", "desc": "Develop crisis plans", "default": False},
+    {"id": "business-continuity-planner", "name": "Business Continuity Planner", "category": "management", "desc": "Develop continuity plans", "default": False},
+    {"id": "risk-management-framework", "name": "Risk Management Framework", "category": "management", "desc": "Design risk frameworks", "default": False},
+    {"id": "compliance-management-guide", "name": "Compliance Management Guide", "category": "management", "desc": "Guide compliance", "default": False},
+    {"id": "policy-procedure-writer", "name": "Policy and Procedure Writer", "category": "management", "desc": "Write policies", "default": False},
+    {"id": "org-chart-designer", "name": "Organizational Chart Designer", "category": "management", "desc": "Design org structures", "default": False},
+    {"id": "job-description-writer", "name": "Job Description Writer", "category": "management", "desc": "Write job descriptions", "default": False},
+    {"id": "competency-framework-developer", "name": "Competency Framework Developer", "category": "management", "desc": "Develop competency models", "default": False},
+    {"id": "salary-benchmarking-analyst", "name": "Salary Benchmarking Analyst", "category": "management", "desc": "Benchmark industry salaries", "default": False},
+    {"id": "benefits-package-designer", "name": "Benefits Package Designer", "category": "management", "desc": "Design benefits packages", "default": False},
+    {"id": "hr-policy-writer", "name": "HR Policy Writer", "category": "management", "desc": "Write HR policies", "default": False},
+    {"id": "employment-contract-drafter", "name": "Employment Contract Drafter", "category": "management", "desc": "Draft employment contracts", "default": False},
+    {"id": "workplace-safety-guide", "name": "Workplace Safety Guide", "category": "management", "desc": "Guide OSHA compliance", "default": False},
+    {"id": "corporate-governance-guide", "name": "Corporate Governance Guide", "category": "management", "desc": "Guide governance practices", "default": False},
+    {"id": "business-ethics-advisor", "name": "Business Ethics Advisor", "category": "management", "desc": "Advise on ethics", "default": False},
+    {"id": "annual-report-writer", "name": "Annual Report Writer", "category": "management", "desc": "Write annual reports", "default": False},
+    {"id": "operations-manual-writer", "name": "Operations Manual Writer", "category": "operations", "desc": "Write operations manuals", "default": False},
+    {"id": "sop-writer", "name": "Standard Operating Procedure Writer", "category": "operations", "desc": "Write clear SOPs", "default": False},
+    {"id": "process-flow-diagram-designer", "name": "Process Flow Diagram Designer", "category": "operations", "desc": "Design process flows", "default": False},
+    {"id": "business-process-optimizer", "name": "Business Process Optimizer", "category": "operations", "desc": "Eliminate bottlenecks", "default": False},
+    {"id": "lean-operations-consultant", "name": "Lean Operations Consultant", "category": "operations", "desc": "Apply lean principles", "default": False},
+    {"id": "quality-management-system-designer", "name": "Quality Management System Designer", "category": "operations", "desc": "Design ISO 9001 QMS", "default": False},
+    {"id": "warehouse-layout-designer", "name": "Warehouse Layout Designer", "category": "operations", "desc": "Design efficient layouts", "default": False},
+    {"id": "warehouse-management-guide", "name": "Warehouse Management Guide", "category": "operations", "desc": "Guide warehouse operations", "default": False},
+    {"id": "inventory-control-specialist", "name": "Inventory Control Specialist", "category": "operations", "desc": "Design control systems", "default": False},
+    {"id": "inventory-optimization-analyst", "name": "Inventory Optimization Analyst", "category": "operations", "desc": "Optimize inventory levels", "default": False},
+    {"id": "stock-reorder-calculator", "name": "Stock Reorder Point Calculator", "category": "operations", "desc": "Calculate reorder points", "default": False},
+    {"id": "warehouse-slotting-optimizer", "name": "Warehouse Slotting Optimizer", "category": "operations", "desc": "Optimize product slotting", "default": False},
+    {"id": "picking-route-optimizer", "name": "Picking Route Optimizer", "category": "operations", "desc": "Optimize picking routes", "default": False},
+    {"id": "shipping-logistics-coordinator", "name": "Shipping and Logistics Coordinator", "category": "operations", "desc": "Manage shipping", "default": False},
+    {"id": "last-mile-delivery-optimizer", "name": "Last Mile Delivery Optimizer", "category": "operations", "desc": "Optimize delivery routes", "default": False},
+    {"id": "fleet-management-guide", "name": "Fleet Management Guide", "category": "operations", "desc": "Guide fleet operations", "default": False},
+    {"id": "supply-chain-risk-assessor", "name": "Supply Chain Risk Assessor", "category": "operations", "desc": "Assess supply chain risks", "default": False},
+    {"id": "supplier-evaluation-matrix", "name": "Supplier Evaluation Matrix", "category": "operations", "desc": "Design supplier scorecards", "default": False},
+    {"id": "reverse-logistics-manager", "name": "Reverse Logistics Manager", "category": "operations", "desc": "Manage returns", "default": False},
+    {"id": "export-documentation-specialist", "name": "Export Documentation Specialist", "category": "operations", "desc": "Prepare export docs", "default": False},
+    {"id": "import-clearance-guide", "name": "Import Clearance Guide", "category": "operations", "desc": "Guide import procedures", "default": False},
+    {"id": "customs-compliance-advisor", "name": "Customs Compliance Advisor", "category": "operations", "desc": "Advise customs compliance", "default": False},
+    {"id": "facility-management-guide", "name": "Facility Management Guide", "category": "operations", "desc": "Guide facility management", "default": False},
+    {"id": "service-level-agreement-writer", "name": "Service Level Agreement Writer", "category": "operations", "desc": "Write SLAs", "default": False},
+    {"id": "vendor-performance-scorecard", "name": "Vendor Performance Scorecard", "category": "operations", "desc": "Design vendor KPIs", "default": False},
+    {"id": "corrective-action-plan-writer", "name": "Corrective Action Plan Writer", "category": "operations", "desc": "Write corrective plans", "default": False},
+    {"id": "production-planning-guide", "name": "Production Planning Guide", "category": "manufacturing", "desc": "Plan production schedules", "default": False},
+    {"id": "master-production-scheduler", "name": "Master Production Scheduler", "category": "manufacturing", "desc": "Create MPS schedules", "default": False},
+    {"id": "bill-of-materials-creator", "name": "Bill of Materials Creator", "category": "manufacturing", "desc": "Create accurate BOMs", "default": False},
+    {"id": "material-requirement-planner", "name": "Material Requirement Planner", "category": "manufacturing", "desc": "Calculate material needs", "default": False},
+    {"id": "shop-floor-controller", "name": "Shop Floor Controller", "category": "manufacturing", "desc": "Manage shop floor", "default": False},
+    {"id": "production-order-manager", "name": "Production Order Manager", "category": "manufacturing", "desc": "Manage production orders", "default": False},
+    {"id": "work-order-creator", "name": "Work Order Creator", "category": "manufacturing", "desc": "Create detailed work orders", "default": False},
+    {"id": "oee-calculator", "name": "OEE Calculator", "category": "manufacturing", "desc": "Calculate equipment effectiveness", "default": False},
+    {"id": "production-line-balancer", "name": "Production Line Balancer", "category": "manufacturing", "desc": "Balance production lines", "default": False},
+    {"id": "lean-manufacturing-guide", "name": "Lean Manufacturing Guide", "category": "manufacturing", "desc": "Apply lean methods", "default": False},
+    {"id": "5s-implementation-guide", "name": "5S Implementation Guide", "category": "manufacturing", "desc": "Guide workplace organization", "default": False},
+    {"id": "tpm-implementation-guide", "name": "TPM Implementation Guide", "category": "manufacturing", "desc": "Guide maintenance", "default": False},
+    {"id": "kanban-system-designer", "name": "Kanban System Designer", "category": "manufacturing", "desc": "Design pull-based systems", "default": False},
+    {"id": "value-stream-mapping-facilitator", "name": "Value Stream Mapping Facilitator", "category": "manufacturing", "desc": "Facilitate VSM", "default": False},
+    {"id": "quality-control-inspector-guide", "name": "Quality Control Inspector Guide", "category": "manufacturing", "desc": "Guide QC processes", "default": False},
+    {"id": "statistical-process-control-guide", "name": "Statistical Process Control Guide", "category": "manufacturing", "desc": "Apply SPC", "default": False},
+    {"id": "fmea-facilitator", "name": "FMEA Facilitator", "category": "manufacturing", "desc": "Facilitate Failure Mode analysis", "default": False},
+    {"id": "control-plan-writer", "name": "Control Plan Writer", "category": "manufacturing", "desc": "Write control plans", "default": False},
+    {"id": "iso-9001-quality-manual-writer", "name": "ISO 9001 Quality Manual Writer", "category": "manufacturing", "desc": "Write quality manuals", "default": False},
+    {"id": "gmp-compliance-guide", "name": "GMP Compliance Guide", "category": "manufacturing", "desc": "Guide GMP compliance", "default": False},
+    {"id": "halal-certification-guide", "name": "Halal Certification Guide", "category": "manufacturing", "desc": "Guide halal certification", "default": False},
+    {"id": "factory-layout-planner", "name": "Factory Layout Planner", "category": "manufacturing", "desc": "Plan factory layouts", "default": False},
+    {"id": "machine-maintenance-scheduler", "name": "Machine Maintenance Scheduler", "category": "manufacturing", "desc": "Schedule maintenance", "default": False},
+    {"id": "scrap-rate-analyst", "name": "Scrap Rate Analyst", "category": "manufacturing", "desc": "Analyze scrap rates", "default": False},
+    {"id": "yield-improvement-specialist", "name": "Yield Improvement Specialist", "category": "manufacturing", "desc": "Improve manufacturing yield", "default": False},
+    {"id": "ecommerce-strategy-planner", "name": "E-commerce Strategy Planner", "category": "ecommerce", "desc": "Develop online retail strategies", "default": False},
+    {"id": "shopify-store-guide", "name": "Shopify Store Builder Guide", "category": "ecommerce", "desc": "Guide Shopify setup", "default": False},
+    {"id": "shopee-seller-guide", "name": "Shopee Seller Center Guide", "category": "ecommerce", "desc": "Guide Shopee operations", "default": False},
+    {"id": "lazada-seller-guide", "name": "Lazada Seller Center Guide", "category": "ecommerce", "desc": "Guide Lazada operations", "default": False},
+    {"id": "product-listing-optimizer", "name": "Product Listing Optimizer", "category": "ecommerce", "desc": "Optimize product listings", "default": False},
+    {"id": "product-description-writer", "name": "Product Description Writer", "category": "ecommerce", "desc": "Write product descriptions", "default": False},
+    {"id": "ecommerce-seo-specialist", "name": "E-commerce SEO Specialist", "category": "ecommerce", "desc": "Optimize e-commerce search", "default": False},
+    {"id": "ecommerce-conversion-optimizer", "name": "E-commerce Conversion Optimizer", "category": "ecommerce", "desc": "Optimize conversion rates", "default": False},
+    {"id": "cart-abandonment-reducer", "name": "Cart Abandonment Reducer", "category": "ecommerce", "desc": "Design recovery sequences", "default": False},
+    {"id": "payment-gateway-guide", "name": "Payment Gateway Selection Guide", "category": "ecommerce", "desc": "Guide payment selection", "default": False},
+    {"id": "multichannel-selling-planner", "name": "Multi-channel Selling Planner", "category": "ecommerce", "desc": "Plan multi-channel sales", "default": False},
+    {"id": "dropshipping-guide", "name": "Dropshipping Business Guide", "category": "ecommerce", "desc": "Guide dropshipping operations", "default": False},
+    {"id": "customer-ltv-calculator", "name": "Customer Lifetime Value Calculator", "category": "ecommerce", "desc": "Calculate CLV", "default": False},
+    {"id": "flash-sale-manager", "name": "Flash Sale Manager", "category": "ecommerce", "desc": "Plan flash sale events", "default": False},
+    {"id": "cross-border-ecommerce-guide", "name": "Cross-border E-commerce Guide", "category": "ecommerce", "desc": "Guide cross-border selling", "default": False},
+    {"id": "ecommerce-legal-compliance", "name": "E-commerce Legal Compliance Guide", "category": "ecommerce", "desc": "Guide PDPA compliance", "default": False},
+    {"id": "property-investment-analyst", "name": "Property Investment Analyst", "category": "real-estate", "desc": "Analyze investment ROI", "default": False},
+    {"id": "rental-yield-calculator", "name": "Rental Yield Calculator", "category": "real-estate", "desc": "Calculate rental yields", "default": False},
+    {"id": "property-listing-copywriter", "name": "Property Listing Copywriter", "category": "real-estate", "desc": "Write property listings", "default": False},
+    {"id": "tenant-screening-guide", "name": "Tenant Screening Guide", "category": "real-estate", "desc": "Guide tenant screening", "default": False},
+    {"id": "tenancy-agreement-drafter", "name": "Tenancy Agreement Drafter", "category": "real-estate", "desc": "Draft tenancy agreements", "default": False},
+    {"id": "property-management-guide", "name": "Property Management Guide", "category": "real-estate", "desc": "Guide property management", "default": False},
+    {"id": "home-loan-application-guide", "name": "Home Loan Application Guide", "category": "real-estate", "desc": "Guide loan applications", "default": False},
+    {"id": "business-plan-writer", "name": "Business Plan Writer", "category": "entrepreneurship", "desc": "Write business plans", "default": False},
+    {"id": "pitch-deck-creator", "name": "Pitch Deck Creator", "category": "entrepreneurship", "desc": "Create investor pitch decks", "default": False},
+    {"id": "executive-summary-writer", "name": "Executive Summary Writer", "category": "entrepreneurship", "desc": "Write executive summaries", "default": False},
+    {"id": "lean-canvas-facilitator", "name": "Lean Canvas Facilitator", "category": "entrepreneurship", "desc": "Facilitate Lean Canvas", "default": False},
+    {"id": "business-model-canvas-facilitator", "name": "Business Model Canvas Facilitator", "category": "entrepreneurship", "desc": "Facilitate BMC", "default": False},
+    {"id": "startup-financial-forecaster", "name": "Startup Financial Forecaster", "category": "entrepreneurship", "desc": "Build startup forecasts", "default": False},
+    {"id": "mvp-definition-guide", "name": "MVP Definition Guide", "category": "entrepreneurship", "desc": "Guide MVP definition", "default": False},
+    {"id": "product-market-fit-evaluator", "name": "Product Market Fit Evaluator", "category": "entrepreneurship", "desc": "Evaluate product-market fit", "default": False},
+    {"id": "customer-discovery-guide", "name": "Customer Discovery Guide", "category": "entrepreneurship", "desc": "Guide customer interviews", "default": False},
+    {"id": "go-to-market-strategist", "name": "Go-to-Market Strategist", "category": "entrepreneurship", "desc": "Develop GTM strategies", "default": False},
+    {"id": "startup-legal-structure-guide", "name": "Startup Legal Structure Guide", "category": "entrepreneurship", "desc": "Guide legal structure", "default": False},
+    {"id": "founders-agreement-drafter", "name": "Founders Agreement Drafter", "category": "entrepreneurship", "desc": "Draft founders agreements", "default": False},
+    {"id": "cap-table-manager", "name": "Cap Table Manager", "category": "entrepreneurship", "desc": "Manage capitalization tables", "default": False},
+    {"id": "term-sheet-analyzer", "name": "Term Sheet Analyzer", "category": "entrepreneurship", "desc": "Analyze investor term sheets", "default": False},
+    {"id": "fundraising-strategy-planner", "name": "Fundraising Strategy Planner", "category": "entrepreneurship", "desc": "Plan fundraising", "default": False},
+    {"id": "investor-update-writer", "name": "Investor Update Writer", "category": "entrepreneurship", "desc": "Write investor updates", "default": False},
+    {"id": "saas-metrics-analyst", "name": "SaaS Metrics Analyst", "category": "entrepreneurship", "desc": "Analyze MRR, churn, LTV", "default": False},
+    {"id": "unit-economics-calculator", "name": "Unit Economics Calculator", "category": "entrepreneurship", "desc": "Calculate CAC, LTV", "default": False},
+    {"id": "burn-rate-calculator", "name": "Burn Rate Calculator", "category": "entrepreneurship", "desc": "Calculate runway", "default": False},
+    {"id": "course-curriculum-designer", "name": "Course Curriculum Designer", "category": "education", "desc": "Design training curricula", "default": False},
+    {"id": "training-needs-analyst", "name": "Training Needs Analyst", "category": "education", "desc": "Analyze training needs", "default": False},
+    {"id": "learning-module-creator", "name": "Learning Module Creator", "category": "education", "desc": "Create learning modules", "default": False},
+    {"id": "training-evaluation-designer", "name": "Training Evaluation Designer", "category": "education", "desc": "Design evaluations", "default": False},
+    {"id": "elearning-content-developer", "name": "E-learning Content Developer", "category": "education", "desc": "Develop online content", "default": False},
+    {"id": "assessment-question-creator", "name": "Assessment Question Bank Creator", "category": "education", "desc": "Create test questions", "default": False},
+    {"id": "training-roi-calculator", "name": "Training ROI Calculator", "category": "education", "desc": "Calculate training ROI", "default": False},
+    {"id": "digital-transformation-guide", "name": "Digital Transformation Guide", "category": "technology", "desc": "Guide digital transformation", "default": False},
+    {"id": "it-strategy-planner", "name": "IT Strategy Planner", "category": "technology", "desc": "Develop IT strategies", "default": False},
+    {"id": "software-selection-guide", "name": "Software Selection Guide", "category": "technology", "desc": "Guide software selection", "default": False},
+    {"id": "erp-implementation-guide", "name": "ERP Implementation Guide", "category": "technology", "desc": "Guide ERP implementation", "default": False},
+    {"id": "crm-implementation-guide", "name": "CRM Implementation Guide", "category": "technology", "desc": "Guide CRM implementation", "default": False},
+    {"id": "tech-stack-advisor", "name": "Technology Stack Advisor", "category": "technology", "desc": "Advise tech stack", "default": False},
+    {"id": "data-management-guide", "name": "Data Management Guide", "category": "technology", "desc": "Guide data management", "default": False},
+    {"id": "it-helpdesk-guide", "name": "IT Helpdesk Guide", "category": "technology", "desc": "Guide IT support", "default": False},
+    {"id": "cloud-migration-planner", "name": "Cloud Migration Planner", "category": "technology", "desc": "Plan cloud migration", "default": False},
+    {"id": "data-backup-recovery-guide", "name": "Data Backup and Recovery Guide", "category": "technology", "desc": "Guide backup strategies", "default": False},
+    {"id": "data-privacy-compliance-guide", "name": "Data Privacy Compliance Guide", "category": "technology", "desc": "Guide PDPA compliance", "default": False},
+    {"id": "ai-adoption-guide", "name": "AI Adoption Guide for Business", "category": "technology", "desc": "Guide AI adoption", "default": False},
+    {"id": "chatbot-implementation-guide", "name": "Chatbot Implementation Guide", "category": "technology", "desc": "Guide chatbot setup", "default": False},
+    {"id": "automation-opportunity-guide", "name": "Automation Opportunity Guide", "category": "technology", "desc": "Find automation opportunities", "default": False},
+    {"id": "business-intelligence-guide", "name": "Business Intelligence Guide", "category": "technology", "desc": "Guide BI implementation", "default": False},
+    {"id": "data-analytics-guide", "name": "Data Analytics Guide for Business", "category": "technology", "desc": "Guide data decisions", "default": False},
+    {"id": "restaurant-operations-guide", "name": "Restaurant Operations Guide", "category": "hospitality", "desc": "Guide restaurant operations", "default": False},
+    {"id": "menu-engineering-analyst", "name": "Menu Engineering Analyst", "category": "hospitality", "desc": "Analyze menu profitability", "default": False},
+    {"id": "recipe-cost-calculator", "name": "Recipe Cost Calculator", "category": "hospitality", "desc": "Calculate food costs", "default": False},
+    {"id": "food-safety-plan-writer", "name": "Food Safety Plan Writer", "category": "hospitality", "desc": "Write food safety plans", "default": False},
+    {"id": "hotel-front-office-guide", "name": "Hotel Front Office Guide", "category": "hospitality", "desc": "Guide hotel operations", "default": False},
+    {"id": "housekeeping-management-guide", "name": "Housekeeping Management Guide", "category": "hospitality", "desc": "Guide housekeeping", "default": False},
+    {"id": "revenue-management-hotels", "name": "Revenue Management for Hotels", "category": "hospitality", "desc": "Optimize hotel revenue", "default": False},
+    {"id": "guest-experience-designer", "name": "Guest Experience Designer", "category": "hospitality", "desc": "Design guest experiences", "default": False},
+    {"id": "farm-business-plan-writer", "name": "Farm Business Plan Writer", "category": "agriculture", "desc": "Write farm business plans", "default": False},
+    {"id": "crop-management-guide", "name": "Crop Management Guide", "category": "agriculture", "desc": "Guide crop cycles", "default": False},
+    {"id": "livestock-management-guide", "name": "Livestock Management Guide", "category": "agriculture", "desc": "Guide livestock farming", "default": False},
+    {"id": "farm-financial-management", "name": "Farm Financial Management Guide", "category": "agriculture", "desc": "Guide farm finance", "default": False},
+    {"id": "agricultural-subsidy-guide", "name": "Agricultural Subsidy Guide", "category": "agriculture", "desc": "Guide subsidy applications", "default": False},
+    {"id": "agricultural-marketing-guide", "name": "Agricultural Marketing Guide", "category": "agriculture", "desc": "Guide agri marketing", "default": False},
+    {"id": "construction-project-planner", "name": "Construction Project Planner", "category": "construction", "desc": "Plan projects", "default": False},
+    {"id": "construction-cost-estimator", "name": "Construction Cost Estimator", "category": "construction", "desc": "Estimate costs", "default": False},
+    {"id": "tender-document-preparer", "name": "Tender Document Preparer", "category": "construction", "desc": "Prepare tender documents", "default": False},
+    {"id": "site-safety-plan-writer", "name": "Site Safety Plan Writer", "category": "construction", "desc": "Write site safety plans", "default": False},
+    {"id": "building-permit-guide", "name": "Building Permit Guide", "category": "construction", "desc": "Guide permit applications", "default": False},
+    {"id": "route-optimization-planner", "name": "Route Optimization Planner", "category": "logistics", "desc": "Plan optimal delivery routes", "default": False},
+    {"id": "fleet-management-guide", "name": "Fleet Management Guide", "category": "logistics", "desc": "Guide fleet operations", "default": False},
+    {"id": "freight-forwarding-guide", "name": "Freight Forwarding Guide", "category": "logistics", "desc": "Guide freight forwarding", "default": False},
+    {"id": "warehouse-safety-guide", "name": "Warehouse Safety Guide", "category": "logistics", "desc": "Guide warehouse safety", "default": False},
+    {"id": "driver-training-program", "name": "Driver Training Program", "category": "logistics", "desc": "Design driver training", "default": False},
+    {"id": "clinic-patient-management", "name": "Clinic Patient Management Guide", "category": "healthcare", "desc": "Guide patient registration", "default": False},
+    {"id": "clinic-appointment-scheduling", "name": "Clinic Appointment Scheduling", "category": "healthcare", "desc": "Design appointment systems", "default": False},
+    {"id": "medical-records-manager", "name": "Medical Records Manager", "category": "healthcare", "desc": "Guide medical records", "default": False},
+    {"id": "clinic-billing-guide", "name": "Clinic Billing Guide", "category": "healthcare", "desc": "Guide clinic billing", "default": False},
+    {"id": "pharmacy-inventory-manager", "name": "Pharmacy Inventory Manager", "category": "healthcare", "desc": "Manage pharmacy stock", "default": False},
 ]
 
-DEFAULT_TOOLS = [
-    {"id": "terminal", "name": "Terminal", "desc": "Execute shell commands on the system", "risk": "high", "enabled": True},
-    {"id": "file_system", "name": "File System", "desc": "Read, write, and manage files", "risk": "medium", "enabled": True},
-    {"id": "web_search", "name": "Web Search", "desc": "Search the internet", "risk": "low", "enabled": True},
-    {"id": "code_execution", "name": "Code Execution", "desc": "Run isolated code", "risk": "high", "enabled": True},
-    {"id": "image_generation", "name": "Image Generation", "desc": "Generate images", "risk": "low", "enabled": False},
-    {"id": "browser_automation", "name": "Browser Automation", "desc": "Control a headless browser", "risk": "medium", "enabled": True},
-    {"id": "memory_access", "name": "Memory Access", "desc": "Read/write persistent memory", "risk": "medium", "enabled": True},
+BUILTIN_TOOLSETS = [
+    # ── SYSTEM TOOLS ─────────────────────────────────────────────────
+    {"id": "create_staff", "name": "Create Staff", "category": "system", "desc": "Create a new AI or human staff member in a department/unit", "default": True, "risk": "medium"},
+    {"id": "list_staff", "name": "List Staff", "category": "system", "desc": "List all staff members, optionally filtered by unit", "default": True, "risk": "low"},
+    {"id": "get_staff", "name": "Get Staff Info", "category": "system", "desc": "Get details of a specific staff member by name or ID", "default": True, "risk": "low"},
+    {"id": "create_department", "name": "Create Department", "category": "system", "desc": "Create a new department in the organisation", "default": True, "risk": "medium"},
+    {"id": "create_unit", "name": "Create Unit", "category": "system", "desc": "Create a new unit inside a department", "default": True, "risk": "medium"},
+    {"id": "create_task", "name": "Create Task", "category": "system", "desc": "Create and queue a new task assigned to a staff member", "default": True, "risk": "low"},
+    {"id": "list_tasks", "name": "List Tasks", "category": "system", "desc": "List recent tasks with their status", "default": True, "risk": "low"},
+    {"id": "get_company_info", "name": "Get Company Info", "category": "system", "desc": "Get company name, industry, business profile, and key statistics", "default": True, "risk": "low"},
+    {"id": "send_notification", "name": "Send Notification", "category": "system", "desc": "Send a notification to the human owner/admin", "default": True, "risk": "low"},
+    {"id": "manage_integration_connections", "name": "Manage Integration Connections", "category": "system", "desc": "Full CRUD for ALL integration connections", "default": True, "risk": "high"},
+    {"id": "web", "name": "Web", "category": "system", "desc": "Web search and content extraction", "default": True, "risk": "low"},
+    {"id": "browser", "name": "Browser", "category": "system", "desc": "Browser automation (CDP/Playwright)", "default": False, "risk": "medium"},
+    {"id": "terminal", "name": "Terminal", "category": "system", "desc": "Shell commands and process management", "default": True, "risk": "high"},
+    {"id": "file", "name": "File", "category": "system", "desc": "File read/write/search/patch", "default": True, "risk": "medium"},
+    {"id": "code_execution", "name": "Code Execution", "category": "system", "desc": "Sandboxed Python execution", "default": True, "risk": "medium"},
+    {"id": "vision", "name": "Vision", "category": "system", "desc": "Image analysis and recognition", "default": True, "risk": "low"},
+    {"id": "image_gen", "name": "Image Generation", "category": "system", "desc": "AI image generation", "default": False, "risk": "low"},
+    {"id": "tts", "name": "Text-to-Speech", "category": "system", "desc": "Text-to-speech conversion", "default": False, "risk": "low"},
+    {"id": "memory", "name": "Memory", "category": "system", "desc": "Persistent cross-session memory", "default": True, "risk": "low"},
+    {"id": "delegation", "name": "Delegation", "category": "system", "desc": "Subagent task delegation", "default": False, "risk": "high"},
+    {"id": "cronjob", "name": "Cron Jobs", "category": "system", "desc": "Scheduled task management", "default": False, "risk": "high"},
+    {"id": "messaging", "name": "Messaging", "category": "system", "desc": "Cross-platform message sending", "default": True, "risk": "medium"},
+    {"id": "todo", "name": "Task List", "category": "system", "desc": "In-session task planning", "default": True, "risk": "low"},
+    {"id": "clarify", "name": "Clarify", "category": "system", "desc": "Ask user clarifying questions", "default": True, "risk": "low"},
+    {"id": "skills_tool", "name": "Skills", "category": "system", "desc": "Skill browsing and management", "default": True, "risk": "low"},
+
+    # ── INTEGRATION TOOLS ────────────────────────────────────────────
+    {"id": "integration_google_calendar", "name": "Google Calendar", "category": "integration", "desc": "Connect Google Calendar for schedule sync and smart booking", "default": True, "risk": "medium"},
+    {"id": "integration_google_drive", "name": "Google Drive", "category": "integration", "desc": "Connect Google Drive for document exploration and file retrieval", "default": True, "risk": "medium"},
+    {"id": "integration_google_contacts", "name": "Google Contacts", "category": "integration", "desc": "Connect Google Contacts for CRM enrichment and contact lookup", "default": False, "risk": "medium"},
+    {"id": "integration_outlook_calendar", "name": "Outlook Calendar", "category": "integration", "desc": "Connect Outlook Calendar for schedule sync and conflict detection", "default": False, "risk": "medium"},
+    {"id": "integration_erp", "name": "ERP (ERPNext)", "category": "integration", "desc": "Connect ERPNext API for finance, invoicing, and operations sync", "default": False, "risk": "high"},
+    {"id": "integration_crm", "name": "CRM Integration", "category": "integration", "desc": "Connect CRM for leads, opportunities, and account updates", "default": False, "risk": "high"},
+    {"id": "integration_ticketing", "name": "Ticketing System", "category": "integration", "desc": "Connect support ticketing for customer service workflows", "default": False, "risk": "medium"},
+    {"id": "integration_social_media", "name": "Social Media", "category": "integration", "desc": "Connect social channels for publishing, monitoring, campaigns", "default": False, "risk": "medium"},
+    {"id": "integration_email_imap_smtp", "name": "Email (IMAP/SMTP)", "category": "integration", "desc": "Connect email inbox to read/send/manage emails", "default": True, "risk": "high"},
+    {"id": "integration_github_copilot", "name": "GitHub Copilot", "category": "integration", "desc": "Connect GitHub for Copilot SDK authentication", "default": False, "risk": "medium"},
+
+    # ── MESSAGING HUB ────────────────────────────────────────────────
+    {"id": "integration_messaging_hub", "name": "Messaging Hub", "category": "messaging", "desc": "Unified communication hub: WhatsApp, Telegram, Discord, Slack", "default": True, "risk": "high"},
+    {"id": "integration_wasap_marz", "name": "Wasap.Marz WhatsApp", "category": "messaging", "desc": "WhatsApp gateway via Wasap.Marz with QR scan and webhook", "default": True, "risk": "high"},
+    {"id": "integration_whatsapp_meta", "name": "WhatsApp Meta API", "category": "messaging", "desc": "WhatsApp Business API rasmi Meta Cloud API", "default": False, "risk": "high"},
+    {"id": "integration_whatsapp_business", "name": "WhatsApp On-Premises", "category": "messaging", "desc": "WhatsApp Business API On-Premises for full control", "default": False, "risk": "high"},
+    {"id": "integration_telegram_bot", "name": "Telegram Bot", "category": "messaging", "desc": "Telegram bot integration for messaging and commands", "default": True, "risk": "medium"},
+
+    # ── AUTOMATION TOOLS ─────────────────────────────────────────────
+    {"id": "integration_n8n", "name": "n8n Workflows", "category": "automation", "desc": "Connect n8n workflows for automation triggers", "default": False, "risk": "high"},
+    {"id": "integration_make", "name": "Make.com", "category": "automation", "desc": "Connect Make.com scenarios for automation triggers", "default": False, "risk": "high"},
+
+    # ── LOCAL AGENT TOOLS ────────────────────────────────────────────
+    {"id": "integration_local_folder_ocr", "name": "Local Folder & OCR", "category": "local", "desc": "Read local folder on office PC, extract text via OCR", "default": False, "risk": "high"},
 ]
 
-DEFAULT_POLICY = {
+DEFAULT_GOVERNANCE_POLICY = {
+    "version": "2.0",
+    "name": "StaffBot.my AI Governance Policy",
+    "description": "Enterprise AI governance policy aligned with Aona AI governance standards. Covers data classification, acceptable use, risk assessment, incident response, and vendor security.",
+    "data_classification": {
+        "enabled": True,
+        "levels": [
+            {"level": "Public", "description": "Information that can be freely shared", "ai_usage": "Allowed with any AI tool", "examples": ["Published blog posts", "Marketing materials", "Public press releases"]},
+            {"level": "Internal", "description": "Information for internal use only", "ai_usage": "Allowed with approved AI agents only", "examples": ["Internal policies", "Employee directories", "Meeting notes"]},
+            {"level": "Confidential", "description": "Sensitive business information", "ai_usage": "Allowed only with isolated AI agents, no external model training", "examples": ["Customer data", "Financial reports", "Business strategies"]},
+            {"level": "Restricted", "description": "Highly sensitive or regulated data", "ai_usage": "PROHIBITED — do not process with any AI agent", "examples": ["PII", "Passwords", "Legal privilege documents", "Trade secrets"]},
+        ],
+        "default_level": "Internal",
+        "prompt_content_rules": {
+            "no_confidential_in_prompts": True,
+            "no_pii_in_prompts": True,
+            "no_api_keys_in_prompts": True,
+            "auto_redact_sensitive_data": True,
+        },
+    },
     "general_restrictions": [
-        "Do not share sensitive user information",
-        "Do not execute destructive system commands",
-        "Do not impersonate users or make decisions on their behalf",
+        "NEVER execute shell commands that modify system files without explicit approval",
+        "NEVER share, expose, or log API keys, passwords, tokens, or credentials",
+        "NEVER attempt to escalate privileges or access restricted system resources",
+        "NEVER use the agent for illegal, unethical, or harmful activities",
+        "NEVER impersonate a human user without disclosure",
+        "NEVER process Restricted-level data (PII, passwords, trade secrets) through any AI agent",
+        "NEVER train external AI models on client data or conversation history",
+        "NEVER make automated decisions that have legal or financial impact without human approval",
+        "ALWAYS maintain professional tone in customer-facing communications",
+        "ALWAYS respect data privacy — do not share one client's data with another",
+        "ALWAYS disclose AI-generated content when required by policy",
+        "ALWAYS obtain human approval before taking destructive actions (delete, modify schema, bulk operations)",
     ],
     "content_filtering": {
-        "filter_strength": "medium",
+        "enabled": True,
+        "blocked_categories": ["hate_speech", "violence", "sexual_content", "self_harm", "harassment", "illegal_activities", "malicious_code_generation", "social_engineering"],
+        "filter_strength": "high",
         "prompt_injection_protection": True,
         "jailbreak_detection": True,
-        "blocked_categories": ["hate_speech", "violence", "sexual_content", "self_harm"],
+        "data_exfiltration_prevention": True,
     },
+    "prohibited_ai_uses": [
+        "Training external AI/ML models on client data or conversations",
+        "Automated credit decisions, loan approvals, or insurance underwriting without human review",
+        "Medical diagnosis or treatment recommendations without qualified professional review",
+        "Legal advice or contract interpretation without qualified legal review",
+        "Automated hiring decisions or candidate ranking without human oversight",
+        "Generating deceptive content (deepfakes, impersonation, misleading information)",
+        "Automated decisions affecting children or vulnerable populations",
+        "Weapons development, surveillance targeting, or mass monitoring systems",
+        "Automated enforcement of laws, regulations, or sanctions without due process",
+        "Creating or distributing malware, exploits, or attack tools",
+    ],
     "action_restrictions": {
-        "allowed_actions": ["web_search", "read_file", "code_analysis", "image_generation", "summarize", "translate"],
-        "approval_required": ["write_file", "send_email", "delete_file", "install_package", "modify_system"],
-        "blocked_actions": ["delete_system_file", "modify_user_database", "send_spam", "execute_unknown_binary", "change_permissions"],
+        "allowed_actions": [
+            "read_files_in_client_workspace",
+            "write_files_to_client_directory",
+            "execute_terminal_commands_in_sandbox",
+            "send_messages_via_platforms",
+            "search_the_web",
+            "access_memory",
+            "delegate_subtasks",
+            "manage_cron_schedules",
+            "process_emails",
+            "manage_documents",
+            "read_knowledge_base",
+            "write_knowledge_base",
+        ],
+        "blocked_actions": [
+            "modify_system_configurations",
+            "access_other_clients_data",
+            "install_software_without_approval",
+            "execute_unverified_code_from_third_parties",
+            "access_network_pentesting_tools",
+            "process_restricted_data",
+            "train_external_models_on_client_data",
+            "make_automated_financial_decisions",
+            "generate_deceptive_content",
+            "bypass_content_filters",
+        ],
+        "approval_required": [
+            "delete_files",
+            "modify_database_schema",
+            "make_http_requests_to_unknown_domains",
+            "install_packages",
+            "run_containers",
+            "send_bulk_messages",
+            "execute_code_from_external_sources",
+            "modify_security_policies",
+            "access_or_modify_other_users_data",
+        ],
     },
     "data_governance": {
+        "data_residency": "client_container_only",
         "retention_days": 90,
-        "audit_retention_days": 365,
         "auto_purge_after_expiry": True,
+        "encryption_at_rest": True,
+        "encryption_in_transit": True,
+        "audit_logging": True,
+        "audit_retention_days": 365,
+        "data_minimization": True,
+        "anonymize_before_logging": True,
+    },
+    "incident_response": {
+        "enabled": True,
+        "severity_levels": [
+            {"level": "S1-Critical", "description": "Data breach, system compromise, unauthorized access to other clients", "response_time": "Immediate containment + notification", "escalate_to": "admin_dashboard + email + whatsapp"},
+            {"level": "S2-High", "description": "Policy violation, exposed credentials, unauthorized data processing", "response_time": "Within 4 hours", "escalate_to": "admin_dashboard + email"},
+            {"level": "S3-Medium", "description": "Configuration drift, minor policy violation, suspicious activity detected", "response_time": "Within 24 hours", "escalate_to": "admin_dashboard"},
+            {"level": "S4-Low", "description": "Rate limit exceeded, non-malicious policy reminder needed", "response_time": "Next business day", "escalate_to": "log_only"},
+        ],
+        "response_phases": ["Detect", "Contain", "Investigate", "Recover", "Review"],
+        "evidence_preservation": True,
+        "post_incident_review_required": True,
+        "auto_suspend_on_critical": False,
+    },
+    "vendor_risk_management": {
+        "enabled": False,
+        "evaluation_criteria": [
+            "data_security_practices",
+            "access_control",
+            "compliance_certifications",
+            "ai_specific_security",
+            "operational_security",
+        ],
+        "required_reviews": ["initial_onboarding", "annual_review", "incident_triggered"],
     },
     "rate_limits": {
         "max_requests_per_minute": 30,
         "max_tokens_per_hour": 500000,
         "max_concurrent_tasks": 3,
         "cooldown_after_violation_seconds": 300,
+        "daily_token_budget": 5000000,
+        "monthly_token_budget": 150000000,
     },
     "monitoring": {
         "log_all_actions": True,
         "log_approval_requests": True,
         "alert_on_violation": True,
-        "violation_threshold_before_suspension": 5,
+        "alert_channels": ["admin_dashboard", "email", "whatsapp"],
+        "violation_warning_threshold": 5,
+        "violation_action": "send_warning_then_suspend_if_continue",
+        "shadow_ai_detection_enabled": True,
+        "weekly_policy_compliance_report": True,
+        "monthly_governance_review": True,
+        "audit_log_export_enabled": True,
     },
 }
 
 
-# ── Helpers ────────────────────────────────────────────────────────
-
-async def _get_setting(db: AsyncSession, key: str) -> Optional[str]:
-    result = await db.execute(select(Setting).where(Setting.key == key))
-    setting = result.scalar_one_or_none()
-    return setting.value if setting else None
-
-
-async def _set_setting(db: AsyncSession, key: str, value: str, admin: Client):
-    result = await db.execute(select(Setting).where(Setting.key == key))
-    setting = result.scalar_one_or_none()
-    if setting:
-        setting.value = value
-    else:
-        setting = Setting(key=key, value=value, encrypted=False)
-        db.add(setting)
-    await db.commit()
-
-
-def _parse_json(raw: Optional[str], default):
-    if not raw:
-        return default
-    try:
-        return json.loads(raw)
-    except (json.JSONDecodeError, TypeError):
-        return default
-
-
-# ── Skills ─────────────────────────────────────────────────────────
-
 @router.get("/skills")
-async def get_skills(
+async def list_skills(
     admin: Client = Depends(get_current_admin),
     db: AsyncSession = Depends(get_db),
 ):
-    raw = await _get_setting(db, "policy_skills")
-    skills = _parse_json(raw, DEFAULT_SKILLS)
-    enabled_count = sum(1 for s in skills if s.get("enabled"))
-    return {"skills": skills, "enabled": enabled_count}
+    """List all available skills with their enabled/disabled status."""
+    # Load saved policy from DB
+    result = await db.execute(
+        select(Setting).where(Setting.key == "governance_policy")
+    )
+    setting = result.scalar_one_or_none()
 
+    policy = {}
+    if setting:
+        import json
+        policy = json.loads(setting.value)
 
-@router.put("/skills")
-async def save_skills(
-    data: dict,
-    admin: Client = Depends(get_current_admin),
-    db: AsyncSession = Depends(get_db),
-):
-    # Support: full array replacement OR just enabled_ids
-    if "skills" in data:
-        skills = data["skills"]
-    else:
-        enabled_ids = data.get("enabled_skills", [])
-        raw = await _get_setting(db, "policy_skills")
-        skills = _parse_json(raw, DEFAULT_SKILLS)
-        for skill in skills:
-            skill["enabled"] = skill["id"] in enabled_ids
-    await _set_setting(db, "policy_skills", json.dumps(skills), admin)
-    enabled_count = sum(1 for s in skills if s.get("enabled"))
-    return {"message": f"Skills updated", "enabled": enabled_count, "skills": skills}
+    enabled_skills = set(policy.get("enabled_skills", [s["id"] for s in BUILTIN_SKILLS if s["default"]]))
 
+    return {
+        "skills": [
+            {**s, "enabled": s["id"] in enabled_skills}
+            for s in BUILTIN_SKILLS
+        ],
+        "total": len(BUILTIN_SKILLS),
+        "enabled": len(enabled_skills),
+    }
 
-# ── Toolsets ───────────────────────────────────────────────────────
 
 @router.get("/tools")
-async def get_tools(
+async def list_tools(
     admin: Client = Depends(get_current_admin),
     db: AsyncSession = Depends(get_db),
 ):
-    raw = await _get_setting(db, "policy_tools")
-    tools = _parse_json(raw, DEFAULT_TOOLS)
-    enabled_count = sum(1 for t in tools if t.get("enabled"))
-    return {"toolsets": tools, "enabled": enabled_count}
+    """List all available toolsets with status."""
+    result = await db.execute(
+        select(Setting).where(Setting.key == "governance_policy")
+    )
+    setting = result.scalar_one_or_none()
 
+    policy = {}
+    if setting:
+        import json
+        policy = json.loads(setting.value)
 
-@router.put("/tools")
-async def save_tools(
-    data: dict,
-    admin: Client = Depends(get_current_admin),
-    db: AsyncSession = Depends(get_db),
-):
-    # Support: full array replacement OR just enabled_ids
-    if "toolsets" in data:
-        tools = data["toolsets"]
-    else:
-        enabled_ids = data.get("enabled_tools", [])
-        raw = await _get_setting(db, "policy_tools")
-        tools = _parse_json(raw, DEFAULT_TOOLS)
-        for tool in tools:
-            tool["enabled"] = tool["id"] in enabled_ids
-    await _set_setting(db, "policy_tools", json.dumps(tools), admin)
-    enabled_count = sum(1 for t in tools if t.get("enabled"))
-    return {"message": f"Tools updated", "enabled": enabled_count, "toolsets": tools}
+    enabled_tools = set(policy.get("enabled_tools", [t["id"] for t in BUILTIN_TOOLSETS if t["default"]]))
 
+    return {
+        "toolsets": [
+            {**t, "enabled": t["id"] in enabled_tools}
+            for t in BUILTIN_TOOLSETS
+        ],
+        "total": len(BUILTIN_TOOLSETS),
+        "enabled": len(enabled_tools),
+    }
 
-# ── Governance Policy ──────────────────────────────────────────────
 
 @router.get("/policy")
 async def get_policy(
     admin: Client = Depends(get_current_admin),
     db: AsyncSession = Depends(get_db),
 ):
-    raw = await _get_setting(db, "policy_data")
-    return _parse_json(raw, DEFAULT_POLICY)
+    """Get the current governance policy."""
+    result = await db.execute(
+        select(Setting).where(Setting.key == "governance_policy")
+    )
+    setting = result.scalar_one_or_none()
+
+    if setting:
+        import json
+        return json.loads(setting.value)
+    else:
+        # Return default policy if none configured
+        return DEFAULT_GOVERNANCE_POLICY
 
 
 @router.put("/policy")
-async def save_policy(
+async def update_policy(
     data: dict,
     admin: Client = Depends(get_current_admin),
     db: AsyncSession = Depends(get_db),
 ):
-    await _set_setting(db, "policy_data", json.dumps(data), admin)
-    return {"message": "Governance policy saved"}
+    """Save updated governance policy."""
+    import json
+
+    result = await db.execute(
+        select(Setting).where(Setting.key == "governance_policy")
+    )
+    setting = result.scalar_one_or_none()
+
+    policy_json = json.dumps(data, indent=2)
+
+    if setting:
+        setting.value = policy_json
+    else:
+        setting = Setting(
+            key="governance_policy",
+            value=policy_json,
+            encrypted=False,
+        )
+        db.add(setting)
+
+    await db.commit()
+    return {"message": "Governance policy updated successfully"}
+
+
+@router.put("/skills")
+async def update_skills(
+    data: dict,
+    admin: Client = Depends(get_current_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Enable/disable skills."""
+    import json
+
+    result = await db.execute(
+        select(Setting).where(Setting.key == "governance_policy")
+    )
+    setting = result.scalar_one_or_none()
+
+    if setting:
+        policy = json.loads(setting.value)
+    else:
+        policy = dict(DEFAULT_GOVERNANCE_POLICY)
+
+    policy["enabled_skills"] = data.get("enabled_skills", [])
+    setting.value = json.dumps(policy, indent=2)
+    db.add(setting)
+    await db.commit()
+
+    return {"message": f"Skills updated ({len(data.get('enabled_skills', []))} enabled)"}
+
+
+@router.put("/tools")
+async def update_tools(
+    data: dict,
+    admin: Client = Depends(get_current_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Enable/disable toolsets."""
+    import json
+
+    result = await db.execute(
+        select(Setting).where(Setting.key == "governance_policy")
+    )
+    setting = result.scalar_one_or_none()
+
+    if setting:
+        policy = json.loads(setting.value)
+    else:
+        policy = dict(DEFAULT_GOVERNANCE_POLICY)
+
+    policy["enabled_tools"] = data.get("enabled_tools", [])
+    setting.value = json.dumps(policy, indent=2)
+    db.add(setting)
+    await db.commit()
+
+    return {"message": f"Tools updated ({len(data.get('enabled_tools', []))} enabled)"}
+    # ── EXTENDED BUSINESS SKILLS (556) ─────────────────────────
+    # Sales, Marketing, Branding, Finance, Economy, Accounting,
+    # Management, Leadership, Operations, Warehouse, Factory,
+    # E-commerce, Real Estate, Startup, Education, Healthcare,
+    # Hospitality, Technology, Agriculture, Construction, Logistics
+
+
+
