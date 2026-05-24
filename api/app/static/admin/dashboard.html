@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="ms">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Dashboard — StaffBot.my</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="/static/css/app.css">
+</head>
+<body>
+    <div class="app-layout">
+        <div class="sidebar" style="background:#111827">
+            <div class="sidebar-brand"><h2>StaffBot.my</h2><span>Admin Panel</span></div>
+            <nav class="sidebar-nav">
+                <a href="dashboard.html" class="active"><span>📊</span><span>Dashboard</span></a>
+                <a href="users.html"><span>👥</span><span>Pengguna</span></a>
+                <a href="packages.html"><span>📦</span><span>Pakej</span></a>
+                <a href="policy.html"><span>🛡️</span><span>Policy</span></a>
+                <a href="settings.html"><span>⚙️</span><span>Settings</span></a>
+                <a href="#" onclick="logout()" style="margin-top:20px;border-top:1px solid rgba(255,255,255,0.1);padding-top:20px"><span>🚪</span><span>Log Keluar</span></a>
+            </nav>
+            <div id="sidebar-user" style="padding:16px 20px;border-top:1px solid rgba(255,255,255,0.1);margin-top:auto"></div>
+        </div>
+        <div class="main-content">
+            <div class="topbar"><h1>Admin Dashboard</h1></div>
+            <div class="grid-4" id="adminStats">
+                <div class="card stat-card"><div class="stat-label">Jumlah Pengguna</div><div class="stat-value" id="stat-users">-</div></div>
+                <div class="card stat-card"><div class="stat-label">Aktif</div><div class="stat-value" id="stat-active">-</div></div>
+                <div class="card stat-card"><div class="stat-label">Container Aktif</div><div class="stat-value" id="stat-containers">-</div></div>
+                <div class="card stat-card"><div class="stat-label">Deployment Pending</div><div class="stat-value" id="stat-pending">-</div></div>
+            </div>
+            <div class="card">
+                <div class="card-header"><h3>System Health</h3></div>
+                <div id="systemHealth"><p style="color:var(--text-light)">Loading...</p></div>
+            </div>
+        </div>
+    </div>
+    <div id="toast-container" class="toast-container"></div>
+    <script src="/static/js/app.js"></script>
+    <script>
+    async function init() {
+        const user = await checkAuth('/admin/login.html');
+        if (!user) return;
+        renderSidebarUser(user);
+        try {
+            const stats = await api('/admin/dashboard');
+            document.getElementById('stat-users').textContent = stats.total_users;
+            document.getElementById('stat-active').textContent = stats.active_users;
+            document.getElementById('stat-containers').textContent = stats.active_containers;
+            document.getElementById('stat-pending').textContent = stats.pending_deployments;
+        } catch {}
+        try {
+            const health = await api('/admin/health');
+            document.getElementById('systemHealth').innerHTML = `
+                <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px">
+                    <div style="padding:16px;border:1px solid var(--border);border-radius:8px;text-align:center">
+                        <div style="font-size:13px;color:var(--text-light)">API</div>
+                        <div class="status-badge status-${health.api_status === 'ok' ? 'active' : 'error'}">${health.api_status}</div>
+                    </div>
+                    <div style="padding:16px;border:1px solid var(--border);border-radius:8px;text-align:center">
+                        <div style="font-size:13px;color:var(--text-light)">Database</div>
+                        <div class="status-badge status-${health.db_status === 'ok' ? 'active' : 'error'}">${health.db_status}</div>
+                    </div>
+                    <div style="padding:16px;border:1px solid var(--border);border-radius:8px;text-align:center">
+                        <div style="font-size:13px;color:var(--text-light)">Server B</div>
+                        <div class="status-badge status-${health.server_b_status === 'ok' ? 'active' : health.server_b_status === 'unreachable' ? 'error' : 'pending'}">${health.server_b_status}</div>
+                    </div>
+                </div>
+            `;
+        } catch {}
+    }
+    init();
+    </script>
+</body>
+</html>

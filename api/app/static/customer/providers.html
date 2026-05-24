@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Services — StaffBot.my</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="/static/css/app.css">
+</head>
+<body>
+    <div class="app-layout">
+        <div class="sidebar">
+            <div class="sidebar-brand"><h2>StaffBot.my</h2><span>Customer Dashboard</span></div>
+            <nav class="sidebar-nav">
+                <a href="dashboard.html"><span>📊</span><span>Dashboard</span></a>
+                <a href="bots.html"><span>🤖</span><span>My Staff AI</span></a>
+                <a href="chat.html"><span>💬</span><span>Chat</span></a>
+                <a href="billing.html"><span>💰</span><span>Billing</span></a>
+                <a href="usage.html"><span>📈</span><span>Usage</span></a>
+                <a href="settings.html"><span>⚙️</span><span>Settings</span></a>
+                <a href="affiliates.html"><span>🤝</span><span>Affiliates</span></a>
+                <a href="#" onclick="logout()" style="margin-top:20px;border-top:1px solid rgba(255,255,255,0.1);padding-top:20px"><span>🚪</span><span>Log Out</span></a>
+            </nav>
+            <div id="sidebar-user" style="padding:16px 20px;border-top:1px solid rgba(255,255,255,0.1);margin-top:auto"></div>
+        </div>
+        <div class="main-content">
+            <div class="topbar"><h1>Services</h1></div>
+            <div class="card">
+                <p style="color:var(--text-light)">Service details are managed by StaffBot.my. Your token usage is shown on the Dashboard.</p>
+            </div>
+        </div>
+    </div>
+    <script src="/static/js/app.js"></script>
+    <script>async function init(){const u=await checkAuth();if(!u)return;renderSidebarUser(u);}init();</script>
+</body>
+</html>

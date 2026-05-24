@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Payment Gateway — StaffBot.my Admin</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="/static/css/app.css">
+</head>
+<body>
+    <div class="app-layout">
+        <div class="sidebar" style="background:#111827">
+            <div class="sidebar-brand"><h2>StaffBot.my</h2><span>Admin Panel</span></div>
+            <nav id="sidebar-nav"></nav>
+            <div id="sidebar-user" style="padding:16px 20px;border-top:1px solid rgba(255,255,255,0.1);margin-top:auto"></div>
+        </div>
+        <div class="main-content">
+            <div class="topbar"><h1>Payment Gateway</h1></div>
+
+            <form onsubmit="return savePaymentSettings(event)">
+                <div class="card">
+                    <div class="card-header"><h3>Stripe</h3></div>
+                    <div class="grid-2">
+                        <div class="form-group"><label>Secret Key</label><input type="password" class="form-input" id="stripe_key"></div>
+                        <div class="form-group"><label>Webhook Secret</label><input type="password" class="form-input" id="stripe_wh"></div>
+                    </div>
+                </div>
+                <button type="submit" class="btn btn-primary" id="saveBtn">Save Payment Settings</button>
+            </form>
+        </div>
+    </div>
+    <div id="toast-container" class="toast-container"></div>
+    <script src="/static/js/app.js"></script>
+    <script>
+    const PAYMENT_KEYS = {
+        stripe_key: {key: "stripe_secret_key", encrypted: true},
+        stripe_wh: {key: "stripe_webhook_secret", encrypted: true},
+    };
+
+    async function init() {
+        const user = await checkAuth("/admin/login.html");
+        if (!user) return;
+        renderSidebarUser(user);
+        renderSidebar("payments");
+        await loadSettings();
+    }
+
+    async function loadSettings() {
+        try {
+            const s = await api("/admin/settings");
+            s.forEach(setting => {
+                const inputId = Object.keys(PAYMENT_KEYS).find(k => PAYMENT_KEYS[k].key === setting.key);
+                if (inputId && document.getElementById(inputId)) {
+                    document.getElementById(inputId).value = setting.value || "";
+                }
+            });
+        } catch {}
+    }
+
+    async function savePaymentSettings(e) {
+        e.preventDefault();
+        const btn = document.getElementById("saveBtn");
+        btn.disabled = true; btn.textContent = "Saving...";
+        try {
+            for (const [inputId, cfg] of Object.entries(PAYMENT_KEYS)) {
+                const val = document.getElementById(inputId).value.trim();
+                if (val) {
+                    await api("/admin/settings", { method: "PUT", body: JSON.stringify({
+                        key: cfg.key,
+                        value: val,
+                        encrypted: cfg.encrypted,
+                    })});
+                }
+            }
+            showToast("Payment settings saved", "success");
+        } catch {}
+        btn.disabled = false; btn.textContent = "Save Payment Settings";
+        return false;
+    }
+
+    init();
+    </script>
+</body>
+</html>

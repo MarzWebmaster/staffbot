@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Login — StaffBot.my</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="/static/css/app.css">
+</head>
+<body class="login-page">
+    <div class="login-card">
+        <div style="text-align:center;margin-bottom:24px">
+            <h1 style="font-size:28px;color:var(--primary)">StaffBot.my</h1>
+            <p>Admin Panel</p>
+        </div>
+        <h1>Admin Login</h1>
+        <p>Exclusive admin access</p>
+        <form onsubmit="return handleAdminLogin(event)">
+            <div class="form-group"><label>Admin Email</label><input type="email" class="form-input" id="adminEmail" required></div>
+            <div class="form-group"><label>Password</label><input type="password" class="form-input" id="adminPassword" required></div>
+            <button type="submit" class="btn btn-primary" style="width:100%;justify-content:center;padding:12px" id="adminLoginBtn">Admin Sign In</button>
+        </form>
+        <div style="text-align:center;margin-top:16px;font-size:13px">
+            <a href="/customer/login.html" style="color:var(--text-light)">Customer Login</a>
+        </div>
+    </div>
+    <div id="toast-container" class="toast-container"></div>
+    <script src="/static/js/app.js"></script>
+    <script>
+    async function handleAdminLogin(e) {
+        e.preventDefault();
+        const btn = document.getElementById('adminLoginBtn');
+        btn.disabled = true; btn.textContent = 'Processing...';
+        try {
+            const email = document.getElementById('adminEmail').value;
+            const password = document.getElementById('adminPassword').value;
+            await login(email, password);
+            if (USER_DATA && USER_DATA.email !== email) {
+                logout();
+                throw new Error('This account is not an admin');
+            }
+            window.location.href = 'dashboard.html';
+        } catch(err) {
+            btn.disabled = false; btn.textContent = 'Admin Sign In';
+        }
+        return false;
+    }
+    </script>
+</body>
+</html>
