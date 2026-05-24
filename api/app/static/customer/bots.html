@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="ms">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Staff AI Saya — StaffBot.my</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="/static/css/app.css">
+</head>
+<body>
+    <div class="app-layout">
+        <div class="sidebar">
+            <div class="sidebar-brand">
+                <h2>StaffBot.my</h2>
+                <span>Customer Dashboard</span>
+            </div>
+            <nav class="sidebar-nav">
+                <a href="dashboard.html"><span>📊</span><span>Dashboard</span></a>
+                <a href="bots.html" class="active"><span>🤖</span><span>Staff AI Saya</span></a>
+                <a href="chat.html"><span>💬</span><span>Chat</span></a>
+                <a href="settings.html"><span>⚙️</span><span>Tetapan</span></a>
+                <a href="billing.html"><span>💰</span><span>Billing</span></a>
+                <a href="usage.html"><span>📈</span><span>Penggunaan</span></a>
+                <a href="#" onclick="logout()" style="margin-top:20px;border-top:1px solid rgba(255,255,255,0.1);padding-top:20px"><span>🚪</span><span>Log Keluar</span></a>
+            </nav>
+            <div id="sidebar-user" style="padding:16px 20px;border-top:1px solid rgba(255,255,255,0.1);margin-top:auto"></div>
+        </div>
+
+        <div class="main-content">
+            <div class="topbar">
+                <h1>Staff AI Saya</h1>
+                <button class="btn btn-primary" onclick="showAddBotModal()">+ Tambah Staff</button>
+            </div>
+
+            <div id="bots-container">
+                <p style="color:var(--text-light)">Loading...</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add Bot Modal -->
+    <div class="modal-overlay" id="addBotModal">
+        <div class="modal">
+            <h3>Tambah Staff AI Baru</h3>
+            <form onsubmit="return createBot(event)">
+                <div class="form-group">
+                    <label>Nama Staff</label>
+                    <input type="text" class="form-input" id="botName" placeholder="Cth: Staff Marketing" required>
+                </div>
+                <div class="form-group">
+                    <label>Skill (pilih)</label>
+                    <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:8px">
+                        <label style="font-size:13px"><input type="checkbox" value="chat" checked disabled> Chat</label>
+                        <label style="font-size:13px"><input type="checkbox" value="memory" checked disabled> Memory</label>
+                        <label style="font-size:13px"><input type="checkbox" value="tasks"> Tasks</label>
+                    </div>
+                </div>
+                <div class="modal-actions">
+                    <button type="button" class="btn btn-secondary" onclick="closeModal('addBotModal')">Batal</button>
+                    <button type="submit" class="btn btn-primary" id="createBotBtn">Cipta Staff</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Delete Confirm Modal -->
+    <div class="modal-overlay" id="deleteBotModal">
+        <div class="modal">
+            <h3>Padam Staff AI</h3>
+            <p style="color:var(--text-light);margin-bottom:16px">Padamkan <strong id="deleteBotName"></strong>? Semua data perbualan, memori, dan tetapan akan hilang. Tindakan ini tak boleh dibatalkan.</p>
+            <div class="modal-actions">
+                <button class="btn btn-secondary" onclick="closeModal('deleteBotModal')">Batal</button>
+                <button class="btn btn-danger" id="confirmDeleteBtn">Padam</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="toast-container" class="toast-container"></div>
+
+    <script src="/static/js/app.js"></script>
+    <script>
+    let deleteTargetId = null;
+
+    async function init() {
+        const user = await checkAuth();
+        if (!user) return;
+        renderSidebarUser(user);
+        await loadBots();
+    }
+
+    async function loadBots() {
+        try {
+            const containers = await api('/containers/');
+            const container = document.getElementById('bots-container');
+            if (!containers.length) {
+                container.innerHTML = `
+                    <div class="card" style="text-align:center;padding:60px">
+                        <div style="font-size:48px;margin-bottom:16px">🤖</div>
+                        <h3 style="margin-bottom:8px">Belum Ada Staff AI</h3>
+                        <p style="color:var(--text-light);margin-bottom:24px">Klik "Tambah Staff" untuk cipta staff AI pertama anda.</p>
+                        <button class="btn btn-primary" onclick="showAddBotModal()">+ Tambah Staff</button>
+                    </div>
+                `;
+                return;
+            }
+            container.innerHTML = `<div class="grid-2">${containers.map(c => `
+                <div class="card">
+                    <div style="display:flex;justify-content:space-between;align-items:start;margin-bottom:12px">
+                        <div>
+                            <h3 style="font-size:16px;margin-bottom:4px">${c.name}</h3>
+                            <div>${statusBadge(c.status)}</div>
+                        </div>
+                        <div style="display:flex;gap:8px">
+                            <button class="btn btn-outline btn-sm" onclick="window.location.href='chat.html?bot=${c.id}'">💬 Chat</button>
+                            <button class="btn btn-danger btn-sm" onclick="showDeleteModal(${c.id},'${c.name}')">🗑</button>
+                        </div>
+                    </div>
+                    <div style="font-size:13px;color:var(--text-light)">
+                        <div>Image: ${c.image}</div>
+                        <div>Skills: ${(c.skills||[]).join(', ') || '-'}</div>
+                        <div>Dicipta: ${formatDate(c.created_at)}</div>
+                    </div>
+                    <div style="margin-top:12px;display:flex;gap:8px">
+                        <button class="btn btn-secondary btn-sm" onclick="renameBot(${c.id})">Rename</button>
+                    </div>
+                </div>
+            `).join('')}</div>`;
+        } catch { /* handled by api helper */ }
+    }
+
+    function showAddBotModal() { openModal('addBotModal'); document.getElementById('botName').value = ''; }
+    function showDeleteModal(id, name) { deleteTargetId = id; document.getElementById('deleteBotName').textContent = name; openModal('deleteBotModal'); }
+
+    async function createBot(e) {
+        e.preventDefault();
+        const btn = document.getElementById('createBotBtn');
+        btn.disabled = true; btn.textContent = 'Menghasilkan...';
+        try {
+            await api('/containers', { method: 'POST', body: JSON.stringify({ name: document.getElementById('botName').value }) });
+            showToast('Staff AI berjaya dicipta!', 'success');
+            closeModal('addBotModal');
+            await loadBots();
+        } catch { /* handled */ }
+        btn.disabled = false; btn.textContent = 'Cipta Staff';
+        return false;
+    }
+
+    document.getElementById('confirmDeleteBtn').addEventListener('click', async () => {
+        if (!deleteTargetId) return;
+        try {
+            await api(`/containers/${deleteTargetId}`, { method: 'DELETE' });
+            showToast('Staff AI dipadam', 'success');
+            closeModal('deleteBotModal');
+            await loadBots();
+        } catch { /* handled */ }
+    });
+
+    async function renameBot(id) {
+        const newName = prompt('Nama baru:');
+        if (!newName) return;
+        try {
+            await api(`/containers/${id}`, { method: 'PUT', body: JSON.stringify({ name: newName }) });
+            showToast('Nama dikemaskini', 'success');
+            await loadBots();
+        } catch { /* handled */ }
+    }
+
+    init();
+    </script>
+</body>
+</html>

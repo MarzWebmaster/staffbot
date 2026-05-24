@@ -1,0 +1,64 @@
+version: "3.8"
+
+services:
+  api:
+    build: .
+    container_name: staffbot-api
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      - STAFFBOT_DATABASE_URL=postgresql://staffbot:${DB_PASSWORD:-staffbot}@db:5432/staffbot_db
+      - STAFFBOT_SECRET_KEY=${SECRET_KEY}
+      - STAFFBOT_CORS_ORIGINS=["*"]
+      - STAFFBOT_STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY}
+      - STAFFBOT_STRIPE_WEBHOOK_SECRET=${STRIPE_WEBHOOK_SECRET}
+      - STAFFBOT_CLOUDFLARE_API_TOKEN=${CLOUDFLARE_API_TOKEN}
+      - STAFFBOT_CLOUDFLARE_ZONE_ID=${CLOUDFLARE_ZONE_ID}
+      - STAFFBOT_SERVER_B_API_URL=${SERVER_B_API_URL:-http://10.0.0.2:8080}
+      - STAFFBOT_SERVER_B_API_KEY=${SERVER_B_API_KEY}
+      - STAFFBOT_SMTP_HOST=${SMTP_HOST}
+      - STAFFBOT_SMTP_PORT=${SMTP_PORT:-587}
+      - STAFFBOT_SMTP_USER=${SMTP_USER}
+      - STAFFBOT_SMTP_PASSWORD=${SMTP_PASSWORD}
+      - STAFFBOT_SMTP_FROM=${SMTP_FROM:-noreply@staffbot.my}
+      - STAFFBOT_ADMIN_WHATSAPP=${ADMIN_WHATSAPP}
+      - STAFFBOT_ADMIN_EMAIL=${ADMIN_EMAIL}
+      - STAFFBOT_ADMIN_PHONE=${ADMIN_PHONE}
+      - STAFFBOT_DOMAIN=staffbot.my
+      - STAFFBOT_LANDING_PAGE_URL=${LANDING_PAGE_URL:-https://staffbot.my}
+      - STAFFBOT_SMS_API_URL=${SMS_API_URL}
+      - STAFFBOT_SMS_API_KEY=${SMS_API_KEY}
+      - STAFFBOT_OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - staffbot-network
+
+  db:
+    image: postgres:16-alpine
+    container_name: staffbot-db
+    restart: unless-stopped
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_USER=staffbot
+      - POSTGRES_PASSWORD=${DB_PASSWORD:-staffbot}
+      - POSTGRES_DB=staffbot_db
+    ports:
+      - "5433:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U staffbot -d staffbot_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - staffbot-network
+
+volumes:
+  postgres_data:
+
+networks:
+  staffbot-network:
+    driver: bridge

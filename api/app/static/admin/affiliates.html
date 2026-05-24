@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="ms">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Affiliates — StaffBot.my</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="/static/css/app.css">
+</head>
+<body>
+    <div class="app-layout">
+        <div class="sidebar" style="background:#111827">
+            <div class="sidebar-brand"><h2>StaffBot.my</h2><span>Admin Panel</span></div>
+            <nav class="sidebar-nav">
+                <a href="dashboard.html"><span>📊</span><span>Dashboard</span></a>
+                <a href="users.html"><span>👥</span><span>Pengguna</span></a>
+                <a href="packages.html"><span>📦</span><span>Pakej</span></a>
+                <a href="providers.html"><span>🔌</span><span>LLM Providers</span></a>
+                <a href="affiliates.html" class="active"><span>🤝</span><span>Affiliates</span></a>
+                <a href="policy.html"><span>🛡️</span><span>Policy</span></a>
+                <a href="settings.html"><span>⚙️</span><span>Settings</span></a>
+                <a href="#" onclick="logout()" style="margin-top:20px;border-top:1px solid rgba(255,255,255,0.1);padding-top:20px"><span>🚪</span><span>Log Keluar</span></a>
+            </nav>
+            <div id="sidebar-user" style="padding:16px 20px;border-top:1px solid rgba(255,255,255,0.1);margin-top:auto"></div>
+        </div>
+        <div class="main-content">
+            <div class="topbar">
+                <h1>🤝 Affiliates Management</h1>
+                <div>
+                    <span class="status-badge status-active" id="totalAffiliates">0 affiliates</span>
+                </div>
+            </div>
+
+            <!-- Stats Overview -->
+            <div class="grid-4" id="affiliateStats">
+                <div class="card stat-card"><div class="stat-label">Active Affiliates</div><div class="stat-value" id="stat-active">-</div></div>
+                <div class="card stat-card"><div class="stat-label">Total Paid</div><div class="stat-value" id="stat-paid">-</div></div>
+                <div class="card stat-card"><div class="stat-label">Pending Earnings</div><div class="stat-value" id="stat-pending">-</div></div>
+                <div class="card stat-card"><div class="stat-label">Pending Payouts</div><div class="stat-value" id="stat-payouts">-</div></div>
+            </div>
+
+            <!-- Affiliate List -->
+            <div class="card">
+                <div class="card-header">
+                    <h3>Senarai Affiliates</h3>
+                    <div style="display:flex;gap:8px">
+                        <select id="statusFilter" class="form-control" style="width:auto" onchange="loadAffiliates()">
+                            <option value="">Semua Status</option>
+                            <option value="active">Active</option>
+                            <option value="suspended">Suspended</option>
+                        </select>
+                        <input type="text" id="searchInput" class="form-control" placeholder="Cari..." style="width:200px" onkeyup="loadAffiliates()">
+                    </div>
+                </div>
+                <div style="overflow-x:auto">
+                    <table class="data-table" id="affiliatesTable">
+                        <thead><tr><th>Affiliate</th><th>Referral Code</th><th>Earnings</th><th>Referrals</th><th>Clicks</th><th>Rate</th><th>Status</th><th>Tindakan</th></tr></thead>
+                        <tbody id="affiliatesBody"><tr><td colspan="8" style="text-align:center;color:var(--text-light)">Loading...</td></tr></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Pending Payouts -->
+            <div class="card">
+                <div class="card-header"><h3>Payout Requests</h3></div>
+                <div style="overflow-x:auto">
+                    <table class="data-table" id="payoutsTable">
+                        <thead><tr><th>Affiliate ID</th><th>Amount</th><th>Method</th><th>Status</th><th>Date</th><th>Tindakan</th></tr></thead>
+                        <tbody id="payoutsBody"><tr><td colspan="6" style="text-align:center;color:var(--text-light)">Loading...</td></tr></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Leaderboard -->
+            <div class="card">
+                <div class="card-header"><h3>🏆 Leaderboard</h3></div>
+                <div style="overflow-x:auto">
+                    <table class="data-table" id="leaderboardTable">
+                        <thead><tr><th>#</th><th>Name</th><th>Total Earnings</th><th>Referrals</th><th>Rate</th></tr></thead>
+                        <tbody id="leaderboardBody"><tr><td colspan="5" style="text-align:center;color:var(--text-light)">Loading...</td></tr></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Edit Affiliate Modal -->
+    <div class="modal-overlay" id="editAffiliateModal">
+        <div class="modal">
+            <div class="modal-header"><h3>Edit Affiliate</h3><button class="modal-close" onclick="closeModal('editAffiliateModal')">&times;</button></div>
+            <form onsubmit="updateAffiliate(event)">
+                <div class="modal-body">
+                    <input type="hidden" id="editAffId">
+                    <div class="form-group"><label>Commission Rate (%)</label><input type="number" id="editRate" class="form-control" step="0.1" min="0" max="100"></div>
+                    <div class="form-group"><label>Min Payout (RM)</label><input type="number" id="editMinPayout" class="form-control" step="1"></div>
+                    <div class="form-group"><label><input type="checkbox" id="editAutoApprove"> Auto Approve Referrals</label></div>
+                    <div class="form-group"><label>Status</label><select id="editStatus" class="form-control"><option value="active">Active</option><option value="suspended">Suspended</option></select></div>
+                    <div class="form-group"><label>Notes</label><textarea id="editNotes" class="form-control" rows="2"></textarea></div>
+                </div>
+                <div class="modal-footer"><button type="button" class="btn btn-ghost" onclick="closeModal('editAffiliateModal')">Batal</button><button type="submit" class="btn btn-primary">Simpan</button></div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Process Payout Modal -->
+    <div class="modal-overlay" id="processPayoutModal">
+        <div class="modal">
+            <div class="modal-header"><h3>Process Payout</h3><button class="modal-close" onclick="closeModal('processPayoutModal')">&times;</button></div>
+            <form onsubmit="processPayout(event)">
+                <div class="modal-body">
+                    <input type="hidden" id="payoutId">
+                    <div class="form-group"><label>Payout Amount</label><div id="payoutAmount" style="font-weight:700;font-size:18px">-</div></div>
+                    <div class="form-group"><label>Action</label><select id="payoutAction" class="form-control"><option value="completed">✅ Approve & Pay</option><option value="rejected">❌ Reject</option></select></div>
+                    <div class="form-group"><label>Admin Notes</label><textarea id="payoutNotes" class="form-control" rows="2"></textarea></div>
+                </div>
+                <div class="modal-footer"><button type="button" class="btn btn-ghost" onclick="closeModal('processPayoutModal')">Batal</button><button type="submit" class="btn btn-primary">Proses</button></div>
+            </form>
+        </div>
+    </div>
+
+    <div id="toast-container" class="toast-container"></div>
+    <script src="/static/js/app.js"></script>
+    <script>
+    async function init() {
+        const user = await checkAuth('/admin/login.html');
+        if (!user) return;
+        renderSidebarUser(user);
+        await loadStats();
+        await loadAffiliates();
+        await loadPayouts();
+        await loadLeaderboard();
+    }
+
+    async function loadStats() {
+        try {
+            const s = await api('/admin/affiliates/stats/summary');
+            document.getElementById('stat-active').textContent = s.active_affiliates;
+            document.getElementById('stat-paid').textContent = 'RM' + (s.total_paid || 0).toFixed(2);
+            document.getElementById('stat-pending').textContent = 'RM' + (s.total_pending_earnings || 0).toFixed(2);
+            document.getElementById('stat-payouts').textContent = s.pending_payout_requests;
+            document.getElementById('totalAffiliates').textContent = s.total_affiliates + ' affiliates';
+        } catch {}
+    }
+
+    async function loadAffiliates() {
+        try {
+            const search = document.getElementById('searchInput').value;
+            const status = document.getElementById('statusFilter').value;
+            let url = '/admin/affiliates/?limit=100';
+            if (status) url += '&status_filter=' + status;
+            const affs = await api(url);
+            const tbody = document.getElementById('affiliatesBody');
+            if (!affs.length) {
+                tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--text-light)">Tiada affiliate.</td></tr>';
+                return;
+            }
+            tbody.innerHTML = affs.map(a => `
+                <tr>
+                    <td><strong>${a.client_name||'Unknown'}</strong><br><small style="color:var(--text-light)">ID: ${a.client_id}</small></td>
+                    <td><code>${a.referral_code}</code></td>
+                    <td><strong>RM${(a.total_earnings||0).toFixed(2)}</strong><br><small style="color:var(--text-light)">Pending: RM${(a.pending_earnings||0).toFixed(2)}</small></td>
+                    <td>${a.total_referrals||0}</td>
+                    <td>${a.total_clicks||0}</td>
+                    <td>${a.commission_rate}%</td>
+                    <td>${a.status === 'active' ? '<span class="status-badge status-active">Active</span>' : '<span class="status-badge status-error">Suspended</span>'}</td>
+                    <td><button class="btn btn-sm btn-ghost" onclick="openEditAffiliate(${a.id})">✏️</button></td>
+                </tr>
+            `).join('');
+        } catch {}
+    }
+
+    async function loadPayouts() {
+        try {
+            const payouts = await api('/admin/affiliates/payouts/all');
+            const tbody = document.getElementById('payoutsBody');
+            if (!payouts.length) {
+                tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--text-light)">Tiada payout request.</td></tr>';
+                return;
+            }
+            tbody.innerHTML = payouts.map(p => `
+                <tr>
+                    <td>#${p.id}</td>
+                    <td><strong>RM${(p.amount||0).toFixed(2)}</strong></td>
+                    <td>${p.method}</td>
+                    <td>${statusBadge(p.status)}</td>
+                    <td>${formatDate(p.created_at)}</td>
+                    <td>${p.status === 'pending' ? `<button class="btn btn-sm btn-primary" onclick="openProcessPayout(${p.id}, ${p.amount})">Proses</button>` : '-'}</td>
+                </tr>
+            `).join('');
+        } catch {}
+    }
+
+    async function loadLeaderboard() {
+        try {
+            const lb = await api('/admin/affiliates/leaderboard?limit=20');
+            const tbody = document.getElementById('leaderboardBody');
+            if (!lb.entries.length) {
+                tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--text-light)">Tiada data leaderboard.</td></tr>';
+                return;
+            }
+            tbody.innerHTML = lb.entries.map(e => `
+                <tr>
+                    <td><strong>#${e.rank}</strong></td>
+                    <td>${e.name_masked}</td>
+                    <td><strong>RM${(e.total_earnings||0).toFixed(2)}</strong></td>
+                    <td>${e.total_referrals||0}</td>
+                    <td>${e.commission_rate}%</td>
+                </tr>
+            `).join('');
+        } catch {}
+    }
+
+    function openEditAffiliate(id) {
+        // Load affiliate details
+        api('/admin/affiliates/' + id).then(a => {
+            document.getElementById('editAffId').value = a.id;
+            document.getElementById('editRate').value = a.commission_rate;
+            document.getElementById('editMinPayout').value = a.min_payout;
+            document.getElementById('editAutoApprove').checked = a.is_auto_approve;
+            document.getElementById('editStatus').value = a.status;
+            document.getElementById('editNotes').value = a.notes||'';
+            openModal('editAffiliateModal');
+        });
+    }
+
+    async function updateAffiliate(e) {
+        e.preventDefault();
+        const id = document.getElementById('editAffId').value;
+        try {
+            await api('/admin/affiliates/' + id, {
+                method: 'PUT',
+                body: JSON.stringify({
+                    commission_rate: parseFloat(document.getElementById('editRate').value),
+                    min_payout: parseFloat(document.getElementById('editMinPayout').value),
+                    is_auto_approve: document.getElementById('editAutoApprove').checked,
+                    status: document.getElementById('editStatus').value,
+                    notes: document.getElementById('editNotes').value,
+                }),
+            });
+            showToast('Affiliate updated', 'success');
+            closeModal('editAffiliateModal');
+            await loadAffiliates();
+        } catch {}
+    }
+
+    function openProcessPayout(id, amount) {
+        document.getElementById('payoutId').value = id;
+        document.getElementById('payoutAmount').textContent = 'RM' + (amount||0).toFixed(2);
+        document.getElementById('payoutAction').value = 'completed';
+        document.getElementById('payoutNotes').value = '';
+        openModal('processPayoutModal');
+    }
+
+    async function processPayout(e) {
+        e.preventDefault();
+        const id = document.getElementById('payoutId').value;
+        const action = document.getElementById('payoutAction').value;
+        const notes = document.getElementById('payoutNotes').value;
+        try {
+            await api('/admin/affiliates/payouts/' + id, {
+                method: 'PUT',
+                body: JSON.stringify({ status: action, admin_notes: notes }),
+            });
+            showToast('Payout ' + (action === 'completed' ? 'approved' : 'rejected'), 'success');
+            closeModal('processPayoutModal');
+            await loadPayouts();
+            await loadAffiliates();
+            await loadStats();
+        } catch {}
+    }
+
+    init();
+    </script>
+</body>
+</html>

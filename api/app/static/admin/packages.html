@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="ms">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pakej — StaffBot.my Admin</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="/static/css/app.css">
+</head>
+<body>
+    <div class="app-layout">
+        <div class="sidebar" style="background:#111827">
+            <div class="sidebar-brand"><h2>StaffBot.my</h2><span>Admin Panel</span></div>
+            <nav class="sidebar-nav">
+                <a href="dashboard.html"><span>📊</span><span>Dashboard</span></a>
+                <a href="users.html"><span>👥</span><span>Pengguna</span></a>
+                <a href="packages.html" class="active"><span>📦</span><span>Pakej</span></a>
+                <a href="policy.html"><span>🛡️</span><span>Policy</span></a>
+                <a href="settings.html"><span>⚙️</span><span>Settings</span></a>
+                <a href="#" onclick="logout()" style="margin-top:20px;border-top:1px solid rgba(255,255,255,0.1);padding-top:20px"><span>🚪</span><span>Log Keluar</span></a>
+            </nav>
+            <div id="sidebar-user" style="padding:16px 20px;border-top:1px solid rgba(255,255,255,0.1);margin-top:auto"></div>
+        </div>
+        <div class="main-content">
+            <div class="topbar">
+                <h1>Pakej</h1>
+                <button class="btn btn-primary" onclick="showAddPackage()">+ Tambah Pakej</button>
+            </div>
+            <div id="packagesContainer"><p style="color:var(--text-light)">Loading...</p></div>
+        </div>
+    </div>
+
+    <!-- Add Package Modal -->
+    <div class="modal-overlay" id="packageModal">
+        <div class="modal" style="width:600px">
+            <h3 id="pkgModalTitle">Tambah Pakej</h3>
+            <form onsubmit="return savePackage(event)">
+                <input type="hidden" id="pkgId">
+                <div class="grid-2">
+                    <div class="form-group"><label>Nama</label><input type="text" class="form-input" id="pkgName" required></div>
+                    <div class="form-group"><label>Paparan Nama</label><input type="text" class="form-input" id="pkgDisplay" required></div>
+                    <div class="form-group"><label>Harga Bulanan (RM)</label><input type="number" class="form-input" id="pkgPrice" step="0.01" required></div>
+                    <div class="form-group"><label>Had Bot</label><input type="number" class="form-input" id="pkgBots" value="1"></div>
+                    <div class="form-group"><label>Token Terurus</label><input type="number" class="form-input" id="pkgTokens" value="0"></div>
+                    <div class="form-group"><label>Aturan</label><input type="number" class="form-input" id="pkgSort" value="0"></div>
+                </div>
+                <div class="form-group"><label>Penerangan</label><textarea class="form-input" id="pkgDesc" rows="3"></textarea></div>
+                <div class="form-group"><label>Features (satu setiap baris)</label><textarea class="form-input" id="pkgFeatures" rows="4" placeholder="Chat dengan AI&#10;Memory berterusan&#10;Integrasi GDrive"></textarea></div>
+                <div class="modal-actions">
+                    <button type="button" class="btn btn-secondary" onclick="closeModal('packageModal')">Batal</button>
+                    <button type="submit" class="btn btn-primary" id="savePkgBtn">Simpan</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div id="toast-container" class="toast-container"></div>
+    <script src="/static/js/app.js"></script>
+    <script>
+    async function init() {
+        const user = await checkAuth('/admin/login.html');
+        if (!user) return;
+        renderSidebarUser(user);
+        loadPackages();
+    }
+    async function loadPackages() {
+        try {
+            const pkgs = await api('/admin/packages/all');
+            document.getElementById('packagesContainer').innerHTML = 
+                `<div class="grid-3">${pkgs.map(p => `
+                    <div class="card" style="position:relative;${!p.is_active ? 'opacity:0.6' : ''}">
+                        ${!p.is_active ? '<div style="position:absolute;top:12px;right:12px;font-size:11px;background:var(--border);padding:2px 8px;border-radius:4px">Tidak Aktif</div>' : ''}
+                        <h3 style="font-size:18px;margin-bottom:4px">${p.display_name || p.name}</h3>
+                        <div style="font-size:24px;font-weight:700">${formatCurrency(p.price_monthly)}<span style="font-size:14px;font-weight:400;color:var(--text-light)">/bulan</span></div>
+                        <div style="margin:12px 0;font-size:13px;color:var(--text-light)">
+                            <div>🤖 ${p.bot_limit} bot</div>
+                            <div>🔑 ${p.managed_tokens} token</div>
+                            ${p.description ? `<div style="margin-top:8px">${p.description}</div>` : ''}
+                        </div>
+                        <div style="display:flex;gap:8px">
+                            <button class="btn btn-secondary btn-sm" onclick="editPackage(${p.id})">Edit</button>
+                            <button class="btn btn-${p.is_active ? 'danger' : 'success'} btn-sm" onclick="togglePackage(${p.id},${!p.is_active})">${p.is_active ? 'Nyahaktif' : 'Aktifkan'}</button>
+                        </div>
+                    </div>
+                `).join('')}</div>`;
+        } catch {}
+    }
+    function showAddPackage() {
+        document.getElementById('pkgModalTitle').textContent = 'Tambah Pakej';
+        document.getElementById('pkgId').value = '';
+        ['pkgName','pkgDisplay','pkgPrice','pkgBots','pkgTokens','pkgSort','pkgDesc','pkgFeatures'].forEach(id => document.getElementById(id).value = '');
+        openModal('packageModal');
+    }
+    async function editPackage(id) {
+        // We need to fetch package detail - for MVP, load from list
+        try {
+            const pkgs = await api('/admin/packages/all');
+            const pkg = pkgs.find(p => p.id === id);
+            if (!pkg) return;
+            document.getElementById('pkgModalTitle').textContent = 'Edit Pakej';
+            document.getElementById('pkgId').value = id;
+            document.getElementById('pkgName').value = pkg.name;
+            document.getElementById('pkgDisplay').value = pkg.display_name || '';
+            document.getElementById('pkgPrice').value = pkg.price_monthly || 0;
+            document.getElementById('pkgBots').value = pkg.bot_limit || 1;
+            document.getElementById('pkgTokens').value = pkg.managed_tokens || 0;
+            document.getElementById('pkgSort').value = pkg.sort_order || 0;
+            document.getElementById('pkgDesc').value = pkg.description || '';
+            document.getElementById('pkgFeatures').value = (pkg.features || []).join('\n');
+            openModal('packageModal');
+        } catch {}
+    }
+    async function savePackage(e) {
+        e.preventDefault();
+        const id = document.getElementById('pkgId').value;
+        const data = {
+            name: document.getElementById('pkgName').value,
+            display_name: document.getElementById('pkgDisplay').value,
+            price_monthly: parseFloat(document.getElementById('pkgPrice').value),
+            bot_limit: parseInt(document.getElementById('pkgBots').value),
+            managed_tokens: parseFloat(document.getElementById('pkgTokens').value),
+            sort_order: parseInt(document.getElementById('pkgSort').value),
+            description: document.getElementById('pkgDesc').value,
+            features: document.getElementById('pkgFeatures').value.split('\n').filter(Boolean),
+        };
+        if (id) await api(`/admin/packages/${id}`, { method: 'PUT', body: JSON.stringify(data) });
+        else await api('/admin/packages', { method: 'POST', body: JSON.stringify(data) });
+        closeModal('packageModal');
+        showToast(id ? 'Pakej dikemaskini' : 'Pakej ditambah', 'success');
+        loadPackages();
+        return false;
+    }
+    async function togglePackage(id, activate) {
+        if (!activate) await api(`/admin/packages/${id}`, { method: 'DELETE' });
+        else await api(`/admin/packages/${id}`, { method: 'PUT', body: JSON.stringify({ is_active: true }) });
+        showToast(`Pakej ${activate ? 'diaktifkan' : 'dinyahaktifkan'}`, 'success');
+        loadPackages();
+    }
+    init();
+    </script>
+</body>
+</html>

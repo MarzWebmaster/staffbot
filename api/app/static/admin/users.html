@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Users — StaffBot.my Admin</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="/static/css/app.css">
+</head>
+<body>
+    <div class="app-layout">
+        <div class="sidebar" style="background:#111827">
+            <div class="sidebar-brand"><h2>StaffBot.my</h2><span>Admin Panel</span></div>
+            <nav class="sidebar-nav">
+                <a href="dashboard.html"><span>📊</span><span>Dashboard</span></a>
+                <a href="users.html" class="active"><span>👥</span><span>Users</span></a>
+                <a href="packages.html"><span>📦</span><span>Packages</span></a>
+                <a href="llm-providers.html"><span>🔌</span><span>LLM Providers</span></a>
+                <a href="affiliates.html"><span>🤝</span><span>Affiliates</span></a>
+                <a href="policy.html"><span>🛡️</span><span>Policy</span></a>
+                <a href="settings.html"><span>⚙️</span><span>Settings</span></a>
+                <a href="#" onclick="logout()" style="margin-top:20px;border-top:1px solid rgba(255,255,255,0.1);padding-top:20px"><span>🚪</span><span>Logout</span></a>
+            </nav>
+            <div id="sidebar-user" style="padding:16px 20px;border-top:1px solid rgba(255,255,255,0.1);margin-top:auto"></div>
+        </div>
+        <div class="main-content">
+            <div class="topbar">
+                <h1>Users</h1>
+                <div style="display:flex;gap:12px">
+                    <input type="text" class="form-input" id="searchUser" placeholder="Search..." style="width:200px" onkeyup="loadUsers()">
+                    <select class="form-input" id="statusFilter" style="width:150px" onchange="loadUsers()">
+                        <option value="">All Status</option>
+                        <option value="active">Active</option>
+                        <option value="pending">Pending</option>
+                        <option value="suspended">Suspended</option>
+                    </select>
+                </div>
+            </div>
+            <div class="card">
+                <div id="usersTable"><p style="color:var(--text-light)">Loading...</p></div>
+            </div>
+        </div>
+    </div>
+    <div id="toast-container" class="toast-container"></div>
+    <script src="/static/js/app.js"></script>
+    <script>
+    async function init() {
+        const user = await checkAuth('/admin/login.html');
+        if (!user) return;
+        renderSidebarUser(user);
+        loadUsers();
+    }
+    async function loadUsers() {
+        document.getElementById('usersTable').innerHTML = '<p style="color:var(--text-light)">Loading...</p>';
+        try {
+            const search = document.getElementById('searchUser').value;
+            const status = document.getElementById('statusFilter').value;
+            let url = '/admin/users?';
+            if (search) url += `search=${search}&`;
+            if (status) url += `status_filter=${status}&`;
+            const data = await api(url);
+            document.getElementById('usersTable').innerHTML = data.items.length ?
+                `<div class="table-container"><table>
+                    <tr><th>Name</th><th>Email</th><th>Company</th><th>Package</th><th>Status</th><th>Subdomain</th><th>Registered</th><th>Actions</th></tr>
+                    ${data.items.map(u => `
+                        <tr>
+                            <td><strong>${u.name}</strong></td>
+                            <td>${u.email}</td>
+                            <td>${u.company || '-'}</td>
+                            <td>${u.package}</td>
+                            <td>${statusBadge(u.status)}</td>
+                            <td style="font-size:12px">${u.subdomain || '-'}</td>
+                            <td style="font-size:12px">${formatDate(u.created_at)}</td>
+                            <td>
+                                <select class="form-input" style="width:120px;padding:4px 8px;font-size:12px" onchange="updateStatus(${u.id},this.value)">
+                                    <option value="active" ${u.status==='active'?'selected':''}>Active</option>
+                                    <option value="pending" ${u.status==='pending'?'selected':''}>Pending</option>
+                                    <option value="suspended" ${u.status==='suspended'?'selected':''}>Suspended</option>
+                                </select>
+                            </td>
+                        </tr>
+                    `).join('')}
+                </table></div>
+                <div style="margin-top:12px;font-size:13px;color:var(--text-light)">${data.total} user(s)</div>` :
+                '<p style="color:var(--text-light);padding:20px;text-align:center">No users found</p>';
+        } catch (e) {
+            document.getElementById('usersTable').innerHTML = `<p style="color:var(--danger);padding:20px;text-align:center">Error: ${e.message}</p>`;
+        }
+    }
+    async function updateStatus(id, status) {
+        try {
+            await api(`/admin/users/${id}`, { method: 'PUT', body: JSON.stringify({ status }) });
+            showToast('Status updated', 'success');
+        } catch (e) {
+            showToast(`Error: ${e.message}`, 'error');
+        }
+    }
+    init();
+    </script>
+</body>
+</html>

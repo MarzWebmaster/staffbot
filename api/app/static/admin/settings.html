@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="ms">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Settings — StaffBot.my Admin</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="/static/css/app.css">
+</head>
+<body>
+    <div class="app-layout">
+        <div class="sidebar" style="background:#111827">
+            <div class="sidebar-brand"><h2>StaffBot.my</h2><span>Admin Panel</span></div>
+            <nav id="sidebar-nav">
+            </nav>
+            <div id="sidebar-user" style="padding:16px 20px;border-top:1px solid rgba(255,255,255,0.1);margin-top:auto"></div>
+        </div>
+        <div class="main-content">
+            <div class="topbar"><h1>System Settings</h1></div>
+
+            <form onsubmit="return saveSettings(event)">
+                <div class="card">
+                    <div class="card-header"><h3>Cloudflare</h3></div>
+                    <div class="grid-2">
+                        <div class="form-group"><label>API Token</label><input type="password" class="form-input" id="cf_token"></div>
+                        <div class="form-group"><label>Zone ID</label><input type="text" class="form-input" id="cf_zone"></div>
+                    </div>
+                </div>
+                <div class="card">
+                    <div class="card-header"><h3>Server B (Internal)</h3></div>
+                    <div class="grid-2">
+                        <div class="form-group"><label>API URL</label><input type="text" class="form-input" id="sb_url" placeholder="http://10.0.0.2:8080"></div>
+                        <div class="form-group"><label>API Key</label><input type="password" class="form-input" id="sb_key"></div>
+                    </div>
+                </div>
+                <div class="card">
+                    <div class="card-header"><h3>SMTP / Email</h3></div>
+                    <div class="grid-3">
+                        <div class="form-group"><label>Host</label><input type="text" class="form-input" id="smtp_host"></div>
+                        <div class="form-group"><label>Port</label><input type="number" class="form-input" id="smtp_port" value="587"></div>
+                        <div class="form-group"><label>User</label><input type="text" class="form-input" id="smtp_user"></div>
+                        <div class="form-group"><label>Password</label><input type="password" class="form-input" id="smtp_pass"></div>
+                        <div class="form-group"><label>From</label><input type="email" class="form-input" id="smtp_from" value="noreply@staffbot.my"></div>
+                    </div>
+                </div>
+                <div class="card">
+                    <div class="card-header"><h3>Admin Notifikasi</h3></div>
+                    <div class="grid-3">
+                        <div class="form-group"><label>WhatsApp Admin</label><input type="text" class="form-input" id="admin_wa"></div>
+                        <div class="form-group"><label>Email Admin</label><input type="email" class="form-input" id="admin_email"></div>
+                        <div class="form-group"><label>Phone Admin (SMS)</label><input type="text" class="form-input" id="admin_phone"></div>
+                    </div>
+                </div>
+                <button type="submit" class="btn btn-primary" id="saveSettingsBtn">Simpan Semua Settings</button>
+            </form>
+        </div>
+    </div>
+    <div id="toast-container" class="toast-container"></div>
+    <script src="/static/js/app.js"></script>
+    <script>
+    const SETTING_KEYS = {
+        cf_token: {key: 'cloudflare_api_token', encrypted: true},
+        cf_zone: {key: 'cloudflare_zone_id', encrypted: false},
+        sb_url: {key: 'server_b_api_url', encrypted: false},
+        sb_key: {key: 'server_b_api_key', encrypted: true},
+        smtp_host: {key: 'smtp_host', encrypted: false},
+        smtp_pass: {key: 'smtp_password', encrypted: true},
+        smtp_from: {key: 'smtp_from', encrypted: false},
+        admin_wa: {key: 'admin_whatsapp', encrypted: false},
+        admin_email: {key: 'admin_email', encrypted: false},
+        admin_phone: {key: 'admin_phone', encrypted: false},
+    };
+
+    async function init() {
+        const user = await checkAuth('/admin/login.html');
+        if (!user) return;
+        renderSidebarUser(user);
+        renderSidebar('settings-general');
+        await loadSettings();
+    }
+
+    async function loadSettings() {
+        try {
+            const s = await api('/admin/settings');
+            s.forEach(setting => {
+                const inputId = Object.keys(SETTING_KEYS).find(k => SETTING_KEYS[k].key === setting.key);
+                if (inputId && document.getElementById(inputId)) {
+                    document.getElementById(inputId).value = setting.value || '';
+                }
+            });
+        } catch {}
+    }
+
+    async function saveSettings(e) {
+        e.preventDefault();
+        const btn = document.getElementById('saveSettingsBtn');
+        btn.disabled = true; btn.textContent = 'Menyimpan...';
+        try {
+            for (const [inputId, cfg] of Object.entries(SETTING_KEYS)) {
+                const val = document.getElementById(inputId).value.trim();
+                if (val) {
+                    await api('/admin/settings', { method: 'PUT', body: JSON.stringify({
+                        key: cfg.key,
+                        value: val,
+                        encrypted: cfg.encrypted,
+                    })});
+                }
+            }
+            showToast('Semua settings disimpan', 'success');
+        } catch {}
+        btn.disabled = false; btn.textContent = 'Simpan Semua Settings';
+        return false;
+    }
+
+    init();
+    </script>
+</body>
+</html>
