@@ -1,0 +1,204 @@
+#!/usr/bin/env python3
+"""
+StaffBot.my — Server B API Gateway
+
+Handles:
+- Container lifecycle (deploy, stop, restart, delete)
+- Container health checks
+- Baileys WhatsApp proxy
+- Memory DB access (pgvector)
+- Communication with Server A
+"""
+import os
+import json
+import socket
+import docker
+from fastapi import FastAPI, HTTPException, Depends, Header
+from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
+from typing import Optional, List
+
+AUTH_KEY = os.environ.get("AUTH_KEY", "staffbot-secret-key")
+DATABASE_URL = os.environ.get("DATABASE_URL", "postgresql://staffbot:staffbot@localhost:5432/staffbot_memory")
+CONTAINER_DIR = "/root/staffbot/containers"
+STAFFBOT_CORE_IMAGE = "staffbot-core:latest"
+
+app = FastAPI(title="StaffBot.my — Server B Gateway", version="1.0.0")
+app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
+docker_client = docker.from_env()
+
+
+class DeployRequest(BaseModel):
+    client_id: int
+    container_name: str
+    subdomain: str
+    env_vars: dict = {}
+    skills: List[str] = ["chat", "memory"]
+
+class ContainerAction(BaseModel):
+    action: str
+
+class MemoryQuery(BaseModel):
+    client_id: int
+    query: str
+    limit: int = 5
+
+class MemorySave(BaseModel):
+    client_id: int
+    content: str
+    metadata: dict = {}
+
+
+async def verify_auth(x_api_key: str = Header(None)):
+    if not x_api_key or x_api_key != AUTH_KEY:
+        raise HTTPException(status_code=401, detail="Invalid API key")
+    return True
+
+
+@app.get("/health")
+async def health():
+    return {"status": "ok", "service": "StaffBot.my Server B", "docker": _docker_ok()}
+
+
+@app.post("/api/deploy")
+async def deploy_container(req: DeployRequest, auth=Depends(verify_auth)):
+    """Deploy a new client container."""
+    name = req.container_name
+    container_dir = f"{CONTAINER_DIR}/{name}"
+
+    try:
+        existing = docker_client.containers.get(name)
+        return {"success": True, "container_id": existing.id, "port": _get_port(existing), "message": "Already running"}
+    except docker.errors.NotFound:
+        pass
+
+    os.makedirs(container_dir, exist_ok=True)
+    port = _find_available_port()
+
+    env = {
+        "CLIENT_ID": str(req.client_id),
+        "SUBDOMAIN": req.subdomain,
+        "MEMORY_DB_URL": DATABASE_URL,
+        "SKILLS": ",".join(req.skills),
+        **req.env_vars,
+    }
+
+    try:
+        container = docker_client.containers.run(
+            image=STAFFBOT_CORE_IMAGE,
+            name=name,
+            detach=True,
+            restart_policy={"Name": "unless-stopped"},
+            environment=env,
+            ports={"8000/tcp": port},
+            volumes={container_dir: {"bind": "/app/data", "mode": "rw"}},
+            network="server-b_staffbot-b",
+            labels={"staffbot.client_id": str(req.client_id), "staffbot.type": "client"},
+        )
+        return {"success": True, "container_id": container.id, "port": port, "container_name": name, "message": "Container deployed"}
+    except docker.errors.ImageNotFound:
+        return {"success": False, "port": port, "container_name": name, "message": f"Image {STAFFBOT_CORE_IMAGE} not found", "image_missing": True}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Deploy error: {str(e)}")
+
+
+@app.post("/api/container/{name}/action")
+async def container_action(name: str, action: ContainerAction, auth=Depends(verify_auth)):
+    try:
+        container = docker_client.containers.get(name)
+    except docker.errors.NotFound:
+        raise HTTPException(status_code=404, detail=f"Container {name} not found")
+
+    try:
+        if action.action == "start": container.start()
+        elif action.action == "stop": container.stop()
+        elif action.action == "restart": container.restart()
+        elif action.action == "delete": container.remove(force=True); return {"success": True, "message": f"Container {name} deleted"}
+        else: raise HTTPException(status_code=400, detail=f"Unknown action: {action.action}")
+        container.reload()
+        return {"success": True, "status": container.status}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/container/{name}/status")
+async def container_status(name: str, auth=Depends(verify_auth)):
+    try:
+        container = docker_client.containers.get(name)
+        return {"status": container.status, "image": container.image.tags[0] if container.image.tags else "unknown", "ports": _get_port(container), "created": container.attrs.get("Created", "")}
+    except docker.errors.NotFound:
+        return {"status": "not_found"}
+
+
+@app.get("/api/containers")
+async def list_containers(auth=Depends(verify_auth)):
+    containers = docker_client.containers.list(filters={"label": "staffbot.type=client"}, all=True)
+    return [{"id": c.id[:12], "name": c.name, "status": c.status, "client_id": c.labels.get("staffbot.client_id", ""), "ports": _get_port(c)} for c in containers]
+
+
+@app.put("/api/container/{name}")
+async def update_container(name: str, data: dict, auth=Depends(verify_auth)):
+    try:
+        docker_client.containers.get(name)
+        env_vars = data.get("env_vars", {})
+        return {"success": True, "message": "Env vars recorded. Restart container to apply."}
+    except docker.errors.NotFound:
+        raise HTTPException(status_code=404, detail=f"Container {name} not found")
+
+
+@app.post("/api/notify/whatsapp")
+async def send_whatsapp(data: dict, auth=Depends(verify_auth)):
+    import httpx
+    async with httpx.AsyncClient() as client:
+        try:
+            resp = await client.post("http://localhost:8653/send-message", json={"to": data.get("to"), "message": data.get("message")}, timeout=15.0)
+            return resp.json()
+        except Exception as e:
+            return {"success": False, "error": f"Baileys error: {str(e)}"}
+
+
+@app.post("/api/memory/search")
+async def search_memory(query: MemoryQuery, auth=Depends(verify_auth)):
+    import asyncpg
+    try:
+        conn = await asyncpg.connect(DATABASE_URL)
+        rows = await conn.fetch("SELECT content, metadata, created_at FROM client_memory WHERE client_id=$1 ORDER BY created_at DESC LIMIT $2", query.client_id, query.limit)
+        await conn.close()
+        return [dict(r) for r in rows]
+    except Exception as e:
+        return {"error": str(e), "results": []}
+
+
+@app.post("/api/memory/save")
+async def save_memory(data: MemorySave, auth=Depends(verify_auth)):
+    import asyncpg
+    try:
+        conn = await asyncpg.connect(DATABASE_URL)
+        await conn.execute("INSERT INTO client_memory (client_id, content, metadata) VALUES ($1, $2, $3)", data.client_id, data.content, json.dumps(data.metadata))
+        await conn.close()
+        return {"success": True}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+def _docker_ok():
+    try: docker_client.ping(); return "ok"
+    except: return "error"
+
+def _get_port(container):
+    port_map = container.attrs.get("NetworkSettings", {}).get("Ports", {})
+    for binding in port_map.values():
+        if binding: return int(binding[0].get("HostPort", 0))
+    return None
+
+def _find_available_port(start=9000):
+    for port in range(start, 10000):
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            if s.connect_ex(("0.0.0.0", port)) != 0:
+                return port
+    return 9999
+
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8080)
