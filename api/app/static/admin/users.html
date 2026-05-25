@@ -3,32 +3,74 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Users — StaffBot.my Admin</title>
+    <title>Users — StaffBot.my Admin</title><style>
+@media (max-width: 768px) {
+    html, body { overflow-x: hidden !important; width: 100% !important; max-width: 100% !important; margin: 0 !important; padding: 0 !important; }
+    .app-layout { display: block !important; width: 100% !important; max-width: 100% !important; margin: 0 !important; }
+    .main-content { margin: 0 !important; margin-left: 0 !important; width: 100vw !important; max-width: 100vw !important; padding: 12px !important; padding-top: 56px !important; box-sizing: border-box !important; flex: none !important; float: none !important; display: block !important; }
+    .sidebar-toggle { display: flex !important; }
+    .sidebar-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 999; }
+    .sidebar-overlay.active { display: block; }
+    .sidebar { transform: translateX(-100%) !important; transition: transform 0.3s ease !important; }
+    .sidebar.open { transform: translateX(0) !important;  }
+    .grid-4, .grid-3, .grid-2 { grid-template-columns: 1fr !important; gap: 12px !important; }
+    #adminStats.grid-4, #affiliateStats.grid-4, #billingStats.grid-4 { grid-template-columns: 1fr 1fr !important; gap: 12px !important; }
+    .mobile-grid-2 { grid-template-columns: 1fr !important; max-width: 100% !important; }
+    .mobile-grid-3 { grid-template-columns: 1fr !important; max-width: 100% !important; }
+    .card { padding: 14px !important; max-width: 100% !important; overflow-wrap: break-word !important; }
+    .stat-card .stat-value { font-size: 22px !important; }
+    .table-container { overflow-x: auto !important; max-width: 100% !important; }
+    .table-container table { min-width: 100% !important; }
+    .modal { width: 95vw !important; max-width: 95vw !important; }
+    .btn { padding: 12px 20px !important; min-height: 44px !important; }
+}
+@media (max-width: 480px) {
+    #adminStats.grid-4, #affiliateStats.grid-4, #billingStats.grid-4 { grid-template-columns: 1fr !important; }
+    .modal { width: 100vw !important; max-width: 100vw !important; border-radius: 0 !important; }
+}
+</style><script>
+function toggleSidebar() {
+    var s = document.querySelector('.sidebar');
+    var o = document.querySelector('.sidebar-overlay');
+    if (!s) return;
+    if (s.classList.contains('open')) {
+        s.classList.remove('open');
+        if (o) o.classList.remove('active');
+    } else {
+        s.classList.add('open');
+        if (o) o.classList.add('active');
+    }
+}
+</script>
+
     <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="stylesheet" href="/static/css/app.css">
+    <link rel="stylesheet" href="/static/css/app.css?v=200">
+    <style>
+        .status-badge { padding: 3px 10px; border-radius: 12px; font-size: 12px; font-weight: 500; display: inline-block; }
+        .status-badge.active { background: rgba(34,197,94,0.15); color: #22c55e; }
+        .status-badge.pending { background: rgba(234,179,8,0.15); color: #eab308; }
+        .status-badge.suspended { background: rgba(239,68,68,0.15); color: #ef4444; }
+        .search-filter-bar { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+        .search-filter-bar input, .search-filter-bar select { height: 36px; }
+    </style>
 </head>
 <body>
+
+    <button class="sidebar-toggle" onclick="toggleSidebar()">&#9776;</button>
+    <div class="sidebar-overlay" onclick="toggleSidebar()"></div>
     <div class="app-layout">
         <div class="sidebar" style="background:#111827">
             <div class="sidebar-brand"><h2>StaffBot.my</h2><span>Admin Panel</span></div>
-            <nav class="sidebar-nav">
-                <a href="dashboard.html"><span>📊</span><span>Dashboard</span></a>
-                <a href="users.html" class="active"><span>👥</span><span>Users</span></a>
-                <a href="packages.html"><span>📦</span><span>Packages</span></a>
-                <a href="llm-providers.html"><span>🔌</span><span>LLM Providers</span></a>
-                <a href="affiliates.html"><span>🤝</span><span>Affiliates</span></a>
-                <a href="policy.html"><span>🛡️</span><span>Policy</span></a>
-                <a href="settings.html"><span>⚙️</span><span>Settings</span></a>
-                <a href="#" onclick="logout()" style="margin-top:20px;border-top:1px solid rgba(255,255,255,0.1);padding-top:20px"><span>🚪</span><span>Logout</span></a>
-            </nav>
+            <nav class="sidebar-nav" id="sidebar-nav"></nav>
             <div id="sidebar-user" style="padding:16px 20px;border-top:1px solid rgba(255,255,255,0.1);margin-top:auto"></div>
         </div>
         <div class="main-content">
             <div class="topbar">
                 <h1>Users</h1>
-                <div style="display:flex;gap:12px">
-                    <input type="text" class="form-input" id="searchUser" placeholder="Search..." style="width:200px" onkeyup="loadUsers()">
-                    <select class="form-input" id="statusFilter" style="width:150px" onchange="loadUsers()">
+                <span style="font-size:13px;color:var(--text-light)" id="totalCount"></span>
+                <div class="search-filter-bar" style="margin-top:8px">
+                    <input type="text" class="form-input" id="searchUser" placeholder="Search by name or email..." style="width:240px;padding:6px 12px;border:1px solid rgba(255,255,255,0.15);border-radius:6px;background:rgba(255,255,255,0.05);color:#fff;font-size:13px" onkeyup="debouncedLoad()">
+                    <select class="form-input" id="statusFilter" style="width:150px;padding:6px 12px;border:1px solid rgba(255,255,255,0.15);border-radius:6px;background:rgba(255,255,255,0.05);color:#fff;font-size:13px" onchange="currentPage=1;loadUsers()">
                         <option value="">All Status</option>
                         <option value="active">Active</option>
                         <option value="pending">Pending</option>
@@ -36,64 +78,191 @@
                     </select>
                 </div>
             </div>
+
+            <!-- Stats Summary Cards -->
+            <div class="grid-3" style="display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:20px" id="statsCards">
+                <div class="card" style="padding:16px;text-align:center;background:#1e293b;border:1px solid rgba(255,255,255,0.08)">
+                    <div style="font-size:28px;font-weight:700;color:#3b82f6" id="statTotal">0</div>
+                    <div style="font-size:13px;color:rgba(255,255,255,0.6);margin-top:4px">Total Users</div>
+                </div>
+                <div class="card" style="padding:16px;text-align:center;background:#1e293b;border:1px solid rgba(255,255,255,0.08)">
+                    <div style="font-size:28px;font-weight:700;color:#22c55e" id="statActive">0</div>
+                    <div style="font-size:13px;color:rgba(255,255,255,0.6);margin-top:4px">Active</div>
+                </div>
+                <div class="card" style="padding:16px;text-align:center;background:#1e293b;border:1px solid rgba(255,255,255,0.08)">
+                    <div style="font-size:28px;font-weight:700;color:#eab308" id="statPending">0</div>
+                    <div style="font-size:13px;color:rgba(255,255,255,0.6);margin-top:4px">Pending</div>
+                </div>
+                <div class="card" style="padding:16px;text-align:center;background:#1e293b;border:1px solid rgba(255,255,255,0.08)">
+                    <div style="font-size:28px;font-weight:700;color:#ef4444" id="statSuspended">0</div>
+                    <div style="font-size:13px;color:rgba(255,255,255,0.6);margin-top:4px">Suspended</div>
+                </div>
+            </div>
+
+            <!-- Users Table -->
             <div class="card">
-                <div id="usersTable"><p style="color:var(--text-light)">Loading...</p></div>
+                <table class="data-table" style="width:100%;border-collapse:collapse">
+                    <thead>
+                        <tr style="text-align:left;border-bottom:1px solid rgba(255,255,255,0.1)">
+                            <th style="padding:12px 16px;font-size:13px;color:rgba(255,255,255,0.6);text-transform:uppercase;letter-spacing:0.5px">Name</th>
+                            <th style="padding:12px 16px;font-size:13px;color:rgba(255,255,255,0.6);text-transform:uppercase;letter-spacing:0.5px">Email</th>
+                            <th style="padding:12px 16px;font-size:13px;color:rgba(255,255,255,0.6);text-transform:uppercase;letter-spacing:0.5px">Company</th>
+                            <th style="padding:12px 16px;font-size:13px;color:rgba(255,255,255,0.6);text-transform:uppercase;letter-spacing:0.5px">Package</th>
+                            <th style="padding:12px 16px;font-size:13px;color:rgba(255,255,255,0.6);text-transform:uppercase;letter-spacing:0.5px">Status</th>
+                            <th style="padding:12px 16px;font-size:13px;color:rgba(255,255,255,0.6);text-transform:uppercase;letter-spacing:0.5px">Registered</th>
+                            <th style="padding:12px 16px;font-size:13px;color:rgba(255,255,255,0.6);text-transform:uppercase;letter-spacing:0.5px">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tableBody"></tbody>
+                </table>
+
+                <!-- Pagination -->
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-top:16px;padding:0 16px">
+                    <span style="font-size:13px;color:var(--text-light)" id="paginationInfo"></span>
+                    <div style="display:flex;gap:4px" id="paginationControls"></div>
+                </div>
             </div>
         </div>
     </div>
     <div id="toast-container" class="toast-container"></div>
     <script src="/static/js/app.js"></script>
     <script>
+    let allUsers = [];
+    const PAGE_SIZE = 5;
+    let currentPage = 1;
+    let debounceTimer = null;
+
+    function statusBadge(status) {
+        const labels = { active: 'Active', pending: 'Pending', suspended: 'Suspended' };
+        return '<span class="status-badge ' + status + '">' + (labels[status] || status) + '</span>';
+    }
+
+    function formatDate(d) {
+        if (!d) return '-';
+        try { return new Date(d).toLocaleDateString('en-MY', { day: '2-digit', month: 'short', year: 'numeric' }); } catch(e) { return d; }
+    }
+
+    function filterUsers() {
+        const search = document.getElementById('searchUser').value.toLowerCase().trim();
+        const status = document.getElementById('statusFilter').value;
+        return allUsers.filter(u => {
+            if (status && u.status !== status) return false;
+            if (search) {
+                const name = (u.name || '').toLowerCase();
+                const email = (u.email || '').toLowerCase();
+                const company = (u.company || '').toLowerCase();
+                if (!name.includes(search) && !email.includes(search) && !company.includes(search)) return false;
+            }
+            return true;
+        });
+    }
+
+    function renderPage() {
+        const filtered = filterUsers();
+        const totalPages = Math.ceil(filtered.length / PAGE_SIZE) || 1;
+        if (currentPage > totalPages) currentPage = totalPages;
+        const start = (currentPage - 1) * PAGE_SIZE;
+        const end = start + PAGE_SIZE;
+        const page = filtered.slice(start, end);
+
+        // Update stats
+        const total = allUsers.length;
+        const active = allUsers.filter(u => u.status === 'active').length;
+        const pending = allUsers.filter(u => u.status === 'pending').length;
+        const suspended = allUsers.filter(u => u.status === 'suspended').length;
+        document.getElementById('statTotal').textContent = total;
+        document.getElementById('statActive').textContent = active;
+        document.getElementById('statPending').textContent = pending;
+        document.getElementById('statSuspended').textContent = suspended;
+        document.getElementById('totalCount').textContent = '(' + total + ' total)';
+
+        // Build table
+        if (page.length === 0) {
+            document.getElementById('tableBody').innerHTML = '<tr><td colspan="7" style="text-align:center;padding:30px;color:var(--text-light)">No users found</td></tr>';
+        } else {
+            document.getElementById('tableBody').innerHTML = page.map(function(u) {
+                return '<tr style="border-bottom:1px solid rgba(255,255,255,0.05)">' +
+                    '<td style="padding:12px 16px"><strong>' + (u.name || '-') + '</strong></td>' +
+                    '<td style="padding:12px 16px;font-size:13px;color:var(--text-light)">' + (u.email || '-') + '</td>' +
+                    '<td style="padding:12px 16px;font-size:13px;color:var(--text-light)">' + (u.company || '-') + '</td>' +
+                    '<td style="padding:12px 16px;font-size:13px"><span class="status-badge" style="background:rgba(99,102,241,0.15);color:#818cf8">' + (u.package || '-') + '</span></td>' +
+                    '<td style="padding:12px 16px">' + statusBadge(u.status) + '</td>' +
+                    '<td style="padding:12px 16px;font-size:12px;color:var(--text-light)">' + formatDate(u.created_at) + '</td>' +
+                    '<td style="padding:12px 16px">' +
+                        '<select class="form-input" style="padding:4px 8px;font-size:12px;border:1px solid rgba(255,255,255,0.15);border-radius:6px;background:rgba(255,255,255,0.05);color:#fff;width:110px" onchange="updateStatus(' + u.id + ',this.value)">' +
+                            '<option value="active"' + (u.status==='active'?' selected':'') + '>Active</option>' +
+                            '<option value="pending"' + (u.status==='pending'?' selected':'') + '>Pending</option>' +
+                            '<option value="suspended"' + (u.status==='suspended'?' selected':'') + '>Suspended</option>' +
+                        '</select>' +
+                    '</td>' +
+                    '</tr>';
+            }).join('');
+        }
+
+        // Pagination info
+        document.getElementById('paginationInfo').textContent = filtered.length
+            ? 'Showing ' + (start + 1) + '-' + Math.min(end, filtered.length) + ' of ' + filtered.length
+            : '';
+        renderPagination(totalPages, filtered.length);
+    }
+
+    function renderPagination(totalPages, totalItems) {
+        if (totalItems === 0) {
+            document.getElementById('paginationControls').innerHTML = '';
+            return;
+        }
+        let html = '<button class="btn btn-sm btn-outline" onclick="currentPage=1;renderPage()"' + (currentPage <= 1 ? ' disabled' : '') + ' style="padding:4px 10px;font-size:13px;border:1px solid rgba(255,255,255,0.15);border-radius:6px;background:rgba(255,255,255,0.05);color:#fff;cursor:pointer;line-height:1">❮❮</button>';
+        html += '<button class="btn btn-sm btn-outline" onclick="currentPage--;renderPage()"' + (currentPage <= 1 ? ' disabled' : '') + ' style="padding:4px 10px;font-size:13px;border:1px solid rgba(255,255,255,0.15);border-radius:6px;background:rgba(255,255,255,0.05);color:#fff;cursor:pointer;line-height:1">❮</button>';
+        const pStart = Math.max(1, Math.min(currentPage - 2, totalPages - 4));
+        const pEnd = Math.min(totalPages, pStart + 4);
+        for (let p = pStart; p <= pEnd; p++) {
+            html += '<button class="btn btn-sm ' + (p === currentPage ? 'btn-primary' : 'btn-outline') + '" onclick="currentPage=' + p + ';renderPage()" style="padding:4px 10px;font-size:13px;border-radius:6px;cursor:pointer;line-height:1' + (p === currentPage ? ';background:#3b82f6;color:#fff;border:none' : ';border:1px solid rgba(255,255,255,0.15);background:rgba(255,255,255,0.05);color:#fff') + '">' + p + '</button>';
+        }
+        html += '<button class="btn btn-sm btn-outline" onclick="currentPage++;renderPage()"' + (currentPage >= totalPages ? ' disabled' : '') + ' style="padding:4px 10px;font-size:13px;border:1px solid rgba(255,255,255,0.15);border-radius:6px;background:rgba(255,255,255,0.05);color:#fff;cursor:pointer;line-height:1">❯</button>';
+        html += '<button class="btn btn-sm btn-outline" onclick="currentPage=' + totalPages + ';renderPage()"' + (currentPage >= totalPages ? ' disabled' : '') + ' style="padding:4px 10px;font-size:13px;border:1px solid rgba(255,255,255,0.15);border-radius:6px;background:rgba(255,255,255,0.05);color:#fff;cursor:pointer;line-height:1">❯❯</button>';
+        document.getElementById('paginationControls').innerHTML = html;
+    }
+
+    function debouncedLoad() {
+        clearTimeout(debounceTimer);
+        debounceTimer = setTimeout(function() { currentPage = 1; loadUsers(); }, 300);
+    }
+
+    async function loadUsers() {
+        try {
+            let url = '/admin/users/?';
+            const search = document.getElementById('searchUser').value.trim();
+            const status = document.getElementById('statusFilter').value;
+            if (search) url += 'search=' + encodeURIComponent(search) + '&';
+            if (status) url += 'status_filter=' + status + '&';
+            const data = await api(url);
+            allUsers = data.items || data || [];
+            currentPage = 1;
+            renderPage();
+        } catch(e) {
+            document.getElementById('tableBody').innerHTML = '<tr><td colspan="7" style="text-align:center;padding:30px;color:var(--text-light)">Failed to load users</td></tr>';
+        }
+    }
+
+    async function updateStatus(id, status) {
+        try {
+            await api('/admin/users/' + id, { method: 'PUT', body: JSON.stringify({ status: status }) });
+            showToast('User status updated', 'success');
+            // Update local data to avoid re-fetch
+            var u = allUsers.find(function(x) { return x.id === id; });
+            if (u) u.status = status;
+            renderPage();
+        } catch(e) {
+            showToast(e.message || 'Failed to update status', 'error');
+        }
+    }
+
     async function init() {
         const user = await checkAuth('/admin/login.html');
         if (!user) return;
         renderSidebarUser(user);
+        renderSidebar('users');
         loadUsers();
-    }
-    async function loadUsers() {
-        document.getElementById('usersTable').innerHTML = '<p style="color:var(--text-light)">Loading...</p>';
-        try {
-            const search = document.getElementById('searchUser').value;
-            const status = document.getElementById('statusFilter').value;
-            let url = '/admin/users?';
-            if (search) url += `search=${search}&`;
-            if (status) url += `status_filter=${status}&`;
-            const data = await api(url);
-            document.getElementById('usersTable').innerHTML = data.items.length ?
-                `<div class="table-container"><table>
-                    <tr><th>Name</th><th>Email</th><th>Company</th><th>Package</th><th>Status</th><th>Subdomain</th><th>Registered</th><th>Actions</th></tr>
-                    ${data.items.map(u => `
-                        <tr>
-                            <td><strong>${u.name}</strong></td>
-                            <td>${u.email}</td>
-                            <td>${u.company || '-'}</td>
-                            <td>${u.package}</td>
-                            <td>${statusBadge(u.status)}</td>
-                            <td style="font-size:12px">${u.subdomain || '-'}</td>
-                            <td style="font-size:12px">${formatDate(u.created_at)}</td>
-                            <td>
-                                <select class="form-input" style="width:120px;padding:4px 8px;font-size:12px" onchange="updateStatus(${u.id},this.value)">
-                                    <option value="active" ${u.status==='active'?'selected':''}>Active</option>
-                                    <option value="pending" ${u.status==='pending'?'selected':''}>Pending</option>
-                                    <option value="suspended" ${u.status==='suspended'?'selected':''}>Suspended</option>
-                                </select>
-                            </td>
-                        </tr>
-                    `).join('')}
-                </table></div>
-                <div style="margin-top:12px;font-size:13px;color:var(--text-light)">${data.total} user(s)</div>` :
-                '<p style="color:var(--text-light);padding:20px;text-align:center">No users found</p>';
-        } catch (e) {
-            document.getElementById('usersTable').innerHTML = `<p style="color:var(--danger);padding:20px;text-align:center">Error: ${e.message}</p>`;
-        }
-    }
-    async function updateStatus(id, status) {
-        try {
-            await api(`/admin/users/${id}`, { method: 'PUT', body: JSON.stringify({ status }) });
-            showToast('Status updated', 'success');
-        } catch (e) {
-            showToast(`Error: ${e.message}`, 'error');
-        }
     }
     init();
     </script>

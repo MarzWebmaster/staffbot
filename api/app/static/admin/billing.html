@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Billing — StaffBot.my Admin</title><style>
+@media (max-width: 768px) {
+    html, body { overflow-x: hidden !important; width: 100% !important; max-width: 100% !important; margin: 0 !important; padding: 0 !important; }
+    .app-layout { display: block !important; width: 100% !important; max-width: 100% !important; margin: 0 !important; }
+    .main-content { margin: 0 !important; margin-left: 0 !important; width: 100vw !important; max-width: 100vw !important; padding: 12px !important; padding-top: 56px !important; box-sizing: border-box !important; flex: none !important; float: none !important; display: block !important; }
+    .sidebar-toggle { display: flex !important; }
+    .sidebar-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 999; }
+    .sidebar-overlay.active { display: block; }
+    .sidebar { transform: translateX(-100%) !important; transition: transform 0.3s ease !important; }
+    .sidebar.open { transform: translateX(0) !important;  }
+    .grid-4, .grid-3, .grid-2 { grid-template-columns: 1fr !important; gap: 12px !important; }
+    #adminStats.grid-4, #affiliateStats.grid-4, #billingStats.grid-4 { grid-template-columns: 1fr 1fr !important; gap: 12px !important; }
+    .mobile-grid-2 { grid-template-columns: 1fr !important; max-width: 100% !important; }
+    .mobile-grid-3 { grid-template-columns: 1fr !important; max-width: 100% !important; }
+    .card { padding: 14px !important; max-width: 100% !important; overflow-wrap: break-word !important; }
+    .stat-card .stat-value { font-size: 22px !important; }
+    .table-container { overflow-x: auto !important; max-width: 100% !important; }
+    .table-container table { min-width: 100% !important; }
+    .modal { width: 95vw !important; max-width: 95vw !important; }
+    .btn { padding: 12px 20px !important; min-height: 44px !important; }
+}
+@media (max-width: 480px) {
+    #adminStats.grid-4, #affiliateStats.grid-4, #billingStats.grid-4 { grid-template-columns: 1fr !important; }
+    .modal { width: 100vw !important; max-width: 100vw !important; border-radius: 0 !important; }
+}
+</style><script>
+function toggleSidebar() {
+    var s = document.querySelector('.sidebar');
+    var o = document.querySelector('.sidebar-overlay');
+    if (!s) return;
+    if (s.classList.contains('open')) {
+        s.classList.remove('open');
+        if (o) o.classList.remove('active');
+    } else {
+        s.classList.add('open');
+        if (o) o.classList.add('active');
+    }
+}
+</script>
+
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="stylesheet" href="/static/css/app.css?v=200">
+</head>
+<body>
+
+    <button class="sidebar-toggle" onclick="toggleSidebar()">&#9776;</button>
+    <div class="sidebar-overlay" onclick="toggleSidebar()"></div>
+    <div class="app-layout">
+        <div class="sidebar" style="background:#111827">
+            <div class="sidebar-brand"><h2>StaffBot.my</h2><span>Admin Panel</span></div>
+            <nav class="sidebar-nav" id="sidebar-nav"></nav>
+            <div id="sidebar-user" style="padding:16px 20px;border-top:1px solid rgba(255,255,255,0.1);margin-top:auto"></div>
+        </div>
+        <div class="main-content">
+            <div class="topbar"><h1>Billing</h1></div>
+
+            <!-- Summary Cards -->
+            <div class="grid-3" id="billingStats">
+                <div class="card stat-card"><div class="stat-label">Total Revenue</div><div class="stat-value" id="totalRevenue">RM0.00</div></div>
+                <div class="card stat-card"><div class="stat-label">Active Subscriptions</div><div class="stat-value" id="activeSubs">0</div></div>
+                <div class="card stat-card"><div class="stat-label">Pending Payments</div><div class="stat-value" id="pendingPayments">0</div></div>
+            </div>
+
+            <!-- Revenue Chart -->
+            <div class="card">
+                <div class="card-header"><h3>Monthly Revenue</h3></div>
+                <div style="height:250px"><canvas id="revenueChart"></canvas></div>
+            </div>
+
+            <!-- Subscriptions Table -->
+            <div class="card" style="margin-top:20px">
+                <div class="card-header"><h3>Subscriptions</h3></div>
+                <div id="subsTable"><p style="color:var(--text-light)">Loading...</p></div>
+            </div>
+        </div>
+    </div>
+    <div id="toast-container" class="toast-container"></div>
+    <script src="/static/js/app.js"></script>
+    <script>
+    let chartInstance = null;
+
+    async function init() {
+        const user = await checkAuth('/admin/login.html');
+        if (!user) return;
+        renderSidebarUser(user);
+        renderSidebar('billing');
+
+        // Load billing data from dashboard
+        try {
+            const data = await api('/admin/dashboard');
+            document.getElementById('totalRevenue').textContent = 'RM' + Number(data.total_revenue || 0).toFixed(2);
+            document.getElementById('activeSubs').textContent = data.active_users || 0;
+
+            if (data.monthly_revenue && data.monthly_revenue.length) {
+                const labels = data.monthly_revenue.map(r => r.month);
+                const amounts = data.monthly_revenue.map(r => r.amount);
+                const ctx = document.getElementById('revenueChart').getContext('2d');
+                if (chartInstance) chartInstance.destroy();
+                chartInstance = new Chart(ctx, {
+                    type: 'bar',
+                    data: { labels, datasets: [{ label: 'Revenue (RM)', data: amounts, backgroundColor: '#10B981', borderRadius: 4 }] },
+                    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } },
+                        scales: { y: { beginAtZero: true, grid: { color: 'rgba(255,255,255,0.05)' } }, x: { grid: { display: false } } } }
+                });
+            }
+        } catch {}
+
+        // Load subscriptions
+        try {
+            const users = await api('/admin/users/');
+            const items = users.items || [];
+            const tbody = items.map(u => '<tr>' +
+                '<td>' + (u.name || '-') + '</td>' +
+                '<td>' + u.email + '</td>' +
+                '<td><span style="background:rgba(99,102,241,0.15);color:#818CF8;padding:2px 8px;border-radius:12px;font-size:12px">' + (u.package || '-') + '</span></td>' +
+                '<td>' + statusBadge(u.status) + '</td>' +
+                '<td style="font-size:13px;color:var(--text-light)">' + (u.created_at ? u.created_at.slice(0,10) : '-') + '</td>' +
+                '</tr>').join('');
+            document.getElementById('subsTable').innerHTML = items.length ?
+                '<table class="data-table"><thead><tr><th>Name</th><th>Email</th><th>Package</th><th>Status</th><th>Registered</th></tr></thead><tbody>' + tbody + '</tbody></table>' +
+                '<div style="margin-top:12px;font-size:13px;color:var(--text-light)">' + items.length + ' users</div>' :
+                '<p style="color:var(--text-light);padding:20px;text-align:center">No users yet</p>';
+        } catch {}
+    }
+    init();
+    </script>
+</body>
+</html>

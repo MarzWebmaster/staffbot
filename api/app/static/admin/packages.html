@@ -1,56 +1,110 @@
 <!DOCTYPE html>
-<html lang="ms">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Pakej — StaffBot.my Admin</title>
+    <title>Packages — StaffBot.my Admin</title><style>
+@media (max-width: 768px) {
+    html, body { overflow-x: hidden !important; width: 100% !important; max-width: 100% !important; margin: 0 !important; padding: 0 !important; }
+    .app-layout { display: block !important; width: 100% !important; max-width: 100% !important; margin: 0 !important; }
+    .main-content { margin: 0 !important; margin-left: 0 !important; width: 100vw !important; max-width: 100vw !important; padding: 12px !important; padding-top: 56px !important; box-sizing: border-box !important; flex: none !important; float: none !important; display: block !important; }
+    .sidebar-toggle { display: flex !important; }
+    .sidebar-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 999; }
+    .sidebar-overlay.active { display: block; }
+    .sidebar { transform: translateX(-100%) !important; transition: transform 0.3s ease !important; }
+    .sidebar.open { transform: translateX(0) !important;  }
+    .grid-4, .grid-3, .grid-2 { grid-template-columns: 1fr !important; gap: 12px !important; }
+    #adminStats.grid-4, #affiliateStats.grid-4, #billingStats.grid-4 { grid-template-columns: 1fr 1fr !important; gap: 12px !important; }
+    .mobile-grid-2 { grid-template-columns: 1fr !important; max-width: 100% !important; }
+    .mobile-grid-3 { grid-template-columns: 1fr !important; max-width: 100% !important; }
+    .card { padding: 14px !important; max-width: 100% !important; overflow-wrap: break-word !important; }
+    .stat-card .stat-value { font-size: 22px !important; }
+    .table-container { overflow-x: auto !important; max-width: 100% !important; }
+    .table-container table { min-width: 100% !important; }
+    .modal { width: 95vw !important; max-width: 95vw !important; }
+    .btn { padding: 12px 20px !important; min-height: 44px !important; }
+}
+@media (max-width: 480px) {
+    #adminStats.grid-4, #affiliateStats.grid-4, #billingStats.grid-4 { grid-template-columns: 1fr !important; }
+    .modal { width: 100vw !important; max-width: 100vw !important; border-radius: 0 !important; }
+}
+</style><script>
+function toggleSidebar() {
+    var s = document.querySelector('.sidebar');
+    var o = document.querySelector('.sidebar-overlay');
+    if (!s) return;
+    if (s.classList.contains('open')) {
+        s.classList.remove('open');
+        if (o) o.classList.remove('active');
+    } else {
+        s.classList.add('open');
+        if (o) o.classList.add('active');
+    }
+}
+</script>
+
     <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="stylesheet" href="/static/css/app.css">
+    <link rel="stylesheet" href="/static/css/app.css?v=200">
 </head>
 <body>
+
+    <button class="sidebar-toggle" onclick="toggleSidebar()">&#9776;</button>
+    <div class="sidebar-overlay" onclick="toggleSidebar()"></div>
     <div class="app-layout">
         <div class="sidebar" style="background:#111827">
             <div class="sidebar-brand"><h2>StaffBot.my</h2><span>Admin Panel</span></div>
-            <nav class="sidebar-nav">
-                <a href="dashboard.html"><span>📊</span><span>Dashboard</span></a>
-                <a href="users.html"><span>👥</span><span>Pengguna</span></a>
-                <a href="packages.html" class="active"><span>📦</span><span>Pakej</span></a>
-                <a href="policy.html"><span>🛡️</span><span>Policy</span></a>
-                <a href="settings.html"><span>⚙️</span><span>Settings</span></a>
-                <a href="#" onclick="logout()" style="margin-top:20px;border-top:1px solid rgba(255,255,255,0.1);padding-top:20px"><span>🚪</span><span>Log Keluar</span></a>
-            </nav>
+            <nav class="sidebar-nav" id="sidebar-nav"></nav>
             <div id="sidebar-user" style="padding:16px 20px;border-top:1px solid rgba(255,255,255,0.1);margin-top:auto"></div>
         </div>
         <div class="main-content">
             <div class="topbar">
-                <h1>Pakej</h1>
-                <button class="btn btn-primary" onclick="showAddPackage()">+ Tambah Pakej</button>
+                <h1>Packages</h1>
+                <button class="btn btn-primary" onclick="showAddPackage()">+ Add Package</button>
             </div>
             <div id="packagesContainer"><p style="color:var(--text-light)">Loading...</p></div>
         </div>
     </div>
 
-    <!-- Add Package Modal -->
+    <!-- Add/Edit Package Modal -->
     <div class="modal-overlay" id="packageModal">
-        <div class="modal" style="width:600px">
-            <h3 id="pkgModalTitle">Tambah Pakej</h3>
+        <div class="modal" style="width:700px">
+            <h3 id="pkgModalTitle">Add Package</h3>
             <form onsubmit="return savePackage(event)">
                 <input type="hidden" id="pkgId">
-                <div class="grid-2">
-                    <div class="form-group"><label>Nama</label><input type="text" class="form-input" id="pkgName" required></div>
-                    <div class="form-group"><label>Paparan Nama</label><input type="text" class="form-input" id="pkgDisplay" required></div>
-                    <div class="form-group"><label>Harga Bulanan (RM)</label><input type="number" class="form-input" id="pkgPrice" step="0.01" required></div>
-                    <div class="form-group"><label>Had Bot</label><input type="number" class="form-input" id="pkgBots" value="1"></div>
-                    <div class="form-group"><label>Token Terurus</label><input type="number" class="form-input" id="pkgTokens" value="0"></div>
-                    <div class="form-group"><label>Aturan</label><input type="number" class="form-input" id="pkgSort" value="0"></div>
+                <div class="grid-3">
+                    <div class="form-group"><label>Name</label><input type="text" class="form-input" id="pkgName" required></div>
+                    <div class="form-group"><label>Display Name</label><input type="text" class="form-input" id="pkgDisplay" required></div>
+                    <div class="form-group"><label>Monthly Price (RM)</label><input type="number" class="form-input" id="pkgPrice" step="0.01" required></div>
+                    <div class="form-group"><label>Bot Limit</label><input type="number" class="form-input" id="pkgBots" value="1"></div>
+                    <div class="form-group"><label>Managed Tokens</label><input type="number" class="form-input" id="pkgTokens" value="0"></div>
+                    <div class="form-group"><label>Sort Order</label><input type="number" class="form-input" id="pkgSort" value="0"></div>
                 </div>
-                <div class="form-group"><label>Penerangan</label><textarea class="form-input" id="pkgDesc" rows="3"></textarea></div>
-                <div class="form-group"><label>Features (satu setiap baris)</label><textarea class="form-input" id="pkgFeatures" rows="4" placeholder="Chat dengan AI&#10;Memory berterusan&#10;Integrasi GDrive"></textarea></div>
+                <div style="border-top:1px solid var(--border);margin:16px 0;padding-top:16px">
+                    <p style="font-size:13px;font-weight:600;margin-bottom:12px;color:var(--text-light)">CONTAINER RESOURCES</p>
+                    <div class="grid-3">
+                        <div class="form-group"><label>CPU Limit (cores)</label><input type="number" class="form-input" id="pkgCpu" value="1" step="0.5" min="0.5" max="8"></div>
+                        <div class="form-group"><label>RAM Limit (MB)</label><input type="number" class="form-input" id="pkgRam" value="512" step="128" min="128"></div>
+                        <div class="form-group"><label>Storage Limit (GB)</label><input type="number" class="form-input" id="pkgStorage" value="10" step="5" min="1"></div>
+                    </div>
+                </div>
+                <div class="form-group"><label>Description</label><textarea class="form-input" id="pkgDesc" rows="3"></textarea></div>
+                <div class="form-group"><label>Features (one per line)</label><textarea class="form-input" id="pkgFeatures" rows="4" placeholder="Chat with AI&#10;Persistent memory&#10;Google Drive integration"></textarea></div>
                 <div class="modal-actions">
-                    <button type="button" class="btn btn-secondary" onclick="closeModal('packageModal')">Batal</button>
-                    <button type="submit" class="btn btn-primary" id="savePkgBtn">Simpan</button>
+                    <button type="button" class="btn btn-secondary" onclick="closeModal('packageModal')">Cancel</button>
+                    <button type="submit" class="btn btn-primary" id="savePkgBtn">Save</button>
                 </div>
             </form>
+        </div>
+    </div>
+
+    <!-- Apply Results Modal -->
+    <div class="modal-overlay" id="applyResultModal">
+        <div class="modal" style="width:700px;max-height:80vh;overflow-y:auto">
+            <h3 id="applyResultTitle">Apply Resources</h3>
+            <div id="applyResultBody"></div>
+            <div class="modal-actions">
+                <button type="button" class="btn btn-primary" onclick="closeModal('applyResultModal')">Done</button>
+            </div>
         </div>
     </div>
 
@@ -60,56 +114,74 @@
     async function init() {
         const user = await checkAuth('/admin/login.html');
         if (!user) return;
+        renderSidebar('packages');
         renderSidebarUser(user);
         loadPackages();
     }
+
     async function loadPackages() {
         try {
             const pkgs = await api('/admin/packages/all');
             document.getElementById('packagesContainer').innerHTML = 
                 `<div class="grid-3">${pkgs.map(p => `
                     <div class="card" style="position:relative;${!p.is_active ? 'opacity:0.6' : ''}">
-                        ${!p.is_active ? '<div style="position:absolute;top:12px;right:12px;font-size:11px;background:var(--border);padding:2px 8px;border-radius:4px">Tidak Aktif</div>' : ''}
+                        ${!p.is_active ? '<div style="position:absolute;top:12px;right:12px;font-size:11px;background:var(--border);padding:2px 8px;border-radius:4px">Inactive</div>' : ''}
                         <h3 style="font-size:18px;margin-bottom:4px">${p.display_name || p.name}</h3>
-                        <div style="font-size:24px;font-weight:700">${formatCurrency(p.price_monthly)}<span style="font-size:14px;font-weight:400;color:var(--text-light)">/bulan</span></div>
+                        <div style="font-size:24px;font-weight:700">${formatCurrency(p.price_monthly)}<span style="font-size:14px;font-weight:400;color:var(--text-light)\">/month</span></div>
                         <div style="margin:12px 0;font-size:13px;color:var(--text-light)">
-                            <div>🤖 ${p.bot_limit} bot</div>
-                            <div>🔑 ${p.managed_tokens} token</div>
+                            <div>🤖 ${p.bot_limit} bot(s)</div>
+                            <div>🔑 ${p.managed_tokens} tokens</div>
+                            <div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--border);font-size:12px">
+                                <span style="display:inline-block;background:#EEF2FF;color:#4338CA;padding:2px 8px;border-radius:4px;margin:2px">🖥 ${p.cpu_limit || 1} CPU</span>
+                                <span style="display:inline-block;background:#FEF3C7;color:#92400E;padding:2px 8px;border-radius:4px;margin:2px">💾 ${p.memory_limit_mb || 512}MB RAM</span>
+                                <span style="display:inline-block;background:#D1FAE5;color:#065F46;padding:2px 8px;border-radius:4px;margin:2px">📦 ${p.storage_limit_gb || 10}GB</span>
+                            </div>
                             ${p.description ? `<div style="margin-top:8px">${p.description}</div>` : ''}
                         </div>
-                        <div style="display:flex;gap:8px">
+                        <div style="display:flex;gap:8px;flex-wrap:wrap">
                             <button class="btn btn-secondary btn-sm" onclick="editPackage(${p.id})">Edit</button>
-                            <button class="btn btn-${p.is_active ? 'danger' : 'success'} btn-sm" onclick="togglePackage(${p.id},${!p.is_active})">${p.is_active ? 'Nyahaktif' : 'Aktifkan'}</button>
+                            <button class="btn btn-${p.is_active ? 'danger' : 'success'} btn-sm" onclick="togglePackage(${p.id},${!p.is_active})">${p.is_active ? 'Deactivate' : 'Activate'}</button>
+                            <button class="btn btn-sm" style="background:#4338CA;color:white" onclick="applyResources(${p.id},'${p.display_name || p.name}')" title="Apply CPU/RAM limits to running containers">
+                                🔄 Apply
+                            </button>
                         </div>
                     </div>
                 `).join('')}</div>`;
         } catch {}
     }
+
     function showAddPackage() {
-        document.getElementById('pkgModalTitle').textContent = 'Tambah Pakej';
+        document.getElementById('pkgModalTitle').textContent = 'Add Package';
         document.getElementById('pkgId').value = '';
-        ['pkgName','pkgDisplay','pkgPrice','pkgBots','pkgTokens','pkgSort','pkgDesc','pkgFeatures'].forEach(id => document.getElementById(id).value = '');
+        ['pkgName','pkgDisplay','pkgPrice','pkgBots','pkgTokens','pkgSort','pkgCpu','pkgRam','pkgStorage','pkgDesc','pkgFeatures'].forEach(id => document.getElementById(id).value = '');
+        document.getElementById('pkgCpu').value = '1';
+        document.getElementById('pkgRam').value = '512';
+        document.getElementById('pkgStorage').value = '10';
         openModal('packageModal');
     }
+
     async function editPackage(id) {
-        // We need to fetch package detail - for MVP, load from list
         try {
             const pkgs = await api('/admin/packages/all');
             const pkg = pkgs.find(p => p.id === id);
             if (!pkg) return;
-            document.getElementById('pkgModalTitle').textContent = 'Edit Pakej';
+            document.getElementById('pkgModalTitle').textContent = 'Edit Package';
             document.getElementById('pkgId').value = id;
-            document.getElementById('pkgName').value = pkg.name;
+            document.getElementById('pkgName').value = pkg.name || '';
             document.getElementById('pkgDisplay').value = pkg.display_name || '';
             document.getElementById('pkgPrice').value = pkg.price_monthly || 0;
             document.getElementById('pkgBots').value = pkg.bot_limit || 1;
             document.getElementById('pkgTokens').value = pkg.managed_tokens || 0;
             document.getElementById('pkgSort').value = pkg.sort_order || 0;
+            document.getElementById('pkgCpu').value = pkg.cpu_limit || 1;
+            document.getElementById('pkgRam').value = pkg.memory_limit_mb || 512;
+            document.getElementById('pkgStorage').value = pkg.storage_limit_gb || 10;
             document.getElementById('pkgDesc').value = pkg.description || '';
-            document.getElementById('pkgFeatures').value = (pkg.features || []).join('\n');
+            document.getElementById('pkgFeatures').value = (pkg.features || []).join('\\n');
             openModal('packageModal');
         } catch {}
     }
+
     async function savePackage(e) {
         e.preventDefault();
         const id = document.getElementById('pkgId').value;
@@ -120,22 +192,84 @@
             bot_limit: parseInt(document.getElementById('pkgBots').value),
             managed_tokens: parseFloat(document.getElementById('pkgTokens').value),
             sort_order: parseInt(document.getElementById('pkgSort').value),
+            cpu_limit: parseFloat(document.getElementById('pkgCpu').value) || 1,
+            memory_limit_mb: parseInt(document.getElementById('pkgRam').value) || 512,
+            storage_limit_gb: parseInt(document.getElementById('pkgStorage').value) || 10,
             description: document.getElementById('pkgDesc').value,
-            features: document.getElementById('pkgFeatures').value.split('\n').filter(Boolean),
+            features: document.getElementById('pkgFeatures').value.split('\\n').filter(Boolean),
         };
         if (id) await api(`/admin/packages/${id}`, { method: 'PUT', body: JSON.stringify(data) });
-        else await api('/admin/packages', { method: 'POST', body: JSON.stringify(data) });
+        else await api('/admin/packages/', { method: 'POST', body: JSON.stringify(data) });
         closeModal('packageModal');
-        showToast(id ? 'Pakej dikemaskini' : 'Pakej ditambah', 'success');
+        showToast(id ? 'Package updated' : 'Package added', 'success');
         loadPackages();
         return false;
     }
+
     async function togglePackage(id, activate) {
         if (!activate) await api(`/admin/packages/${id}`, { method: 'DELETE' });
         else await api(`/admin/packages/${id}`, { method: 'PUT', body: JSON.stringify({ is_active: true }) });
-        showToast(`Pakej ${activate ? 'diaktifkan' : 'dinyahaktifkan'}`, 'success');
+        showToast(`Package ${activate ? 'activated' : 'deactivated'}`, 'success');
         loadPackages();
     }
+
+    async function applyResources(packageId, packageName) {
+        if (!confirm(`Apply CPU/RAM limits from "${packageName}" to all running containers with this package?\\n\\nStorage changes require container recreation.`)) return;
+
+        document.getElementById('applyResultTitle').textContent = `Applying: ${packageName}`;
+        document.getElementById('applyResultBody').innerHTML = '<p>Applying resource limits...</p>';
+        openModal('applyResultModal');
+
+        try {
+            const result = await api(`/admin/packages/${packageId}/apply`, { method: 'POST' });
+
+            let html = '';
+            const limits = result.new_limits;
+            html += `<div style="margin-bottom:16px;padding:12px;background:#F3F4F6;border-radius:8px">
+                <strong>New Limits:</strong> 🖥 ${limits.cpu} CPU · 💾 ${limits.ram_mb}MB RAM · 📦 ${limits.storage_gb}GB
+            </div>`;
+
+            const updated = result.updated_cpu_ram || [];
+            const warnings = result.storage_warnings || [];
+
+            if (updated.length > 0) {
+                html += `<div style="margin-bottom:12px">
+                    <strong style="color:#065F46">✅ CPU/RAM Updated (${updated.length} container(s))</strong>
+                    <ul style="margin:8px 0 0 16px;font-size:13px">`;
+                updated.forEach(u => {
+                    html += `<li style="margin-bottom:6px">
+                        <strong>${u.client_name}</strong> — ${u.container_name}
+                        <span style="color:var(--text-light);font-size:12px">${u.result.test_mode ? '(Simulated)' : '(Applied live)'}</span>
+                    </li>`;
+                });
+                html += `</ul></div>`;
+            }
+
+            if (warnings.length > 0) {
+                html += `<div style="margin-bottom:12px">
+                    <strong style="color:#92400E">⚠️ Warnings (${warnings.length})</strong>
+                    <ul style="margin:8px 0 0 16px;font-size:13px">`;
+                warnings.forEach(w => {
+                    html += `<li style="margin-bottom:6px">
+                        <strong>${w.client_name}</strong> — ${w.container_name || `(client #${w.client_id})`}
+                        <br><span style="color:var(--text-light)">${w.warning || w.error || w.reason}</span>
+                    </li>`;
+                });
+                html += `</ul></div>`;
+            }
+
+            if (updated.length === 0 && warnings.length === 0) {
+                html += `<p style="color:var(--text-light)">No running containers found for this package.</p>`;
+            }
+
+            document.getElementById('applyResultBody').innerHTML = html;
+            showToast(result.message, 'success');
+        } catch (err) {
+            document.getElementById('applyResultBody').innerHTML = `<p style="color:var(--danger)">Error: ${err.message}</p>`;
+            showToast('Failed to apply resources', 'error');
+        }
+    }
+
     init();
     </script>
 </body>

@@ -98,12 +98,125 @@ function renderSidebarUser(user) {
 }
 
 // Init sidebar
-document.addEventListener('DOMContentLoaded', () => {
-    // Highlight active nav item
-    const path = window.location.pathname;
-    document.querySelectorAll('.sidebar-nav a').forEach(a => {
-        if (a.getAttribute('href') === path.split('/').pop()) a.classList.add('active');
+function renderSidebar(active) {
+    const nav = document.getElementById('sidebar-nav');
+    if (!nav) return;
+    
+    // Menu definition
+    const menus = [
+        { href: 'dashboard.html', icon: '📊', label: 'Dashboard', id: 'dashboard' },
+        { href: 'users.html', icon: '👥', label: 'Users', id: 'users' },
+        { href: 'packages.html', icon: '📦', label: 'Package', id: 'packages' },
+        { 
+            href: 'billing.html',
+            icon: '💰', label: 'Billing', id: 'billing', submenu: [
+                { href: 'usage.html', label: '📈 Usage', id: 'usage' }
+            ]
+        },
+        { 
+            href: 'affiliates.html',
+            icon: '🤝', label: 'Affiliate', id: 'affiliate', submenu: [
+                { href: 'affiliates.html', label: '📊 Dashboard', id: 'affiliates' },
+                { href: 'affiliate-list.html', label: '📋 Affiliate List', id: 'affiliate-list' },
+                { href: 'payout-requests.html', label: '💰 Payout Requests', id: 'payout-requests' },
+                { href: 'leaderboard.html', label: '🏆 Leaderboard', id: 'leaderboard' }
+            ]
+        },
+        { 
+            icon: '⚙️', label: 'Settings', id: 'settings', submenu: [
+                { href: 'settings.html', label: '⚙️ General', id: 'settings-general' },
+                { href: 'payments.html', label: '💳 Payment Gateway', id: 'payments' },
+                { href: 'providers.html', label: '🔌 LLM Providers', id: 'providers' },
+                { href: 'policy.html', label: '🛡️ Policy', id: 'policy' }
+            ]
+        },
+    ];
+
+    // Check if active is in a submenu -> open that submenu
+    const submenuParents = {};
+    menus.forEach(m => {
+        if (m.submenu) {
+            m.submenu.forEach(s => { submenuParents[s.id] = m.id; });
+        }
     });
-    // Load user if token exists
-    if (AUTH_TOKEN) loadProfile().then(u => { if (u) renderSidebarUser(u); });
+    const parentSub = submenuParents[active];
+    
+    let html = '';
+    menus.forEach(m => {
+        const isActive = m.id === active;
+        const hasActiveChild = m.submenu && m.submenu.some(s => s.id === active);
+        const cls = isActive || hasActiveChild ? ' class="active"' : '';
+        
+        if (m.submenu) {
+            const subOpen = hasActiveChild ? ' open' : '';
+            if (m.href) {
+                // Parent with both href (navigate) and submenu toggle via arrow
+                html += `<div style="display:flex;align-items:center">`;
+                html += `<a href="${m.href}"${cls} style="flex:1"><span>${m.icon}</span><span>${m.label}</span></a>`;
+                html += `<span onclick="toggleSubmenu('${m.id}-sub')" style="cursor:pointer;padding:12px 16px;font-size:10px;transition:transform 0.3s;display:inline-block" id="${m.id}-arrow">${hasActiveChild ? '▾' : '▸'}</span>`;
+                html += `</div>`;
+            } else {
+                html += `<a onclick="toggleSubmenu('${m.id}-sub')"${cls}><span>${m.icon}</span><span>${m.label}</span><span style="margin-left:auto;font-size:10px;transition:transform 0.3s" id="${m.id}-arrow">${hasActiveChild ? '▾' : '▸'}</span></a>`;
+            }
+            html += `<div class="submenu${subOpen}" id="${m.id}-sub">`;
+            m.submenu.forEach(s => {
+                const sActive = s.id === active;
+                html += `<a href="${s.href}"${sActive ? ' class="active"' : ''}>${s.label}</a>`;
+            });
+            html += `</div>`;
+        } else {
+            html += `<a href="${m.href}"${cls}><span>${m.icon}</span><span>${m.label}</span></a>`;
+        }
+    });
+    
+    html += `<a href="#" onclick="logout()" style="margin-top:20px;border-top:1px solid rgba(255,255,255,0.1);padding-top:20px"><span>🚪</span><span>Logout</span></a>`;
+    nav.innerHTML = html;
+}
+
+// Auto-close mobile sidebar when clicking a nav link
+document.addEventListener('click', function(e) {
+    const link = e.target.closest('.sidebar-nav a');
+    if (link && window.innerWidth <= 768) {
+        toggleSidebar();
+    }
+});
+
+function toggleSubmenu(id) {
+    const sub = document.getElementById(id);
+    if (!sub) return;
+    sub.classList.toggle('open');
+    // Update arrow
+    const parentId = id.replace('-sub', '');
+    const arrow = document.getElementById(parentId + '-arrow');
+    if (arrow) arrow.textContent = sub.classList.contains('open') ? '▾' : '▸';
+}
+
+function toggleSidebar() {
+    var sidebar = document.querySelector('.sidebar');
+    var overlay = document.querySelector('.sidebar-overlay');
+    if (!sidebar) return;
+    sidebar.classList.toggle('open');
+    if (overlay) overlay.classList.toggle('active');
+}
+
+// Close sidebar on overlay click
+document.addEventListener('click', function(e) {
+    if (e.target.classList.contains('sidebar-overlay')) {
+        document.querySelector('.sidebar').classList.remove('open');
+        e.target.classList.remove('active');
+    }
+});
+
+// Auto-close mobile sidebar when clicking a nav link
+document.addEventListener('click', function(e) {
+    var link = e.target.closest('.sidebar-nav a');
+    if (link && window.innerWidth <= 768) {
+        document.querySelector('.sidebar').classList.remove('open');
+        document.querySelector('.sidebar-overlay').classList.remove('active');
+    }
+});
+
+// Init on page load
+document.addEventListener('DOMContentLoaded', function() {
+    if (AUTH_TOKEN) loadProfile().then(function(u) { if (u) renderSidebarUser(u); });
 });
