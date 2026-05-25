@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Billing — StaffBot.my</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="/static/css/app.css">
+</head>
+<body>
+    <button class="sidebar-toggle" onclick="toggleSidebar()">☰</button>
+    <div class="sidebar-overlay" onclick="toggleSidebar()"></div>
+    <div class="app-layout">
+        <div class="sidebar">
+            <div class="sidebar-brand"><h2>StaffBot.my</h2><span>Customer Dashboard</span></div>
+            <nav class="sidebar-nav">
+                <a href="dashboard.html"><span>📊</span><span>Dashboard</span></a>
+                <a href="bots.html"><span>🤖</span><span>My Staff AI</span></a>
+                <a href="chat.html"><span>💬</span><span>Chat</span></a>
+                <a href="tasks.html"><span>📋</span><span>Tasks</span></a>
+                <a href="billing.html" class="active"><span>💰</span><span>Billing</span></a>
+                <a href="usage.html"><span>📈</span><span>Usage</span></a>
+                <a href="settings.html"><span>⚙️</span><span>Settings</span></a>
+                <a href="affiliates.html"><span>🤝</span><span>Affiliates</span></a>
+                <a href="#" onclick="logout()" style="margin-top:20px;border-top:1px solid rgba(255,255,255,0.1);padding-top:20px"><span>🚪</span><span>Log Out</span></a>
+            </nav>
+            <div id="sidebar-user" style="padding:16px 20px;border-top:1px solid rgba(255,255,255,0.1);margin-top:auto"></div>
+        </div>
+        <div class="main-content">
+            <div class="topbar"><h1>Billing & Subscription</h1></div>
+
+            <div class="grid-2">
+                <div class="card">
+                    <div class="card-header"><h3>Current Plan</h3></div>
+                    <div id="currentPackage"><p style="color:var(--text-light)">Loading...</p></div>
+                </div>
+                <div class="card">
+                    <div class="card-header"><h3>Change Plan</h3></div>
+                    <div id="packagesList"><p style="color:var(--text-light)">Loading...</p></div>
+                </div>
+            </div>
+
+            <!-- Invoice History -->
+            <div class="card">
+                <div class="card-header"><h3>Invoice History</h3></div>
+                <div id="invoiceList"><p style="color:var(--text-light)">No invoice records.</p></div>
+            </div>
+        </div>
+    </div>
+    <div id="toast-container" class="toast-container"></div>
+    <script src="/static/js/app.js"></script>
+    <script>
+    async function init() {
+        const user = await checkAuth();
+        if (!user) return;
+        renderSidebarUser(user);
+        loadSubscription(user);
+        loadPackages();
+    }
+
+    async function loadSubscription(user) {
+        try {
+            const sub = await api(`/subscriptions/${user.id}`);
+            document.getElementById('currentPackage').innerHTML = `
+                <div style="text-align:center;padding:20px">
+                    <div style="font-size:48px;margin-bottom:12px">${user.package === 'enterprise' ? '🏢' : user.package === 'pro' ? '⭐' : '🔵'}</div>
+                    <h2 style="font-size:24px;margin-bottom:8px;text-transform:capitalize">${user.package}</h2>
+                    <div>${statusBadge(sub.status)}</div>
+                    <div style="margin-top:16px;font-size:13px;color:var(--text-light)">
+                        <div>Start: ${formatDate(sub.start_date)}</div>
+                        ${sub.end_date ? `<div>End: ${formatDate(sub.end_date)}</div>` : ''}
+                        <div>Tokens: ${sub.managed_token_used.toFixed(0)} / ${sub.managed_token_quota.toFixed(0)}</div>
+                    </div>
+                </div>
+            `;
+        } catch { document.getElementById('currentPackage').innerHTML = '<p style="color:var(--text-light)">Failed to load subscription</p>'; }
+    }
+
+    async function loadPackages() {
+        try {
+            const pkgs = await api('/admin/packages');
+            document.getElementById('packagesList').innerHTML = `<div class="grid-2">${pkgs.map(p => `
+                <div style="border:1px solid var(--border);border-radius:12px;padding:20px;text-align:center">
+                    <h3 style="font-size:18px;margin-bottom:8px">${p.display_name}</h3>
+                    <div style="font-size:28px;font-weight:700;margin-bottom:8px">${formatCurrency(p.price_monthly)}<span style="font-size:14px;font-weight:400;color:var(--text-light)">/month</span></div>
+                    <div style="font-size:13px;color:var(--text-light);margin-bottom:12px">${p.bot_limit} agent(s), ${p.managed_tokens} tokens</div>
+                    <button class="btn btn-primary btn-sm" onclick="upgrade('${p.name}')">Upgrade</button>
+                </div>
+            `).join('')}</div>`;
+        } catch {}
+    }
+
+    async function upgrade(pkg) {
+        try {
+            const result = await api('/subscriptions/create-checkout', { method: 'POST', body: JSON.stringify({ package: pkg }) });
+            if (result.checkout_url) window.open(result.checkout_url, '_blank');
+            showToast('Redirecting to payment for ' + pkg, 'info');
+        } catch {}
+    }
+
+    init();
+    </script>
+</body>
+</html>

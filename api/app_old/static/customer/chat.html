@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="ms">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chat — StaffBot.my</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="/static/css/app.css">
+</head>
+<body>
+    <button class="sidebar-toggle" onclick="toggleSidebar()">☰</button>
+    <div class="sidebar-overlay" onclick="toggleSidebar()"></div>
+    <div class="app-layout">
+        <div class="sidebar">
+            <div class="sidebar-brand"><h2>StaffBot.my</h2><span>Customer Dashboard</span></div>
+            <nav class="sidebar-nav">
+                <a href="dashboard.html"><span>📊</span><span>Dashboard</span></a>
+                <a href="bots.html"><span>🤖</span><span>Staff AI Saya</span></a>
+                <a href="chat.html" class="active"><span>💬</span><span>Chat</span></a>
+                <a href="settings.html"><span>⚙️</span><span>Tetapan</span></a>
+                <a href="billing.html"><span>💰</span><span>Billing</span></a>
+                <a href="usage.html"><span>📈</span><span>Penggunaan</span></a>
+                <a href="#" onclick="logout()" style="margin-top:20px;border-top:1px solid rgba(255,255,255,0.1);padding-top:20px"><span>🚪</span><span>Log Keluar</span></a>
+            </nav>
+            <div id="sidebar-user" style="padding:16px 20px;border-top:1px solid rgba(255,255,255,0.1);margin-top:auto"></div>
+        </div>
+        <div class="main-content">
+            <div class="topbar">
+                <h1>Chat dengan Staff AI</h1>
+                <div>
+                    <select class="form-input" id="botSelector" style="width:200px" onchange="switchBot()">
+                        <option value="">Pilih Staff...</option>
+                    </select>
+                </div>
+            </div>
+            <div class="card">
+                <div class="chat-container" id="chatContainer">
+                    <div class="chat-messages" id="chatMessages">
+                        <div class="chat-msg chat-bot">
+                            Hai! Saya StaffBot.ai. Pilih staff AI di sebelah atas untuk mula berbual.
+                            <div class="msg-time">Sekarang</div>
+                        </div>
+                    </div>
+                    <div class="chat-input-area">
+                        <input type="text" class="form-input" id="chatInput" placeholder="Taip mesej..." disabled onkeypress="if(event.key==='Enter')sendMessage()">
+                        <button class="btn btn-primary" id="sendBtn" onclick="sendMessage()" disabled>Hantar</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div id="toast-container" class="toast-container"></div>
+    <script src="/static/js/app.js"></script>
+    <script>
+    let currentBotId = null;
+    const params = new URLSearchParams(window.location.search);
+
+    async function init() {
+        const user = await checkAuth();
+        if (!user) return;
+        renderSidebarUser(user);
+        await loadBots();
+        if (params.get('bot')) { document.getElementById('botSelector').value = params.get('bot'); switchBot(); }
+    }
+
+    async function loadBots() {
+        try {
+            const containers = await api('/containers/');
+            const sel = document.getElementById('botSelector');
+            sel.innerHTML = '<option value="">Pilih Staff...</option>' + containers.map(c =>
+                `<option value="${c.id}">${c.name} (${c.status})</option>`
+            ).join('');
+        } catch {}
+    }
+
+    function switchBot() {
+        currentBotId = document.getElementById('botSelector').value;
+        const input = document.getElementById('chatInput');
+        const btn = document.getElementById('sendBtn');
+        const msgs = document.getElementById('chatMessages');
+        
+        if (currentBotId) {
+            input.disabled = false; btn.disabled = false; input.focus();
+            msgs.innerHTML = `<div class="chat-msg chat-bot">Staff AI sedia membantu. Taip mesej anda.<div class="msg-time">${new Date().toLocaleTimeString()}</div></div>`;
+        } else {
+            input.disabled = true; btn.disabled = true;
+            msgs.innerHTML = `<div class="chat-msg chat-bot">Pilih staff AI di sebelah atas untuk mula berbual.<div class="msg-time">Sekarang</div></div>`;
+        }
+    }
+
+    async function sendMessage() {
+        const input = document.getElementById('chatInput');
+        const msg = input.value.trim();
+        if (!msg || !currentBotId) return;
+        
+        input.value = '';
+        const msgs = document.getElementById('chatMessages');
+        msgs.innerHTML += `<div class="chat-msg chat-user">${msg}<div class="msg-time">${new Date().toLocaleTimeString()}</div></div>`;
+        msgs.scrollTop = msgs.scrollHeight;
+        
+        // Show loading
+        msgs.innerHTML += `<div class="chat-msg chat-bot"><div class="loading"></div> Menunggu jawapan...</div>`;
+        msgs.scrollTop = msgs.scrollHeight;
+        
+        try {
+            // For MVP, send to a bot endpoint (will be proxied to Server B's container later)
+            const resp = await api(`/containers/${currentBotId}`, { method: 'GET' });
+            msgs.querySelector('.chat-msg:last-child').remove();
+            msgs.innerHTML += `<div class="chat-msg chat-bot">Maaf, ciri chat penuh akan tersedia selepas Server B disambungkan. StaffBot sedang dalam pembangunan.<div class="msg-time">${new Date().toLocaleTimeString()}</div></div>`;
+        } catch {
+            msgs.querySelector('.chat-msg:last-child').remove();
+            msgs.innerHTML += `<div class="chat-msg chat-bot">Ralat: Tidak dapat berhubung dengan Staff AI.<div class="msg-time">${new Date().toLocaleTimeString()}</div></div>`;
+        }
+        msgs.scrollTop = msgs.scrollHeight;
+    }
+
+    init();
+    </script>
+</body>
+</html>

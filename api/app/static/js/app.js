@@ -57,6 +57,31 @@ async function checkAuth(redirectTo = '/customer/login.html') {
     return user;
 }
 
+// Check ADMIN auth — customer will be redirected to customer login
+async function checkAdminAuth() {
+    if (!AUTH_TOKEN) { window.location.href = '/admin/login.html'; return null; }
+    try {
+        const user = await loadProfile();
+        if (!user) { window.location.href = '/admin/login.html'; return null; }
+        // Verify admin access by calling a protected admin endpoint
+        const adminCheck = await fetch(`${API_BASE}/admin/dashboard`, {
+            headers: { 'Authorization': `Bearer ${AUTH_TOKEN}` }
+        });
+        if (adminCheck.status === 403) {
+            // Customer trying to access admin — KICK OUT
+            localStorage.removeItem('staffbot_token');
+            AUTH_TOKEN = null;
+            USER_DATA = null;
+            window.location.href = '/customer/login.html';
+            return null;
+        }
+        return user;
+    } catch (e) {
+        window.location.href = '/admin/login.html';
+        return null;
+    }
+}
+
 // Toast notifications
 function showToast(msg, type = 'info') {
     const container = document.getElementById('toast-container') || (() => {
@@ -127,6 +152,7 @@ function renderSidebar(active) {
                 { href: 'settings.html', label: '⚙️ General', id: 'settings-general' },
                 { href: 'payments.html', label: '💳 Payment Gateway', id: 'payments' },
                 { href: 'providers.html', label: '🔌 LLM Providers', id: 'providers' },
+{ href: 'token-topups.html', label: '💰 Token Top-Up', id: 'token-topups' },
                 { href: 'policy.html', label: '🛡️ Policy', id: 'policy' }
             ]
         },

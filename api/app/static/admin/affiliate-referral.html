@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Referral — StaffBot.my</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="/static/css/app.css?v=1779706646">
+</head>
+<body>
+    <button class="sidebar-toggle" onclick="toggleSidebar()">☰</button>
+    <div class="sidebar-overlay" onclick="toggleSidebar()"></div>
+    <div class="app-layout" id="app">
+        <div class="sidebar" style="background:#111827">
+            <div class="sidebar-brand"><h2>StaffBot.my</h2><span>Admin Panel</span></div>
+            <nav class="sidebar-nav" id="sidebar-nav"></nav>
+            <div id="sidebar-user" style="padding:16px 20px;border-top:1px solid rgba(255,255,255,0.1);margin-top:auto"></div>
+        </div>
+        <div class="main-content">
+            <div class="topbar"><h1>🔗 Referral Links</h1></div>
+            <div class="grid-4">
+                <div class="card stat-card"><div class="stat-label">Total Referrals</div><div class="stat-value" id="ref-total">0</div></div>
+                <div class="card stat-card"><div class="stat-label">Converted</div><div class="stat-value" id="ref-converted">0</div></div>
+                <div class="card stat-card"><div class="stat-label">Commission Earned</div><div class="stat-value" id="ref-commission">RM0.00</div></div>
+                <div class="card stat-card"><div class="stat-label">Conversion Rate</div><div class="stat-value" id="ref-rate">0%</div></div>
+            </div>
+            <div class="card">
+                <div class="card-header"><h3>Referral Links</h3></div>
+                <div style="padding:16px;text-align:center;color:var(--text-light)">
+                    <p style="font-size:13px">Referral links can be generated once the affiliate system is active with clients.</p>
+                    <p style="font-size:13px;margin-top:4px">Each affiliate gets a unique tracking link to share.</p>
+                </div>
+            </div>
+            <div class="card">
+                <div class="card-header"><h3>Referral History</h3></div>
+                <div id="referralHistory"><p style="color:var(--text-light);padding:16px;text-align:center">No referral activity yet.</p></div>
+            </div>
+        </div>
+    </div>
+    <div id="toast-container" class="toast-container"></div>
+    <script src="/static/js/app.js?v=1779706646"></script>
+    <script>
+    async function init() {
+        const user = await checkAdminAuth('/admin/login.html');
+        if (!user) return;
+        renderSidebar('affiliate-referral');
+        renderSidebarUser(user);
+        try {
+            const data = await api('/admin/affiliates/referrals');
+            if (data.stats) {
+                document.getElementById('ref-total').textContent = data.stats.total || 0;
+                document.getElementById('ref-converted').textContent = data.stats.converted || 0;
+                document.getElementById('ref-commission').textContent = formatCurrency(data.stats.commission || 0);
+                document.getElementById('ref-rate').textContent = (data.stats.rate || 0) + '%';
+            }
+            if (data.items && data.items.length > 0) {
+                document.getElementById('referralHistory').innerHTML = `<div class="table-container"><table>
+                    <tr><th>Affiliate</th><th>Referred</th><th>Status</th><th>Commission</th><th>Date</th></tr>
+                    ${data.items.map(r => `<tr>
+                        <td>${r.affiliate_name}</td><td>${r.referred_name}</td>
+                        <td>${statusBadge(r.status)}</td>
+                        <td>${formatCurrency(r.commission)}</td>
+                        <td style="font-size:12px">${formatDate(r.created_at)}</td>
+                    </tr>`).join('')}
+                </table></div>`;
+            }
+        } catch {}
+    }
+    init();
+    </script>
+</body>
+</html>

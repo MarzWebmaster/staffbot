@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Token Top-Up — StaffBot.my Admin</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="/static/css/app.css">
+</head>
+<body>
+    <button class="sidebar-toggle" onclick="toggleSidebar()">☰</button>
+    <div class="sidebar-overlay" onclick="toggleSidebar()"></div>
+    <div class="app-layout">
+        <div class="sidebar" style="background:#111827">
+            <div class="sidebar-brand"><h2>StaffBot.my</h2><span>Admin Panel</span></div>
+            <nav class="sidebar-nav" id="sidebar-nav"></nav>
+            <div id="sidebar-user" style="padding:16px 20px;border-top:1px solid rgba(255,255,255,0.1);margin-top:auto"></div>
+        </div>
+        <div class="main-content">
+            <div class="topbar">
+                <h1>Token Top-Up Packages</h1>
+                <button class="btn btn-primary" onclick="showAdd()">+ Add Package</button>
+            </div>
+
+            <div class="grid-3" id="packagesContainer"><p style="color:var(--text-light)">Loading...</p></div>
+
+            <div class="card" style="margin-top:16px">
+                <div class="card-header"><h3>Top-Up History</h3></div>
+                <div id="historyContainer"><p style="color:var(--text-light);padding:16px;text-align:center">No top-up transactions yet.</p></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add/Edit Modal -->
+    <div class="modal-overlay" id="pkgModal">
+        <div class="modal" style="width:500px">
+            <h3 id="modalTitle">Add Top-Up Package</h3>
+            <form onsubmit="return savePackage(event)">
+                <input type="hidden" id="pkgId">
+                <div class="form-group"><label>Package Name</label><input type="text" class="form-input" id="pkgName" required></div>
+                <div class="form-group"><label>Description</label><textarea class="form-input" id="pkgDesc" rows="2"></textarea></div>
+                <div class="grid-2">
+                    <div class="form-group"><label>Tokens</label><input type="number" class="form-input" id="pkgTokens" required min="1000"></div>
+                    <div class="form-group"><label>Price (RM)</label><input type="number" class="form-input" id="pkgPrice" step="0.01" required min="1"></div>
+                </div>
+                <div class="form-group"><label>Sort Order</label><input type="number" class="form-input" id="pkgSort" value="0"></div>
+                <div class="modal-actions">
+                    <button type="button" class="btn btn-secondary" onclick="closeModal('pkgModal')">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Save</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div id="toast-container" class="toast-container"></div>
+    <script src="/static/js/app.js"></script>
+    <script>
+    async function init() {
+        const user = await checkAdminAuth('/admin/login.html');
+        if (!user) return;
+        renderSidebar('settings');
+        renderSidebarUser(user);
+        loadPackages();
+        loadHistory();
+    }
+
+    async function loadPackages() {
+        try {
+            const pkgs = await api('/admin/topup-packages');
+            const container = document.getElementById('packagesContainer');
+            if (!pkgs.length) {
+                container.innerHTML = '<p style="color:var(--text-light)">No packages yet. Add one!</p>';
+                return;
+            }
+            container.innerHTML = pkgs.map(p => `
+                <div class="card" style="${!p.is_active ? 'opacity:0.6' : ''}">
+                    <div style="font-size:32px;text-align:center;margin-bottom:8px">💰</div>
+                    <h3 style="font-size:16px;text-align:center">${p.name}</h3>
+                    <div style="font-size:28px;font-weight:700;text-align:center;margin:8px 0">RM${p.price_myr}</div>
+                    <div style="text-align:center;font-size:14px;color:var(--text-light)">${(p.tokens/1000000).toFixed(0)}M tokens</div>
+                    ${p.description ? `<div style="font-size:12px;color:var(--text-light);text-align:center;margin-top:8px">${p.description}</div>` : ''}
+                    <div style="display:flex;gap:8px;margin-top:12px">
+                        <button class="btn btn-secondary btn-sm" style="flex:1" onclick="editPackage(${p.id})">Edit</button>
+                        <button class="btn btn-${p.is_active ? 'danger' : 'success'} btn-sm" onclick="togglePackage(${p.id},${!p.is_active})">${p.is_active ? 'Deactivate' : 'Activate'}</button>
+                    </div>
+                </div>
+            `).join('');
+        } catch { document.getElementById('packagesContainer').innerHTML = '<p style="color:var(--danger)">Failed to load</p>'; }
+    }
+
+    async function loadHistory() {
+        try {
+            const topups = await api('/admin/topup-packages/history');
+            const container = document.getElementById('historyContainer');
+            if (!topups.length) { container.innerHTML = '<p style="color:var(--text-light);text-align:center">No top-up transactions yet.</p>'; return; }
+            container.innerHTML = `<table class="table"><thead><tr><th>Client ID</th><th>Tokens</th><th>Amount</th><th>Status</th><th>Date</th></tr></thead><tbody>${topups.map(t => `
+                <tr>
+                    <td>#${t.client_id}</td>
+                    <td>${(t.tokens/1000000).toFixed(0)}M</td>
+                    <td>RM${t.amount_paid}</td>
+                    <td>${statusBadge(t.status)}</td>
+                    <td>${formatDate(t.created_at)}</td>
+                </tr>
+            `).join('')}</tbody></table>`;
+        } catch {}
+    }
+
+    function showAdd() {
+        document.getElementById('modalTitle').textContent = 'Add Top-Up Package';
+        document.getElementById('pkgId').value = '';
+        ['pkgName','pkgDesc','pkgTokens','pkgPrice','pkgSort'].forEach(id => document.getElementById(id).value = '');
+        openModal('pkgModal');
+    }
+
+    async function editPackage(id) {
+        const pkgs = await api('/admin/topup-packages');
+        const p = pkgs.find(x => x.id === id);
+        if (!p) return;
+        document.getElementById('modalTitle').textContent = 'Edit Package';
+        document.getElementById('pkgId').value = id;
+        document.getElementById('pkgName').value = p.name;
+        document.getElementById('pkgDesc').value = p.description || '';
+        document.getElementById('pkgTokens').value = p.tokens;
+        document.getElementById('pkgPrice').value = p.price_myr;
+        document.getElementById('pkgSort').value = p.sort_order || 0;
+        openModal('pkgModal');
+    }
+
+    async function savePackage(e) {
+        e.preventDefault();
+        const id = document.getElementById('pkgId').value;
+        const data = {
+            name: document.getElementById('pkgName').value,
+            description: document.getElementById('pkgDesc').value,
+            tokens: parseInt(document.getElementById('pkgTokens').value),
+            price_myr: parseFloat(document.getElementById('pkgPrice').value),
+            sort_order: parseInt(document.getElementById('pkgSort').value) || 0,
+        };
+        if (id) await api(`/admin/topup-packages/${id}`, { method: 'PUT', body: JSON.stringify(data) });
+        else await api('/admin/topup-packages/', { method: 'POST', body: JSON.stringify(data) });
+        closeModal('pkgModal');
+        showToast(id ? 'Package updated' : 'Package added', 'success');
+        loadPackages();
+        return false;
+    }
+
+    async function togglePackage(id, activate) {
+        if (!activate) await api(`/admin/topup-packages/${id}`, { method: 'DELETE' });
+        else await api(`/admin/topup-packages/${id}`, { method: 'PUT', body: JSON.stringify({ is_active: true }) });
+        showToast(activate ? 'Activated' : 'Deactivated', 'success');
+        loadPackages();
+    }
+
+    init();
+    </script>
+</body>
+</html>

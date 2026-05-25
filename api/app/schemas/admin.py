@@ -31,7 +31,13 @@ class PackageCreate(BaseModel):
     description: str = ""
     features: list = []
     bot_limit: int = 1
+    sub_ejen_limit: int = 0
     managed_tokens: float = 0
+    cpu_limit: float = 1.0
+    memory_limit_mb: int = 512
+    storage_limit_gb: int = 10
+    skill_category_ids: list = []
+    tool_category_ids: list = []
     sort_order: int = 0
 
 
@@ -42,7 +48,13 @@ class PackageUpdate(BaseModel):
     description: Optional[str] = None
     features: Optional[list] = None
     bot_limit: Optional[int] = None
+    sub_ejen_limit: Optional[int] = None
     managed_tokens: Optional[float] = None
+    cpu_limit: Optional[float] = None
+    memory_limit_mb: Optional[int] = None
+    storage_limit_gb: Optional[int] = None
+    skill_category_ids: Optional[list] = None
+    tool_category_ids: Optional[list] = None
     sort_order: Optional[int] = None
     is_active: Optional[bool] = None
 

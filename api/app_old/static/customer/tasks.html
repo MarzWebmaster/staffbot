@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tasks — StaffBot.my</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="/static/css/app.css">
+</head>
+<body>
+    <button class="sidebar-toggle" onclick="toggleSidebar()">☰</button>
+    <div class="sidebar-overlay" onclick="toggleSidebar()"></div>
+    <div class="app-layout">
+        <div class="sidebar">
+            <div class="sidebar-brand"><h2>StaffBot.my</h2><span>Customer Dashboard</span></div>
+            <nav class="sidebar-nav">
+                <a href="dashboard.html"><span>📊</span><span>Dashboard</span></a>
+                <a href="bots.html"><span>🤖</span><span>My Staff AI</span></a>
+                <a href="chat.html"><span>💬</span><span>Chat</span></a>
+                <a href="tasks.html" class="active"><span>📋</span><span>Tasks</span></a>
+                <a href="billing.html"><span>💰</span><span>Billing</span></a>
+                <a href="usage.html"><span>📈</span><span>Usage</span></a>
+                <a href="settings.html"><span>⚙️</span><span>Settings</span></a>
+                <a href="affiliates.html"><span>🤝</span><span>Affiliates</span></a>
+                <a href="#" onclick="logout()" style="margin-top:20px;border-top:1px solid rgba(255,255,255,0.1);padding-top:20px"><span>🚪</span><span>Log Out</span></a>
+            </nav>
+            <div id="sidebar-user" style="padding:16px 20px;border-top:1px solid rgba(255,255,255,0.1);margin-top:auto"></div>
+        </div>
+        <div class="main-content">
+            <div class="topbar">
+                <h1>📋 Tasks</h1>
+                <div style="display:flex;gap:12px">
+                    <select class="form-input" id="statusFilter" style="width:140px" onchange="loadTasks()">
+                        <option value="">All Status</option>
+                        <option value="pending">Pending</option>
+                        <option value="in_progress">In Progress</option>
+                        <option value="completed">Completed</option>
+                        <option value="cancelled">Cancelled</option>
+                    </select>
+                    <button class="btn btn-primary" onclick="showCreateTask()">+ New Task</button>
+                </div>
+            </div>
+
+            <!-- Stats -->
+            <div class="grid-4" id="taskStats">
+                <div class="card stat-card"><div class="stat-label" style="font-size:12px">Total</div><div class="stat-value" style="font-size:22px" id="statTotal">-</div></div>
+                <div class="card stat-card"><div class="stat-label" style="font-size:12px">Pending</div><div class="stat-value" style="font-size:22px" id="statPending">-</div></div>
+                <div class="card stat-card"><div class="stat-label" style="font-size:12px">In Progress</div><div class="stat-value" style="font-size:22px" id="statProgress">-</div></div>
+                <div class="card stat-card"><div class="stat-label" style="font-size:12px">Completed</div><div class="stat-value" style="font-size:22px" id="statDone">-</div></div>
+            </div>
+
+            <!-- Task List -->
+            <div class="card">
+                <div id="tasksList"><p style="color:var(--text-light)">Loading...</p></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Create Task Modal -->
+    <div class="modal-overlay" id="createTaskModal">
+        <div class="modal">
+            <h3>New Task</h3>
+            <form onsubmit="return createTask(event)">
+                <div class="form-group">
+                    <label>Title</label>
+                    <input type="text" class="form-input" id="taskTitle" required placeholder="e.g. Send weekly report">
+                </div>
+                <div class="form-group">
+                    <label>Description</label>
+                    <textarea class="form-input" id="taskDesc" rows="3" placeholder="Task details..."></textarea>
+                </div>
+                <div class="grid-2">
+                    <div class="form-group">
+                        <label>Priority</label>
+                        <select class="form-input" id="taskPriority">
+                            <option value="low">Low</option>
+                            <option value="normal" selected>Normal</option>
+                            <option value="high">High</option>
+                            <option value="urgent">Urgent</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Assign To</label>
+                        <input type="text" class="form-input" id="taskAssignee" placeholder="Agent name">
+                    </div>
+                </div>
+                <div class="modal-actions">
+                    <button type="button" class="btn btn-secondary" onclick="closeModal('createTaskModal')">Cancel</button>
+                    <button type="submit" class="btn btn-primary" id="createTaskBtn">Create Task</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div id="toast-container" class="toast-container"></div>
+    <script src="/static/js/app.js"></script>
+    <script>
+    async function init() {
+        const user = await checkAuth();
+        if (!user) return;
+        renderSidebarUser(user);
+        await loadTasks();
+    }
+
+    async function loadTasks() {
+        try {
+            const status = document.getElementById('statusFilter').value;
+            let url = '/tasks/list';
+            if (status) url += '?status=' + status;
+            
+            const tasks = await api(url);
+            const container = document.getElementById('tasksList');
+            
+            // Stats
+            const total = tasks.length;
+            const pending = tasks.filter(t => t.status === 'pending').length;
+            const progress = tasks.filter(t => t.status === 'in_progress').length;
+            const done = tasks.filter(t => t.status === 'completed').length;
+            document.getElementById('statTotal').textContent = total;
+            document.getElementById('statPending').textContent = pending;
+            document.getElementById('statProgress').textContent = progress;
+            document.getElementById('statDone').textContent = done;
+            
+            if (!total) {
+                container.innerHTML = '<div style="text-align:center;padding:60px"><div style="font-size:48px;margin-bottom:16px">📋</div><h3 style="margin-bottom:8px">No Tasks</h3><p style="color:var(--text-light);margin-bottom:24px">Create your first task to assign work to your Staff AI.</p><button class="btn btn-primary" onclick="showCreateTask()">+ New Task</button></div>';
+                return;
+            }
+            
+            container.innerHTML = tasks.map(t => `
+                <div class="card" style="margin-bottom:12px;padding:16px;display:flex;justify-content:space-between;align-items:start;gap:12px">
+                    <div style="flex:1">
+                        <div style="display:flex;gap:8px;align-items:center;margin-bottom:4px">
+                            <span style="font-size:16px">${priorityIcon(t.priority)}</span>
+                            <strong style="font-size:15px">${t.title}</strong>
+                            ${statusBadge(t.status)}
+                        </div>
+                        ${t.description ? '<div style="font-size:13px;color:var(--text-light);margin-bottom:4px">' + t.description + '</div>' : ''}
+                        <div style="font-size:12px;color:var(--text-light);display:flex;gap:16px;flex-wrap:wrap">
+                            <span>Priority: <strong>${t.priority}</strong></span>
+                            ${t.assigned_to ? '<span>Assigned: <strong>' + t.assigned_to + '</strong></span>' : ''}
+                            <span>Created: ${formatDate(t.created_at)}</span>
+                        </div>
+                    </div>
+                    <div style="display:flex;gap:4px;flex-shrink:0">
+                        <select class="form-input" style="width:120px;padding:4px 8px;font-size:12px" onchange="updateStatus(${t.id},this.value)">
+                            <option value="pending" ${t.status==='pending'?'selected':''}>Pending</option>
+                            <option value="in_progress" ${t.status==='in_progress'?'selected':''}>In Progress</option>
+                            <option value="completed" ${t.status==='completed'?'selected':''}>Completed</option>
+                            <option value="cancelled" ${t.status==='cancelled'?'selected':''}>Cancelled</option>
+                        </select>
+                    </div>
+                </div>
+            `).join('');
+        } catch {}
+    }
+
+    function priorityIcon(p) {
+        const icons = {low:'🟢', normal:'🔵', high:'🟠', urgent:'🔴'};
+        return icons[p] || '🔵';
+    }
+
+    function showCreateTask() {
+        document.getElementById('taskTitle').value = '';
+        document.getElementById('taskDesc').value = '';
+        document.getElementById('taskPriority').value = 'normal';
+        document.getElementById('taskAssignee').value = '';
+        openModal('createTaskModal');
+    }
+
+    async function createTask(e) {
+        e.preventDefault();
+        const btn = document.getElementById('createTaskBtn');
+        btn.disabled = true; btn.textContent = 'Creating...';
+        try {
+            await api('/tasks/create', {
+                method: 'POST',
+                body: JSON.stringify({
+                    title: document.getElementById('taskTitle').value,
+                    description: document.getElementById('taskDesc').value,
+                    priority: document.getElementById('taskPriority').value,
+                    assigned_to: document.getElementById('taskAssignee').value || null,
+                })
+            });
+            showToast('Task created!', 'success');
+            closeModal('createTaskModal');
+            await loadTasks();
+        } catch {}
+        btn.disabled = false; btn.textContent = 'Create Task';
+        return false;
+    }
+
+    async function updateStatus(id, status) {
+        try {
+            await api('/tasks/' + id, {
+                method: 'PUT',
+                body: JSON.stringify({ status })
+            });
+            showToast('Status updated', 'success');
+            await loadTasks();
+        } catch {}
+    }
+
+    init();
+    </script>
+</body>
+</html>

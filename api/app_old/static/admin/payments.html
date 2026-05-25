@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Payment Gateway — StaffBot.my</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="/static/css/app.css">
+</head>
+<body>
+    <button class="sidebar-toggle" onclick="toggleSidebar()">☰</button>
+    <div class="sidebar-overlay" onclick="toggleSidebar()"></div>
+    <div class="app-layout" id="app">
+        <div class="sidebar" style="background:#111827">
+            <div class="sidebar-brand"><h2>StaffBot.my</h2><span>Admin Panel</span></div>
+            <nav class="sidebar-nav" id="sidebar-nav"></nav>
+            <div id="sidebar-user" style="padding:16px 20px;border-top:1px solid rgba(255,255,255,0.1);margin-top:auto"></div>
+        </div>
+        <div class="main-content">
+            <div class="topbar"><h1>💳 Payment Gateway</h1></div>
+
+            <!-- Stripe Status -->
+            <div class="card" id="stripeStatusCard">
+                <div class="card-header"><h3>Stripe Connection</h3></div>
+                <div id="stripeStatus"><p style="color:var(--text-light)">Checking...</p></div>
+            </div>
+
+            <!-- Recent Transactions -->
+            <div class="card">
+                <div class="card-header"><h3>Recent Transactions</h3></div>
+                <div id="transactionList"><p style="color:var(--text-light);padding:16px">No transactions yet.</p></div>
+            </div>
+
+            <!-- Quick Actions -->
+            <div class="card">
+                <div class="card-header"><h3>Quick Actions</h3></div>
+                <div style="display:flex;gap:12px;flex-wrap:wrap">
+                    <a href="settings.html" class="btn btn-outline">⚙️ Stripe Settings</a>
+                    <a href="https://dashboard.stripe.com/" target="_blank" class="btn btn-outline">📊 Stripe Dashboard</a>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div id="toast-container" class="toast-container"></div>
+    <script src="/static/js/app.js"></script>
+    <script>
+    async function init() {
+        const user = await checkAdminAuth('/admin/login.html');
+        if (!user) return;
+        renderSidebar('payments');
+        renderSidebarUser(user);
+
+        // Check Stripe status
+        try {
+            const status = await api('/admin/payments/status');
+            const card = document.getElementById('stripeStatus');
+            if (status.connected) {
+                card.innerHTML = `
+                    <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap">
+                        <span class="status-badge status-active">✅ Connected</span>
+                        <span style="font-size:13px;color:var(--text-light)">Account: ${status.account_name || 'N/A'}</span>
+                        <span style="font-size:13px;color:var(--text-light)">Mode: ${status.livemode ? '🔴 Live' : '🟡 Test'}</span>
+                    </div>
+                `;
+            } else {
+                card.innerHTML = `
+                    <div style="display:flex;align-items:center;gap:12px">
+                        <span class="status-badge status-error">❌ Not Connected</span>
+                        <span style="font-size:13px;color:var(--text-light)">${status.detail || 'Set Stripe keys in Settings'}</span>
+                        <a href="settings.html" class="btn btn-sm btn-primary">Configure</a>
+                    </div>
+                `;
+            }
+        } catch {
+            document.getElementById('stripeStatus').innerHTML = '<span class="status-badge status-error">❌ Error checking status</span>';
+        }
+
+        // Load transactions
+        try {
+            const tx = await api('/admin/payments/transactions');
+            const list = document.getElementById('transactionList');
+            if (tx.items && tx.items.length > 0) {
+                list.innerHTML = `<div class="table-container"><table>
+                    <tr><th>Amount</th><th>Client</th><th>Status</th><th>Date</th></tr>
+                    ${tx.items.map(t => `<tr>
+                        <td><strong>${formatCurrency(t.amount)}</strong></td>
+                        <td>${t.client_name || '-'}</td>
+                        <td>${statusBadge(t.status)}</td>
+                        <td style="font-size:12px">${formatDate(t.created_at)}</td>
+                    </tr>`).join('')}
+                </table></div>`;
+            }
+        } catch {}
+    }
+    init();
+    </script>
+</body>
+</html>

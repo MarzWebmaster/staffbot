@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Affiliate Settings — StaffBot.my</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="/static/css/app.css?v=1779706646">
+</head>
+<body>
+    <button class="sidebar-toggle" onclick="toggleSidebar()">☰</button>
+    <div class="sidebar-overlay" onclick="toggleSidebar()"></div>
+    <div class="app-layout" id="app">
+        <div class="sidebar" style="background:#111827">
+            <div class="sidebar-brand"><h2>StaffBot.my</h2><span>Admin Panel</span></div>
+            <nav class="sidebar-nav" id="sidebar-nav"></nav>
+            <div id="sidebar-user" style="padding:16px 20px;border-top:1px solid rgba(255,255,255,0.1);margin-top:auto"></div>
+        </div>
+        <div class="main-content">
+            <div class="topbar"><h1>⚙️ Affiliate Settings</h1></div>
+            <form onsubmit="return saveAffiliateSettings(event)">
+                <div class="card">
+                    <div class="card-header"><h3>Commission Rules</h3></div>
+                    <div class="grid-3">
+                        <div class="form-group"><label>Commission Rate (%)</label><input type="number" class="form-input" id="aff-commission-rate" value="10" step="0.5" min="0" max="100"></div>
+                        <div class="form-group"><label>Min Payout (RM)</label><input type="number" class="form-input" id="aff-min-payout" value="50" step="10"></div>
+                        <div class="form-group"><label>Cookie Duration (days)</label><input type="number" class="form-input" id="aff-cookie-days" value="30"></div>
+                    </div>
+                </div>
+                <div class="card">
+                    <div class="card-header"><h3>Tiered Commission</h3></div>
+                    <div style="padding:16px;text-align:center;color:var(--text-light)">
+                        <p style="font-size:13px">Tiered commission structure coming soon.</p>
+                        <p style="font-size:13px;margin-top:4px">Set different rates based on referral volume or affiliate tier.</p>
+                    </div>
+                </div>
+                <div class="card">
+                    <div class="card-header"><h3>Payout Methods</h3></div>
+                    <div style="display:flex;gap:12px;flex-wrap:wrap;padding:16px">
+                        <label style="display:flex;align-items:center;gap:8px;padding:12px;border:1px solid var(--border);border-radius:8px;cursor:pointer">
+                            <input type="checkbox" checked disabled> 💳 Bank Transfer
+                        </label>
+                        <label style="display:flex;align-items:center;gap:8px;padding:12px;border:1px solid var(--border);border-radius:8px;cursor:pointer">
+                            <input type="checkbox" disabled> 📱 TNG / GrabPay
+                        </label>
+                    </div>
+                </div>
+                <button type="submit" class="btn btn-primary">Save Affiliate Settings</button>
+            </form>
+        </div>
+    </div>
+    <div id="toast-container" class="toast-container"></div>
+    <script src="/static/js/app.js?v=1779706646"></script>
+    <script>
+    async function init() {
+        const user = await checkAdminAuth('/admin/login.html');
+        if (!user) return;
+        renderSidebar('affiliate-settings');
+        renderSidebarUser(user);
+        try {
+            const s = await api('/admin/settings?prefix=affiliate_');
+            s.forEach(setting => {
+                const el = document.getElementById('aff-' + setting.key.replace('affiliate_', ''));
+                if (el) el.value = setting.value || el.value;
+            });
+        } catch {}
+    }
+    async function saveAffiliateSettings(e) {
+        e.preventDefault();
+        const btn = e.target.querySelector('button[type=submit]');
+        btn.disabled = true; btn.textContent = 'Saving...';
+        try {
+            const settings = [
+                {key: 'affiliate_commission_rate', value: document.getElementById('aff-commission-rate').value},
+                {key: 'affiliate_min_payout', value: document.getElementById('aff-min-payout').value},
+                {key: 'affiliate_cookie_days', value: document.getElementById('aff-cookie-days').value},
+            ];
+            for (const s of settings) {
+                await api('/admin/settings', {method: 'PUT', body: JSON.stringify({key: s.key, value: s.value})});
+            }
+            showToast('✅ Affiliate settings saved!', 'success');
+        } catch(e) {
+            showToast('❌ ' + e.message, 'error');
+        }
+        btn.disabled = false; btn.textContent = 'Save Affiliate Settings';
+        return false;
+    }
+    init();
+    </script>
+</body>
+</html>

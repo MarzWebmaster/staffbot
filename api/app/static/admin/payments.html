@@ -3,123 +3,95 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Payment Gateway — StaffBot.my Admin</title><style>
-@media (max-width: 768px) {
-    html, body { overflow-x: hidden !important; width: 100% !important; max-width: 100% !important; margin: 0 !important; padding: 0 !important; }
-    .app-layout { display: block !important; width: 100% !important; max-width: 100% !important; margin: 0 !important; }
-    .main-content { margin: 0 !important; margin-left: 0 !important; width: 100vw !important; max-width: 100vw !important; padding: 12px !important; padding-top: 56px !important; box-sizing: border-box !important; flex: none !important; float: none !important; display: block !important; }
-    .sidebar-toggle { display: flex !important; }
-    .sidebar-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 999; }
-    .sidebar-overlay.active { display: block; }
-    .sidebar { transform: translateX(-100%) !important; transition: transform 0.3s ease !important; }
-    .sidebar.open { transform: translateX(0) !important;  }
-    .grid-4, .grid-3, .grid-2 { grid-template-columns: 1fr !important; gap: 12px !important; }
-    #adminStats.grid-4, #affiliateStats.grid-4, #billingStats.grid-4 { grid-template-columns: 1fr 1fr !important; gap: 12px !important; }
-    .mobile-grid-2 { grid-template-columns: 1fr !important; max-width: 100% !important; }
-    .mobile-grid-3 { grid-template-columns: 1fr !important; max-width: 100% !important; }
-    .card { padding: 14px !important; max-width: 100% !important; overflow-wrap: break-word !important; }
-    .stat-card .stat-value { font-size: 22px !important; }
-    .table-container { overflow-x: auto !important; max-width: 100% !important; }
-    .table-container table { min-width: 100% !important; }
-    .modal { width: 95vw !important; max-width: 95vw !important; }
-    .btn { padding: 12px 20px !important; min-height: 44px !important; }
-}
-@media (max-width: 480px) {
-    #adminStats.grid-4, #affiliateStats.grid-4, #billingStats.grid-4 { grid-template-columns: 1fr !important; }
-    .modal { width: 100vw !important; max-width: 100vw !important; border-radius: 0 !important; }
-}
-</style><script>
-function toggleSidebar() {
-    var s = document.querySelector('.sidebar');
-    var o = document.querySelector('.sidebar-overlay');
-    if (!s) return;
-    if (s.classList.contains('open')) {
-        s.classList.remove('open');
-        if (o) o.classList.remove('active');
-    } else {
-        s.classList.add('open');
-        if (o) o.classList.add('active');
-    }
-}
-</script>
-
+    <title>Payment Gateway — StaffBot.my</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="stylesheet" href="/static/css/app.css?v=200">
+    <link rel="stylesheet" href="/static/css/app.css?v=1779706646">
 </head>
 <body>
-
-    <button class="sidebar-toggle" onclick="toggleSidebar()">&#9776;</button>
+    <button class="sidebar-toggle" onclick="toggleSidebar()">☰</button>
     <div class="sidebar-overlay" onclick="toggleSidebar()"></div>
-    <div class="app-layout">
+    <div class="app-layout" id="app">
         <div class="sidebar" style="background:#111827">
             <div class="sidebar-brand"><h2>StaffBot.my</h2><span>Admin Panel</span></div>
             <nav class="sidebar-nav" id="sidebar-nav"></nav>
             <div id="sidebar-user" style="padding:16px 20px;border-top:1px solid rgba(255,255,255,0.1);margin-top:auto"></div>
         </div>
         <div class="main-content">
-            <div class="topbar"><h1>Payment Gateway</h1></div>
+            <div class="topbar"><h1>💳 Payment Gateway</h1></div>
 
-            <form onsubmit="return savePaymentSettings(event)">
-                <div class="card">
-                    <div class="card-header"><h3>Stripe</h3></div>
-                    <div class="grid-2">
-                        <div class="form-group"><label>Secret Key</label><input type="password" class="form-input" id="stripe_key"></div>
-                        <div class="form-group"><label>Webhook Secret</label><input type="password" class="form-input" id="stripe_wh"></div>
-                    </div>
+            <!-- Stripe Status -->
+            <div class="card" id="stripeStatusCard">
+                <div class="card-header"><h3>Stripe Connection</h3></div>
+                <div id="stripeStatus"><p style="color:var(--text-light)">Checking...</p></div>
+            </div>
+
+            <!-- Recent Transactions -->
+            <div class="card">
+                <div class="card-header"><h3>Recent Transactions</h3></div>
+                <div id="transactionList"><p style="color:var(--text-light);padding:16px">No transactions yet.</p></div>
+            </div>
+
+            <!-- Quick Actions -->
+            <div class="card">
+                <div class="card-header"><h3>Quick Actions</h3></div>
+                <div style="display:flex;gap:12px;flex-wrap:wrap">
+                    <a href="settings.html" class="btn btn-outline">⚙️ Stripe Settings</a>
+                    <a href="https://dashboard.stripe.com/" target="_blank" class="btn btn-outline">📊 Stripe Dashboard</a>
                 </div>
-                <button type="submit" class="btn btn-primary" id="saveBtn">Save Payment Settings</button>
-            </form>
+            </div>
         </div>
     </div>
     <div id="toast-container" class="toast-container"></div>
-    <script src="/static/js/app.js"></script>
+    <script src="/static/js/app.js?v=1779706646"></script>
     <script>
-    const PAYMENT_KEYS = {
-        stripe_key: {key: "stripe_secret_key", encrypted: true},
-        stripe_wh: {key: "stripe_webhook_secret", encrypted: true},
-    };
-
     async function init() {
-        const user = await checkAuth("/admin/login.html");
+        const user = await checkAdminAuth('/admin/login.html');
         if (!user) return;
+        renderSidebar('payments');
         renderSidebarUser(user);
-        renderSidebar("payments");
-        await loadSettings();
-    }
 
-    async function loadSettings() {
+        // Check Stripe status
         try {
-            const s = await api("/admin/settings");
-            s.forEach(setting => {
-                const inputId = Object.keys(PAYMENT_KEYS).find(k => PAYMENT_KEYS[k].key === setting.key);
-                if (inputId && document.getElementById(inputId)) {
-                    document.getElementById(inputId).value = setting.value || "";
-                }
-            });
-        } catch {}
-    }
-
-    async function savePaymentSettings(e) {
-        e.preventDefault();
-        const btn = document.getElementById("saveBtn");
-        btn.disabled = true; btn.textContent = "Saving...";
-        try {
-            for (const [inputId, cfg] of Object.entries(PAYMENT_KEYS)) {
-                const val = document.getElementById(inputId).value.trim();
-                if (val) {
-                    await api("/admin/settings", { method: "PUT", body: JSON.stringify({
-                        key: cfg.key,
-                        value: val,
-                        encrypted: cfg.encrypted,
-                    })});
-                }
+            const status = await api('/admin/payments/status');
+            const card = document.getElementById('stripeStatus');
+            if (status.connected) {
+                card.innerHTML = `
+                    <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap">
+                        <span class="status-badge status-active">✅ Connected</span>
+                        <span style="font-size:13px;color:var(--text-light)">Account: ${status.account_name || 'N/A'}</span>
+                        <span style="font-size:13px;color:var(--text-light)">Mode: ${status.livemode ? '🔴 Live' : '🟡 Test'}</span>
+                    </div>
+                `;
+            } else {
+                card.innerHTML = `
+                    <div style="display:flex;align-items:center;gap:12px">
+                        <span class="status-badge status-error">❌ Not Connected</span>
+                        <span style="font-size:13px;color:var(--text-light)">${status.detail || 'Set Stripe keys in Settings'}</span>
+                        <a href="settings.html" class="btn btn-sm btn-primary">Configure</a>
+                    </div>
+                `;
             }
-            showToast("Payment settings saved", "success");
-        } catch {}
-        btn.disabled = false; btn.textContent = "Save Payment Settings";
-        return false;
-    }
+        } catch {
+            document.getElementById('stripeStatus').innerHTML = '<span class="status-badge status-error">❌ Error checking status</span>';
+        }
 
+        // Load transactions
+        try {
+            const tx = await api('/admin/payments/transactions');
+            const list = document.getElementById('transactionList');
+            if (tx.items && tx.items.length > 0) {
+                list.innerHTML = `<div class="table-container"><table>
+                    <tr><th>Amount</th><th>Client</th><th>Status</th><th>Date</th></tr>
+                    ${tx.items.map(t => `<tr>
+                        <td><strong>${formatCurrency(t.amount)}</strong></td>
+                        <td>${t.client_name || '-'}</td>
+                        <td>${statusBadge(t.status)}</td>
+                        <td style="font-size:12px">${formatDate(t.created_at)}</td>
+                    </tr>`).join('')}
+                </table></div>`;
+            }
+        } catch {}
+    }
     init();
     </script>
 </body>

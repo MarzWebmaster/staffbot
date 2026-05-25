@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="ms">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Penggunaan — StaffBot.my</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="/static/css/app.css">
+</head>
+<body>
+    <button class="sidebar-toggle" onclick="toggleSidebar()">☰</button>
+    <div class="sidebar-overlay" onclick="toggleSidebar()"></div>
+    <div class="app-layout">
+        <div class="sidebar">
+            <div class="sidebar-brand"><h2>StaffBot.my</h2><span>Customer Dashboard</span></div>
+            <nav class="sidebar-nav">
+                <a href="dashboard.html"><span>📊</span><span>Dashboard</span></a>
+                <a href="bots.html"><span>🤖</span><span>Staff AI Saya</span></a>
+                <a href="chat.html"><span>💬</span><span>Chat</span></a>
+                <a href="settings.html"><span>⚙️</span><span>Tetapan</span></a>
+                <a href="billing.html"><span>💰</span><span>Billing</span></a>
+                <a href="usage.html" class="active"><span>📈</span><span>Penggunaan</span></a>
+                <a href="#" onclick="logout()" style="margin-top:20px;border-top:1px solid rgba(255,255,255,0.1);padding-top:20px"><span>🚪</span><span>Log Keluar</span></a>
+            </nav>
+            <div id="sidebar-user" style="padding:16px 20px;border-top:1px solid rgba(255,255,255,0.1);margin-top:auto"></div>
+        </div>
+        <div class="main-content">
+            <div class="topbar"><h1>Penggunaan</h1></div>
+
+            <div class="grid-3">
+                <div class="card stat-card"><div class="stat-label">Jumlah Token</div><div class="stat-value" id="totalTokens">-</div></div>
+                <div class="card stat-card"><div class="stat-label">Token Digunakan</div><div class="stat-value" id="usedTokens">-</div></div>
+                <div class="card stat-card"><div class="stat-label">Baki Token</div><div class="stat-value" id="remainingTokens">-</div></div>
+            </div>
+
+            <div class="card">
+                <div class="card-header"><h3>Bot Status</h3></div>
+                <div id="botStatus"><p style="color:var(--text-light)">Loading...</p></div>
+            </div>
+
+            <div class="card">
+                <div class="card-header"><h3>Notifikasi Terkini</h3></div>
+                <div id="notifList"><p style="color:var(--text-light)">Loading...</p></div>
+            </div>
+        </div>
+    </div>
+    <div id="toast-container" class="toast-container"></div>
+    <script src="/static/js/app.js"></script>
+    <script>
+    async function init() {
+        const user = await checkAuth();
+        if (!user) return;
+        renderSidebarUser(user);
+        
+        try {
+            const sub = await api(`/subscriptions/${user.id}`);
+            document.getElementById('totalTokens').textContent = sub.managed_token_quota.toFixed(0);
+            document.getElementById('usedTokens').textContent = sub.managed_token_used.toFixed(0);
+            document.getElementById('remainingTokens').textContent = Math.max(0, sub.managed_token_quota - sub.managed_token_used).toFixed(0);
+        } catch {}
+        
+        try {
+            const containers = await api('/containers/');
+            document.getElementById('botStatus').innerHTML = containers.length ?
+                `<div class="table-container"><table><tr><th>Nama</th><th>Status</th><th>Image</th><th>Dicipta</th></tr>${
+                    containers.map(c => `<tr><td>${c.name}</td><td>${statusBadge(c.status)}</td><td style="font-size:12px">${c.image}</td><td>${formatDate(c.created_at)}</td></tr>`).join('')
+                }</table></div>` : '<p style="color:var(--text-light)">Tiada bot</p>';
+        } catch {}
+
+        try {
+            const notifs = await api('/notifications/log');
+            document.getElementById('notifList').innerHTML = notifs.length ?
+                notifs.map(n => `
+                    <div style="padding:8px 0;border-bottom:1px solid var(--border);font-size:13px">
+                        <strong>${n.type}</strong> via ${n.channel} — ${statusBadge(n.status)}
+                        <div style="color:var(--text-light);font-size:12px">${formatDate(n.sent_at)}</div>
+                    </div>
+                `).join('') : '<p style="color:var(--text-light)">Tiada notifikasi</p>';
+        } catch {}
+    }
+    init();
+    </script>
+</body>
+</html>

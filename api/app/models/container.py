@@ -20,6 +20,7 @@ class Container(Base):
     env_vars = Column(JSON, nullable=True)
     status = Column(String(50), default="pending")
     skills = Column(JSON, nullable=True)
+    tools = Column(JSON, nullable=True)
     created_at = Column(DateTime, default=utcnow)
     updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
 

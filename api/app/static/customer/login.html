@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Login — StaffBot.my</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="stylesheet" href="/static/css/app.css">
+    <link rel="stylesheet" href="/static/css/app.css?v=1779706646">
 </head>
 <body class="login-page">
     <div class="login-card">
@@ -14,7 +14,7 @@
             <p>Digital Employee as a Service</p>
         </div>
         <h1>Welcome</h1>
-        <p>Log in to your dashboard</p>
+        <p>Login to your dashboard</p>
         
         <form id="loginForm" onsubmit="return handleLogin(event)">
             <div class="form-group">
@@ -26,12 +26,12 @@
                 <input type="password" class="form-input" id="password" placeholder="••••••••" required>
             </div>
             <button type="submit" class="btn btn-primary" style="width:100%;justify-content:center;padding:12px" id="loginBtn">
-                Sign In
+                Login
             </button>
         </form>
         
         <div style="text-align:center;margin-top:16px;font-size:13px;color:var(--text-light)">
-            Don't have an account? <a href="https://staffbot.my" style="color:var(--accent)">Register now</a>
+            No account yet? <a href="https://staffbot.my" style="color:var(--accent)">Register here</a>
         </div>
         <div style="text-align:center;margin-top:8px">
             <a href="/admin/login.html" style="font-size:13px;color:var(--text-light)">Admin Login</a>
@@ -40,8 +40,18 @@
 
     <div id="toast-container" class="toast-container"></div>
 
-    <script src="/static/js/app.js"></script>
+    <script src="/static/js/app.js?v=1779706646"></script>
     <script>
+    // Auto-redirect if already logged in
+    if (AUTH_TOKEN) {
+        fetch('/api/v1/admin/dashboard', {
+            headers: { 'Authorization': `Bearer ${AUTH_TOKEN}` }
+        }).then(r => {
+            if (r.status === 403) window.location.href = '/customer/dashboard.html';
+            else window.location.href = '/admin/dashboard.html';
+        }).catch(() => {});
+    }
+
     async function handleLogin(e) {
         e.preventDefault();
         const btn = document.getElementById('loginBtn');
@@ -53,7 +63,7 @@
             await login(email, password);
             window.location.href = '/customer/dashboard.html';
         } catch (err) {
-            btn.disabled = false; btn.textContent = 'Sign In';
+            btn.disabled = false; btn.textContent = 'Login';
         }
         return false;
     }

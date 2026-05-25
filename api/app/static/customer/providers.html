@@ -5,9 +5,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Services — StaffBot.my</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="stylesheet" href="/static/css/app.css">
+    <link rel="stylesheet" href="/static/css/app.css?v=1779706646">
 </head>
 <body>
+    <button class="sidebar-toggle" onclick="toggleSidebar()">☰</button>
+    <div class="sidebar-overlay" onclick="toggleSidebar()"></div>
     <div class="app-layout">
         <div class="sidebar">
             <div class="sidebar-brand"><h2>StaffBot.my</h2><span>Customer Dashboard</span></div>
@@ -30,7 +32,7 @@
             </div>
         </div>
     </div>
-    <script src="/static/js/app.js"></script>
+    <script src="/static/js/app.js?v=1779706646"></script>
     <script>async function init(){const u=await checkAuth();if(!u)return;renderSidebarUser(u);}init();</script>
 </body>
 </html>

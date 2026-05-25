@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Settings — StaffBot.my</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="/static/css/app.css">
+</head>
+<body>
+    <button class="sidebar-toggle" onclick="toggleSidebar()">☰</button>
+    <div class="sidebar-overlay" onclick="toggleSidebar()"></div>
+    <div class="app-layout">
+        <div class="sidebar">
+            <div class="sidebar-brand"><h2>StaffBot.my</h2><span>Customer Dashboard</span></div>
+            <nav class="sidebar-nav">
+                <a href="dashboard.html"><span>📊</span><span>Dashboard</span></a>
+                <a href="bots.html"><span>🤖</span><span>My Staff AI</span></a>
+                <a href="chat.html"><span>💬</span><span>Chat</span></a>
+                <a href="tasks.html"><span>📋</span><span>Tasks</span></a>
+                <a href="billing.html"><span>💰</span><span>Billing</span></a>
+                <a href="usage.html"><span>📈</span><span>Usage</span></a>
+                <a href="settings.html" class="active"><span>⚙️</span><span>Settings</span></a>
+                <a href="affiliates.html"><span>🤝</span><span>Affiliates</span></a>
+                <a href="#" onclick="logout()" style="margin-top:20px;border-top:1px solid rgba(255,255,255,0.1);padding-top:20px"><span>🚪</span><span>Log Out</span></a>
+            </nav>
+            <div id="sidebar-user" style="padding:16px 20px;border-top:1px solid rgba(255,255,255,0.1);margin-top:auto"></div>
+        </div>
+        <div class="main-content">
+            <div class="topbar"><h1>Settings</h1></div>
+
+            <!-- Profile -->
+            <div class="card">
+                <div class="card-header"><h3>Company Profile</h3></div>
+                <form onsubmit="return updateProfile(event)">
+                    <div class="grid-2">
+                        <div class="form-group"><label>Name</label><input type="text" class="form-input" id="pName" required></div>
+                        <div class="form-group"><label>Email</label><input type="email" class="form-input" id="pEmail" required></div>
+                        <div class="form-group"><label>Company</label><input type="text" class="form-input" id="pCompany"></div>
+                        <div class="form-group"><label>Phone</label><input type="text" class="form-input" id="pPhone"></div>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Save Profile</button>
+                </form>
+            </div>
+
+            <!-- BYOK + Priority -->
+            <div class="card">
+                <div class="card-header"><h3>🔑 API Keys</h3></div>
+                <p style="font-size:13px;color:var(--text-light);margin-bottom:16px">
+                    Add your own API keys from any provider. Your keys are encrypted and stored securely.
+                    Select a provider below to manage its key.
+                </p>
+                <!-- Provider Tabs -->
+                <div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:16px;border-bottom:2px solid var(--border);padding-bottom:0" id="byokTabs">
+                </div>
+                <!-- Provider Content -->
+                <div id="byokTabContent">
+                    <div style="text-align:center;padding:40px;color:var(--text-light)" id="byokNoSelection">
+                        Select a provider above to manage your API key.
+                    </div>
+                </div>
+                <div id="byokInfo" style="margin-top:16px;font-size:13px"></div>
+            </div>
+
+            <!-- Token Priority -->
+            <div class="card">
+                <div class="card-header"><h3>⚙️ Token Priority</h3></div>
+                <p style="font-size:13px;color:var(--text-light);margin-bottom:12px">
+                    Choose which token source your Staff AI should use first.
+                </p>
+                <div style="display:flex;gap:16px;flex-wrap:wrap">
+                    <label class="radio-card" onclick="setPriority('managed')" id="priorityManaged" style="cursor:pointer;flex:1;min-width:200px;padding:20px;border:2px solid var(--border);border-radius:12px;text-align:center;transition:all 0.2s">
+                        <div style="font-size:32px;margin-bottom:8px">⚙️</div>
+                        <div style="font-weight:600;font-size:15px">Package Tokens First</div>
+                        <div style="font-size:12px;color:var(--text-light);margin-top:4px">Use tokens from your subscription</div>
+                    </label>
+                    <label class="radio-card" onclick="setPriority('byok')" id="priorityByok" style="cursor:pointer;flex:1;min-width:200px;padding:20px;border:2px solid var(--border);border-radius:12px;text-align:center;transition:all 0.2s">
+                        <div style="font-size:32px;margin-bottom:8px">🔑</div>
+                        <div style="font-weight:600;font-size:15px">BYOK First</div>
+                        <div style="font-size:12px;color:var(--text-light);margin-top:4px">Use your own API key first</div>
+                    </label>
+                </div>
+                <div style="margin-top:12px;font-size:12px;color:var(--text-light)">
+                    Current: <strong id="currentPriority">-</strong>
+                </div>
+            </div>
+
+            <!-- Notifications -->
+            <div class="card">
+                <div class="card-header"><h3>Notification Channels</h3></div>
+                <div id="channels-list"><p style="color:var(--text-light)">Loading...</p></div>
+                <button class="btn btn-secondary btn-sm" style="margin-top:12px" onclick="showAddChannel()">+ Add Channel</button>
+            </div>
+
+            <!-- Add Channel Modal -->
+            <div class="modal-overlay" id="addChannelModal">
+                <div class="modal">
+                    <h3>Add Notification Channel</h3>
+                    <form onsubmit="return addChannel(event)">
+                        <div class="form-group"><label>Type</label>
+                            <select class="form-input" id="channelType">
+                                <option value="whatsapp">WhatsApp</option>
+                                <option value="email">Email</option>
+                                <option value="sms">SMS</option>
+                            </select>
+                        </div>
+                        <div class="form-group"><label>Value</label><input type="text" class="form-input" id="channelValue" required></div>
+                        <div class="modal-actions">
+                            <button type="button" class="btn btn-secondary" onclick="closeModal('addChannelModal')">Cancel</button>
+                            <button type="submit" class="btn btn-primary">Add</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div id="toast-container" class="toast-container"></div>
+    <script src="/static/js/app.js"></script>
+    <script>
+    let userData = null;
+
+    async function init() {
+        userData = await checkAuth();
+        if (!userData) return;
+        renderSidebarUser(userData);
+        document.getElementById('pName').value = userData.name;
+        document.getElementById('pEmail').value = userData.email;
+        document.getElementById('pCompany').value = userData.company || '';
+        document.getElementById('pPhone').value = userData.phone || '';
+
+        await Promise.all([
+            loadBYOKStatus(),
+            loadPriority(),
+            loadChannels()
+        ]);
+    }
+
+    // ── Profile ─────────────────────────────────────────────────
+    async function updateProfile(e) {
+        e.preventDefault();
+        await api(`/clients/${userData.id}`, { method: 'PUT', body: JSON.stringify({
+            name: document.getElementById('pName').value,
+            email: document.getElementById('pEmail').value,
+            company: document.getElementById('pCompany').value,
+            phone: document.getElementById('pPhone').value,
+        })});
+        showToast('Profile saved', 'success');
+        return false;
+    }
+
+    // ── BYOK ────────────────────────────────────────────────────
+    const BYOK_PROVIDERS = [
+        {name:'openrouter', display:'OpenRouter', icon:'🔗', testUrl:'https://openrouter.ai/api/v1/auth/key', testHeader:true, docUrl:'https://openrouter.ai/keys'},
+        {name:'openai', display:'OpenAI', icon:'🟢', testUrl:'https://api.openai.com/v1/models', testHeader:true, docUrl:'https://platform.openai.com/api-keys'},
+        {name:'anthropic', display:'Claude (Anthropic)', icon:'🟣', testUrl:'https://api.anthropic.com/v1/messages', testHeader:true, testBody:JSON.stringify({model:'claude-sonnet-4',max_tokens:1,messages:[{role:'user',content:'hi'}]}), docUrl:'https://console.anthropic.com/settings/keys'},
+        {name:'google', display:'Google Gemini', icon:'🔵', testUrl:'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash', testHeader:false, docUrl:'https://aistudio.google.com/apikey'},
+        {name:'deepseek', display:'DeepSeek', icon:'🔴', testUrl:'https://api.deepseek.com/v1/models', testHeader:true, docUrl:'https://platform.deepseek.com/api_keys'},
+        {name:'ilmui', display:'Ilmu AI', icon:'🇲🇾', testUrl:'https://api.ilmu.ai/v1/models', testHeader:true, docUrl:'https://console.ilmu.ai/keys'},
+    ];
+    
+    let selectedByokTab = 'openrouter';
+    
+    async function loadBYOKStatus() {
+        try {
+            const status = await api('/providers/byok-status');
+            renderTabs(status);
+            renderTabContent(selectedByokTab, status);
+            
+            const hasAnyBYOK = Array.isArray(status) && status.some(s => s.has_byok);
+            document.getElementById('byokInfo').innerHTML = hasAnyBYOK
+                ? '<span class="status-badge status-active">✅ BYOK active — Your keys will be used when selected in chat</span>'
+                : '<span class="status-badge status-pending">❌ No BYOK keys set — Using managed token quota</span>';
+        } catch {}
+    }
+
+    function renderTabs(status) {
+        const tabsEl = document.getElementById('byokTabs');
+        tabsEl.innerHTML = BYOK_PROVIDERS.map(p => {
+            const prov = Array.isArray(status) ? status.find(s => s.name === p.name) : null;
+            const hasKey = prov && prov.has_byok;
+            const isSelected = p.name === selectedByokTab;
+            return `<button onclick="selectTab('${p.name}')" 
+                    style="display:flex;align-items:center;gap:6px;padding:10px 18px;
+                    border:none;background:${isSelected ? 'var(--primary)' : 'transparent'};
+                    color:${isSelected ? 'white' : 'var(--text)'};border-radius:8px 8px 0 0;
+                    cursor:pointer;font-size:13px;font-weight:${isSelected ? '600' : '400'};
+                    transition:all 0.2s;margin-bottom:-2px;border-bottom:${isSelected ? '2px solid var(--primary)' : '2px solid transparent'}">
+                ${p.icon} ${p.display} ${hasKey ? '✅' : ''}
+            </button>`;
+        }).join('');
+    }
+
+    function selectTab(name) {
+        selectedByokTab = name;
+        loadBYOKStatus(); // re-render
+    }
+
+    function renderTabContent(providerName, status) {
+        const p = BYOK_PROVIDERS.find(x => x.name === providerName);
+        if (!p) return;
+        const prov = Array.isArray(status) ? status.find(s => s.name === providerName) : null;
+        const hasKey = prov && prov.has_byok;
+        const prefix = prov ? prov.byok_key_prefix : null;
+        const isManaged = prov && prov.is_managed_available;
+
+        document.getElementById('byokTabContent').innerHTML = `
+            <div style="padding:20px;border:1px solid var(--border);border-radius:12px">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+                    <div>
+                        <div style="font-size:18px;font-weight:600">${p.icon} ${p.display}</div>
+                        <div style="font-size:13px;color:var(--text-light);margin-top:2px">
+                            ${isManaged ? '⚙️ Managed token available · ' : ''}
+                            <a href="${p.docUrl}" target="_blank" style="color:var(--accent)">Get API Key →</a>
+                        </div>
+                    </div>
+                    <div id="tabStatus_${p.name}">
+                        ${hasKey 
+                            ? '<span class="status-badge status-active">✅ Active</span>' 
+                            : '<span class="status-badge status-pending">❌ Not Set</span>'}
+                    </div>
+                </div>
+                <div style="display:flex;gap:12px;align-items:end">
+                    <div class="form-group" style="flex:1;margin-bottom:0">
+                        <label>API Key</label>
+                        <input type="password" class="form-input" id="byokKey_${p.name}" 
+                               placeholder="${hasKey ? prefix + '...' : 'sk-...'}"
+                               style="font-family:monospace;font-size:13px">
+                    </div>
+                    <button class="btn btn-secondary btn-sm" onclick="testBYOK('${p.name}')" id="testBtn_${p.name}">Test</button>
+                    <button class="btn btn-sm ${hasKey ? 'btn-danger' : 'btn-primary'}" 
+                            onclick="saveBYOK('${p.name}')" id="saveBtn_${p.name}">
+                        ${hasKey ? 'Update' : 'Save'}
+                    </button>
+                    ${hasKey ? `<button class="btn btn-sm btn-ghost" onclick="removeBYOK('${p.name}')">✕</button>` : ''}
+                </div>
+                <div id="testResult_${p.name}" style="margin-top:8px;font-size:13px"></div>
+                ${hasKey ? `<div style="margin-top:12px;font-size:12px;color:var(--text-light)">Key saved: ${prefix}...</div>` : ''}
+            </div>
+        `;
+    }
+
+    async function testBYOK(provider) {
+        const key = document.getElementById('byokKey_' + provider).value.trim();
+        const resultEl = document.getElementById('testResult_' + provider);
+        const btn = document.getElementById('testBtn_' + provider);
+        if (!key) { resultEl.innerHTML = '<span style="color:var(--danger)">Enter an API Key first</span>'; return; }
+        
+        btn.disabled = true; btn.textContent = 'Testing...';
+        resultEl.innerHTML = '<span class="loading"></span> Testing...';
+        
+        try {
+            const prov = BYOK_PROVIDERS.find(p => p.name === provider);
+            let valid = false;
+            
+            if (provider === 'google') {
+                const res = await fetch(prov.testUrl + '?key=' + key);
+                valid = res.status !== 403 && res.status !== 401;
+                if (res.status === 404) valid = true;
+            } else if (prov.testHeader) {
+                const headers = {'Authorization': 'Bearer ' + key, 'Content-Type': 'application/json'};
+                if (provider === 'anthropic') {
+                    headers['x-api-key'] = key;
+                    headers['anthropic-version'] = '2023-06-01';
+                }
+                const body = prov.testBody ? {method:'POST', headers, body: prov.testBody} : {headers};
+                const res = await fetch(prov.testUrl, body);
+                valid = res.ok || res.status === 400;
+            }
+            
+            if (valid) {
+                resultEl.innerHTML = '<span style="color:var(--success)">✅ Key valid!</span>';
+                showToast(prov.display + ' key valid!', 'success');
+            } else {
+                resultEl.innerHTML = '<span style="color:var(--danger)">❌ Key may be invalid</span>';
+            }
+        } catch(e) {
+            resultEl.innerHTML = '<span style="color:var(--danger)">❌ Test failed: ' + e.message + '</span>';
+        }
+        btn.disabled = false; btn.textContent = 'Test';
+    }
+
+    async function saveBYOK(provider) {
+        const key = document.getElementById('byokKey_' + provider).value.trim();
+        if (!key) return;
+        try {
+            await api('/providers/toggle-byok', {
+                method: 'POST',
+                body: JSON.stringify({ provider_name: provider, enable: true, api_key: key })
+            });
+            showToast(provider + ' API key saved!', 'success');
+            document.getElementById('byokKey_' + provider).value = '';
+            await loadBYOKStatus();
+        } catch {
+            showToast('Failed to save API Key', 'error');
+        }
+    }
+
+    async function removeBYOK(provider) {
+        if (!confirm('Remove ' + provider + ' API key?')) return;
+        try {
+            await api('/providers/toggle-byok', {
+                method: 'POST',
+                body: JSON.stringify({ provider_name: provider, enable: false })
+            });
+            showToast(provider + ' key removed', 'success');
+            await loadBYOKStatus();
+        } catch {}
+    }    // ── Priority ────────────────────────────────────────────────
+    function loadPriority() {
+        const priority = localStorage.getItem('staffbot_token_priority') || 'managed';
+        updatePriorityUI(priority);
+    }
+
+    function setPriority(val) {
+        localStorage.setItem('staffbot_token_priority', val);
+        updatePriorityUI(val);
+        showToast('Token priority updated', 'success');
+    }
+
+    function updatePriorityUI(val) {
+        document.getElementById('currentPriority').textContent = val === 'byok' ? 'BYOK First' : 'Package Tokens First';
+        ['managed', 'byok'].forEach(p => {
+            const el = document.getElementById('priority' + p.charAt(0).toUpperCase() + p.slice(1));
+            el.style.borderColor = p === val ? 'var(--primary)' : 'var(--border)';
+            el.style.background = p === val ? 'rgba(99,102,241,0.08)' : 'transparent';
+        });
+    }
+
+    // ── Notifications ───────────────────────────────────────────
+    async function loadChannels() {
+        try {
+            const channels = await api('/notifications/channels');
+            document.getElementById('channels-list').innerHTML = channels.length
+                ? channels.map(c => `
+                    <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border)">
+                        <div><strong>${c.channel}</strong>: ${c.value}</div>
+                        <div style="display:flex;gap:8px">
+                            <span class="status-badge ${c.is_active ? 'status-active' : 'status-error'}">${c.is_active ? 'Active' : 'Inactive'}</span>
+                            <button class="btn btn-danger btn-sm" onclick="deleteChannel(${c.id})">✕</button>
+                        </div>
+                    </div>
+                `).join('') : '<p style="color:var(--text-light)">No channels.</p>';
+        } catch {}
+    }
+
+    function showAddChannel() { openModal('addChannelModal'); }
+
+    async function addChannel(e) {
+        e.preventDefault();
+        await api('/notifications/channels', { method: 'POST', body: JSON.stringify({
+            channel: document.getElementById('channelType').value,
+            value: document.getElementById('channelValue').value,
+        })});
+        closeModal('addChannelModal');
+        showToast('Channel added', 'success');
+        loadChannels();
+        return false;
+    }
+
+    async function deleteChannel(id) {
+        if (!confirm('Remove this channel?')) return;
+        await api(`/notifications/channels/${id}`, { method: 'DELETE' });
+        loadChannels();
+    }
+
+    init();
+    </script>
+</body>
+</html>

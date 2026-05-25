@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Users — StaffBot.my Admin</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="/static/css/app.css">
+    <style>
+        .status-badge { padding: 3px 10px; border-radius: 12px; font-size: 12px; font-weight: 500; display: inline-block; }
+        .status-badge.active { background: rgba(34,197,94,0.15); color: #22c55e; }
+        .status-badge.pending { background: rgba(234,179,8,0.15); color: #eab308; }
+        .status-badge.suspended { background: rgba(239,68,68,0.15); color: #ef4444; }
+        .search-filter-bar { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+        .search-filter-bar input, .search-filter-bar select { height: 36px; }
+    </style>
+</head>
+<body>
+    <button class="sidebar-toggle" onclick="toggleSidebar()">☰</button>
+    <div class="sidebar-overlay" onclick="toggleSidebar()"></div>
+    <div class="app-layout">
+        <div class="sidebar" style="background:#111827">
+            <div class="sidebar-brand"><h2>StaffBot.my</h2><span>Admin Panel</span></div>
+            <nav id="sidebar-nav"></nav>
+            <div id="sidebar-user" style="padding:16px 20px;border-top:1px solid rgba(255,255,255,0.1);margin-top:auto"></div>
+        </div>
+        <div class="main-content">
+            <div class="topbar">
+                <h1>Users</h1>
+                <span style="font-size:13px;color:var(--text-light)" id="totalCount"></span>
+                <div class="search-filter-bar" style="margin-top:8px">
+                    <input type="text" class="form-input" id="searchUser" placeholder="Search by name or email..." style="width:240px;padding:6px 12px;border:1px solid rgba(255,255,255,0.15);border-radius:6px;background:rgba(255,255,255,0.05);color:#fff;font-size:13px" onkeyup="debouncedLoad()">
+                    <select class="form-input" id="statusFilter" style="width:150px;padding:6px 12px;border:1px solid rgba(255,255,255,0.15);border-radius:6px;background:rgba(255,255,255,0.05);color:#fff;font-size:13px" onchange="currentPage=1;loadUsers()">
+                        <option value="">All Status</option>
+                        <option value="active">Active</option>
+                        <option value="pending">Pending</option>
+                        <option value="suspended">Suspended</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- Stats Summary Cards -->
+            <div class="inline-grid-4 grid-3" style="display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:20px" id="statsCards">
+                <div class="card" style="padding:16px;text-align:center;background:#1e293b;border:1px solid rgba(255,255,255,0.08)">
+                    <div style="font-size:28px;font-weight:700;color:#3b82f6" id="statTotal">0</div>
+                    <div style="font-size:13px;color:rgba(255,255,255,0.6);margin-top:4px">Total Users</div>
+                </div>
+                <div class="card" style="padding:16px;text-align:center;background:#1e293b;border:1px solid rgba(255,255,255,0.08)">
+                    <div style="font-size:28px;font-weight:700;color:#22c55e" id="statActive">0</div>
+                    <div style="font-size:13px;color:rgba(255,255,255,0.6);margin-top:4px">Active</div>
+                </div>
+                <div class="card" style="padding:16px;text-align:center;background:#1e293b;border:1px solid rgba(255,255,255,0.08)">
+                    <div style="font-size:28px;font-weight:700;color:#eab308" id="statPending">0</div>
+                    <div style="font-size:13px;color:rgba(255,255,255,0.6);margin-top:4px">Pending</div>
+                </div>
+                <div class="card" style="padding:16px;text-align:center;background:#1e293b;border:1px solid rgba(255,255,255,0.08)">
+                    <div style="font-size:28px;font-weight:700;color:#ef4444" id="statSuspended">0</div>
+                    <div style="font-size:13px;color:rgba(255,255,255,0.6);margin-top:4px">Suspended</div>
+                </div>
+            </div>
+
+            <!-- Users Table -->
+            <div class="card">
+                <table class="data-table" style="width:100%;border-collapse:collapse">
+                    <thead>
+                        <tr style="text-align:left;border-bottom:1px solid rgba(255,255,255,0.1)">
+                            <th style="padding:12px 16px;font-size:13px;color:rgba(255,255,255,0.6);text-transform:uppercase;letter-spacing:0.5px">Name</th>
+                            <th style="padding:12px 16px;font-size:13px;color:rgba(255,255,255,0.6);text-transform:uppercase;letter-spacing:0.5px">Email</th>
+                            <th style="padding:12px 16px;font-size:13px;color:rgba(255,255,255,0.6);text-transform:uppercase;letter-spacing:0.5px">Company</th>
+                            <th style="padding:12px 16px;font-size:13px;color:rgba(255,255,255,0.6);text-transform:uppercase;letter-spacing:0.5px">Package</th>
+                            <th style="padding:12px 16px;font-size:13px;color:rgba(255,255,255,0.6);text-transform:uppercase;letter-spacing:0.5px">Status</th>
+                            <th style="padding:12px 16px;font-size:13px;color:rgba(255,255,255,0.6);text-transform:uppercase;letter-spacing:0.5px">Registered</th>
+                            <th style="padding:12px 16px;font-size:13px;color:rgba(255,255,255,0.6);text-transform:uppercase;letter-spacing:0.5px">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tableBody"></tbody>
+                </table>
+
+                <!-- Pagination -->
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-top:16px;padding:0 16px">
+                    <span style="font-size:13px;color:var(--text-light)" id="paginationInfo"></span>
+                    <div style="display:flex;gap:4px" id="paginationControls"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div id="toast-container" class="toast-container"></div>
+    <script src="/static/js/app.js"></script>
+    <script>
+    let allUsers = [];
+    const PAGE_SIZE = 5;
+    let currentPage = 1;
+    let debounceTimer = null;
+
+    function statusBadge(status) {
+        const labels = { active: 'Active', pending: 'Pending', suspended: 'Suspended' };
+        return '<span class="status-badge ' + status + '">' + (labels[status] || status) + '</span>';
+    }
+
+    function formatDate(d) {
+        if (!d) return '-';
+        try { return new Date(d).toLocaleDateString('en-MY', { day: '2-digit', month: 'short', year: 'numeric' }); } catch(e) { return d; }
+    }
+
+    function filterUsers() {
+        const search = document.getElementById('searchUser').value.toLowerCase().trim();
+        const status = document.getElementById('statusFilter').value;
+        return allUsers.filter(u => {
+            if (status && u.status !== status) return false;
+            if (search) {
+                const name = (u.name || '').toLowerCase();
+                const email = (u.email || '').toLowerCase();
+                const company = (u.company || '').toLowerCase();
+                if (!name.includes(search) && !email.includes(search) && !company.includes(search)) return false;
+            }
+            return true;
+        });
+    }
+
+    function renderPage() {
+        const filtered = filterUsers();
+        const totalPages = Math.ceil(filtered.length / PAGE_SIZE) || 1;
+        if (currentPage > totalPages) currentPage = totalPages;
+        const start = (currentPage - 1) * PAGE_SIZE;
+        const end = start + PAGE_SIZE;
+        const page = filtered.slice(start, end);
+
+        // Update stats
+        const total = allUsers.length;
+        const active = allUsers.filter(u => u.status === 'active').length;
+        const pending = allUsers.filter(u => u.status === 'pending').length;
+        const suspended = allUsers.filter(u => u.status === 'suspended').length;
+        document.getElementById('statTotal').textContent = total;
+        document.getElementById('statActive').textContent = active;
+        document.getElementById('statPending').textContent = pending;
+        document.getElementById('statSuspended').textContent = suspended;
+        document.getElementById('totalCount').textContent = '(' + total + ' total)';
+
+        // Build table
+        if (page.length === 0) {
+            document.getElementById('tableBody').innerHTML = '<tr><td colspan="7" style="text-align:center;padding:30px;color:var(--text-light)">No users found</td></tr>';
+        } else {
+            document.getElementById('tableBody').innerHTML = page.map(function(u) {
+                return '<tr style="border-bottom:1px solid rgba(255,255,255,0.05)">' +
+                    '<td style="padding:12px 16px"><strong>' + (u.name || '-') + '</strong></td>' +
+                    '<td style="padding:12px 16px;font-size:13px;color:var(--text-light)">' + (u.email || '-') + '</td>' +
+                    '<td style="padding:12px 16px;font-size:13px;color:var(--text-light)">' + (u.company || '-') + '</td>' +
+                    '<td style="padding:12px 16px;font-size:13px"><span class="status-badge" style="background:rgba(99,102,241,0.15);color:#818cf8">' + (u.package || '-') + '</span></td>' +
+                    '<td style="padding:12px 16px">' + statusBadge(u.status) + '</td>' +
+                    '<td style="padding:12px 16px;font-size:12px;color:var(--text-light)">' + formatDate(u.created_at) + '</td>' +
+                    '<td style="padding:12px 16px">' +
+                        '<select class="form-input" style="padding:4px 8px;font-size:12px;border:1px solid rgba(255,255,255,0.15);border-radius:6px;background:rgba(255,255,255,0.05);color:#fff;width:110px" onchange="updateStatus(' + u.id + ',this.value)">' +
+                            '<option value="active"' + (u.status==='active'?' selected':'') + '>Active</option>' +
+                            '<option value="pending"' + (u.status==='pending'?' selected':'') + '>Pending</option>' +
+                            '<option value="suspended"' + (u.status==='suspended'?' selected':'') + '>Suspended</option>' +
+                        '</select>' +
+                    '</td>' +
+                    '</tr>';
+            }).join('');
+        }
+
+        // Pagination info
+        document.getElementById('paginationInfo').textContent = filtered.length
+            ? 'Showing ' + (start + 1) + '-' + Math.min(end, filtered.length) + ' of ' + filtered.length
+            : '';
+        renderPagination(totalPages, filtered.length);
+    }
+
+    function renderPagination(totalPages, totalItems) {
+        if (totalItems === 0) {
+            document.getElementById('paginationControls').innerHTML = '';
+            return;
+        }
+        let html = '<button class="btn btn-sm btn-outline" onclick="currentPage=1;renderPage()"' + (currentPage <= 1 ? ' disabled' : '') + ' style="padding:4px 10px;font-size:13px;border:1px solid rgba(255,255,255,0.15);border-radius:6px;background:rgba(255,255,255,0.05);color:#fff;cursor:pointer;line-height:1">❮❮</button>';
+        html += '<button class="btn btn-sm btn-outline" onclick="currentPage--;renderPage()"' + (currentPage <= 1 ? ' disabled' : '') + ' style="padding:4px 10px;font-size:13px;border:1px solid rgba(255,255,255,0.15);border-radius:6px;background:rgba(255,255,255,0.05);color:#fff;cursor:pointer;line-height:1">❮</button>';
+        const pStart = Math.max(1, Math.min(currentPage - 2, totalPages - 4));
+        const pEnd = Math.min(totalPages, pStart + 4);
+        for (let p = pStart; p <= pEnd; p++) {
+            html += '<button class="btn btn-sm ' + (p === currentPage ? 'btn-primary' : 'btn-outline') + '" onclick="currentPage=' + p + ';renderPage()" style="padding:4px 10px;font-size:13px;border-radius:6px;cursor:pointer;line-height:1' + (p === currentPage ? ';background:#3b82f6;color:#fff;border:none' : ';border:1px solid rgba(255,255,255,0.15);background:rgba(255,255,255,0.05);color:#fff') + '">' + p + '</button>';
+        }
+        html += '<button class="btn btn-sm btn-outline" onclick="currentPage++;renderPage()"' + (currentPage >= totalPages ? ' disabled' : '') + ' style="padding:4px 10px;font-size:13px;border:1px solid rgba(255,255,255,0.15);border-radius:6px;background:rgba(255,255,255,0.05);color:#fff;cursor:pointer;line-height:1">❯</button>';
+        html += '<button class="btn btn-sm btn-outline" onclick="currentPage=' + totalPages + ';renderPage()"' + (currentPage >= totalPages ? ' disabled' : '') + ' style="padding:4px 10px;font-size:13px;border:1px solid rgba(255,255,255,0.15);border-radius:6px;background:rgba(255,255,255,0.05);color:#fff;cursor:pointer;line-height:1">❯❯</button>';
+        document.getElementById('paginationControls').innerHTML = html;
+    }
+
+    function debouncedLoad() {
+        clearTimeout(debounceTimer);
+        debounceTimer = setTimeout(function() { currentPage = 1; loadUsers(); }, 300);
+    }
+
+    async function loadUsers() {
+        try {
+            let url = '/admin/users/?';
+            const search = document.getElementById('searchUser').value.trim();
+            const status = document.getElementById('statusFilter').value;
+            if (search) url += 'search=' + encodeURIComponent(search) + '&';
+            if (status) url += 'status_filter=' + status + '&';
+            const data = await api(url);
+            allUsers = data.items || data || [];
+            currentPage = 1;
+            renderPage();
+        } catch(e) {
+            document.getElementById('tableBody').innerHTML = '<tr><td colspan="7" style="text-align:center;padding:30px;color:var(--text-light)">Failed to load users</td></tr>';
+        }
+    }
+
+    async function updateStatus(id, status) {
+        try {
+            await api('/admin/users/' + id, { method: 'PUT', body: JSON.stringify({ status: status }) });
+            showToast('User status updated', 'success');
+            // Update local data to avoid re-fetch
+            var u = allUsers.find(function(x) { return x.id === id; });
+            if (u) u.status = status;
+            renderPage();
+        } catch(e) {
+            showToast(e.message || 'Failed to update status', 'error');
+        }
+    }
+
+    async function init() {
+        const user = await checkAdminAuth('/admin/login.html');
+        if (!user) return;
+        renderSidebarUser(user);
+        renderSidebar('users');
+        loadUsers();
+    }
+    init();
+    </script>
+</body>
+</html>

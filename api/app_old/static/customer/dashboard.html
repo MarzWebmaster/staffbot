@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="ms">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard — StaffBot.my</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="/static/css/app.css">
+</head>
+<body>
+    <button class="sidebar-toggle" onclick="toggleSidebar()">☰</button>
+    <div class="sidebar-overlay" onclick="toggleSidebar()"></div>
+    <div class="app-layout">
+        <!-- Sidebar -->
+        <div class="sidebar">
+            <div class="sidebar-brand">
+                <h2>StaffBot.my</h2>
+                <span>Customer Dashboard</span>
+            </div>
+            <nav class="sidebar-nav">
+                <a href="dashboard.html" class="active"><span>📊</span><span>Dashboard</span></a>
+                <a href="bots.html"><span>🤖</span><span>Staff AI Saya</span></a>
+                <a href="chat.html"><span>💬</span><span>Chat</span></a>
+                <a href="settings.html"><span>⚙️</span><span>Tetapan</span></a>
+                <a href="billing.html"><span>💰</span><span>Billing</span></a>
+                <a href="usage.html"><span>📈</span><span>Penggunaan</span></a>
+                <a href="#" onclick="logout()" style="margin-top:20px;border-top:1px solid rgba(255,255,255,0.1);padding-top:20px"><span>🚪</span><span>Log Keluar</span></a>
+            </nav>
+            <div id="sidebar-user" style="padding:16px 20px;border-top:1px solid rgba(255,255,255,0.1);margin-top:auto"></div>
+        </div>
+
+        <!-- Main -->
+        <div class="main-content">
+            <div class="topbar">
+                <h1>Dashboard</h1>
+                <div class="topbar-right">
+                    <span id="package-badge" class="status-badge status-active"></span>
+                </div>
+            </div>
+
+            <!-- Stats -->
+            <div class="grid-4" id="statsGrid">
+                <div class="card stat-card"><div class="stat-label">Bot Aktif</div><div class="stat-value" id="stat-bots">-</div><div class="stat-sub">/ jumlah dibenarkan</div></div>
+                <div class="card stat-card"><div class="stat-label">Status Subscription</div><div class="stat-value" id="stat-sub">-</div><div class="stat-sub">pakej semasa</div></div>
+                <div class="card stat-card"><div class="stat-label">Token Digunakan</div><div class="stat-value" id="stat-tokens">-</div><div class="stat-sub">/ kuota bulanan</div></div>
+                <div class="card stat-card"><div class="stat-label">Akaun</div><div class="stat-value" id="stat-status">-</div><div class="stat-sub">status</div></div>
+            </div>
+
+            <!-- Bots List -->
+            <div class="card">
+                <div class="card-header">
+                    <h3>Staff AI Saya</h3>
+                    <button class="btn btn-primary btn-sm" onclick="window.location.href='bots.html'">Urus Staff</button>
+                </div>
+                <div id="bots-list"><p style="color:var(--text-light)">Loading...</p></div>
+            </div>
+
+            <!-- Recent Activity -->
+            <div class="card">
+                <div class="card-header">
+                    <h3>Aktiviti Terkini</h3>
+                </div>
+                <div id="activity-list"><p style="color:var(--text-light)">Tiada aktiviti terkini</p></div>
+            </div>
+        </div>
+    </div>
+    <div id="toast-container" class="toast-container"></div>
+
+    <script src="/static/js/app.js"></script>
+    <script>
+    async function init() {
+        const user = await checkAuth();
+        if (!user) return;
+        renderSidebarUser(user);
+
+        // Package badge
+        document.getElementById('package-badge').textContent = user.package.toUpperCase();
+        document.getElementById('stat-status').textContent = user.status;
+
+        // Load containers
+        try {
+            const containers = await api('/containers/');
+            document.getElementById('stat-bots').textContent = containers.length;
+            document.getElementById('bots-list').innerHTML = containers.length ? 
+                containers.map(c => `
+                    <div style="display:flex;justify-content:space-between;align-items:center;padding:12px 0;border-bottom:1px solid var(--border)">
+                        <div><strong>${c.name}</strong><br><span style="font-size:12px;color:var(--text-light)">${c.image}</span></div>
+                        <div>${statusBadge(c.status)}</div>
+                    </div>
+                `).join('') : '<p style="color:var(--text-light)">Belum ada bot. Klik "Urus Staff" untuk tambah.</p>';
+        } catch { document.getElementById('bots-list').innerHTML = '<p style="color:var(--text-light)">Gagal load data</p>'; }
+
+        // Load subscription
+        try {
+            const sub = await api(`/subscriptions/${user.id}`);
+            document.getElementById('stat-sub').textContent = sub.status;
+            document.getElementById('stat-tokens').textContent = `${sub.managed_token_used.toFixed(0)} / ${sub.managed_token_quota.toFixed(0)}`;
+        } catch { document.getElementById('stat-sub').textContent = '-'; }
+    }
+    init();
+    </script>
+</body>
+</html>
