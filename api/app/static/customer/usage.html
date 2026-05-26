@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="ms">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Penggunaan — StaffBot.my</title>
+    <title>Usage — StaffBot.my</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="/static/css/app.css?v=1779798256">
 </head>
@@ -15,22 +15,22 @@
             <div class="sidebar-brand"><h2>StaffBot.my</h2><span>Customer Dashboard</span></div>
             <nav class="sidebar-nav">
                 <a href="dashboard.html"><span>📊</span><span>Dashboard</span></a>
-                <a href="bots.html"><span>🤖</span><span>Staff AI Saya</span></a>
+                <a href="bots.html"><span>🤖</span><span>My AI Staff</span></a>
                 <a href="chat.html"><span>💬</span><span>Chat</span></a>
-                <a href="settings.html"><span>⚙️</span><span>Tetapan</span></a>
+                <a href="settings.html"><span>⚙️</span><span>Settings</span></a>
                 <a href="billing.html"><span>💰</span><span>Billing</span></a>
-                <a href="usage.html" class="active"><span>📈</span><span>Penggunaan</span></a>
-                <a href="#" onclick="logout()" style="margin-top:20px;border-top:1px solid rgba(255,255,255,0.1);padding-top:20px"><span>🚪</span><span>Log Keluar</span></a>
+                <a href="usage.html" class="active"><span>📈</span><span>Usage</span></a>
+                <a href="#" onclick="logout()" style="margin-top:20px;border-top:1px solid rgba(255,255,255,0.1);padding-top:20px"><span>🚪</span><span>Logout</span></a>
             </nav>
             <div id="sidebar-user" style="padding:16px 20px;border-top:1px solid rgba(255,255,255,0.1);margin-top:auto"></div>
         </div>
         <div class="main-content">
-            <div class="topbar"><h1>Penggunaan</h1></div>
+            <div class="topbar"><h1>Usage</h1></div>
 
             <div class="grid-3">
-                <div class="card stat-card"><div class="stat-label">Jumlah Token</div><div class="stat-value" id="totalTokens">-</div></div>
-                <div class="card stat-card"><div class="stat-label">Token Digunakan</div><div class="stat-value" id="usedTokens">-</div></div>
-                <div class="card stat-card"><div class="stat-label">Baki Token</div><div class="stat-value" id="remainingTokens">-</div></div>
+                <div class="card stat-card"><div class="stat-label">Total Tokens</div><div class="stat-value" id="totalTokens">-</div></div>
+                <div class="card stat-card"><div class="stat-label">Tokens Used</div><div class="stat-value" id="usedTokens">-</div></div>
+                <div class="card stat-card"><div class="stat-label">Remaining Tokens</div><div class="stat-value" id="remainingTokens">-</div></div>
             </div>
 
             <div class="card">
@@ -39,7 +39,7 @@
             </div>
 
             <div class="card">
-                <div class="card-header"><h3>Notifikasi Terkini</h3></div>
+                <div class="card-header"><h3>Recent Notifications</h3></div>
                 <div id="notifList"><p style="color:var(--text-light)">Loading...</p></div>
             </div>
         </div>
@@ -62,9 +62,9 @@
         try {
             const containers = await api('/containers/');
             document.getElementById('botStatus').innerHTML = containers.length ?
-                `<div class="table-container"><table><tr><th>Nama</th><th>Status</th><th>Image</th><th>Dicipta</th></tr>${
+                `<div class="table-container"><table><tr><th>Name</th><th>Status</th><th>Image</th><th>Created</th></tr>${
                     containers.map(c => `<tr><td>${c.name}</td><td>${statusBadge(c.status)}</td><td style="font-size:12px">${c.image}</td><td>${formatDate(c.created_at)}</td></tr>`).join('')
-                }</table></div>` : '<p style="color:var(--text-light)">Tiada bot</p>';
+                }</table></div>` : '<p style="color:var(--text-light)">No bots</p>';
         } catch {}
 
         try {
@@ -75,7 +75,7 @@
                         <strong>${n.type}</strong> via ${n.channel} — ${statusBadge(n.status)}
                         <div style="color:var(--text-light);font-size:12px">${formatDate(n.sent_at)}</div>
                     </div>
-                `).join('') : '<p style="color:var(--text-light)">Tiada notifikasi</p>';
+                `).join('') : '<p style="color:var(--text-light)">No notifications</p>';
         } catch {}
     }
     init();

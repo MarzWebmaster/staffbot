@@ -103,7 +103,7 @@ document.addEventListener('click', e => {
 });
 
 // Format helpers
-function formatDate(d) { return new Date(d).toLocaleDateString('ms-MY', { day: 'numeric', month: 'short', year: 'numeric' }); }
+function formatDate(d) { return new Date(d).toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' }); }
 function formatCurrency(n) { return `RM${Number(n).toFixed(2)}`; }
 function statusBadge(status) {
     const map = { active: 'active', running: 'active', pending: 'pending', error: 'error', suspended: 'suspended', stopped: 'error', deploying: 'pending' };

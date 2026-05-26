@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="ms">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Staff AI Saya — StaffBot.my</title>
+    <title>My AI Staff — StaffBot.my</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="/static/css/app.css?v=1779798256">
 </head>
@@ -18,20 +18,20 @@
             </div>
             <nav class="sidebar-nav">
                 <a href="dashboard.html"><span>📊</span><span>Dashboard</span></a>
-                <a href="bots.html" class="active"><span>🤖</span><span>Staff AI Saya</span></a>
+                <a href="bots.html" class="active"><span>🤖</span><span>My AI Staff</span></a>
                 <a href="chat.html"><span>💬</span><span>Chat</span></a>
-                <a href="settings.html"><span>⚙️</span><span>Tetapan</span></a>
+                <a href="settings.html"><span>⚙️</span><span>Settings</span></a>
                 <a href="billing.html"><span>💰</span><span>Billing</span></a>
-                <a href="usage.html"><span>📈</span><span>Penggunaan</span></a>
-                <a href="#" onclick="logout()" style="margin-top:20px;border-top:1px solid rgba(255,255,255,0.1);padding-top:20px"><span>🚪</span><span>Log Keluar</span></a>
+                <a href="usage.html"><span>📈</span><span>Usage</span></a>
+                <a href="#" onclick="logout()" style="margin-top:20px;border-top:1px solid rgba(255,255,255,0.1);padding-top:20px"><span>🚪</span><span>Logout</span></a>
             </nav>
             <div id="sidebar-user" style="padding:16px 20px;border-top:1px solid rgba(255,255,255,0.1);margin-top:auto"></div>
         </div>
 
         <div class="main-content">
             <div class="topbar">
-                <h1>Staff AI Saya</h1>
-                <button class="btn btn-primary" onclick="showAddBotModal()">+ Tambah Staff</button>
+                <h1>My AI Staff</h1>
+                <button class="btn btn-primary" onclick="showAddBotModal()">+ Add Staff</button>
             </div>
 
             <div id="bots-container">
@@ -43,14 +43,14 @@
     <!-- Add Bot Modal -->
     <div class="modal-overlay" id="addBotModal">
         <div class="modal">
-            <h3>Tambah Staff AI Baru</h3>
+            <h3>Create New AI Staff</h3>
             <form onsubmit="return createBot(event)">
                 <div class="form-group">
-                    <label>Nama Staff</label>
-                    <input type="text" class="form-input" id="botName" placeholder="Cth: Staff Marketing" required>
+                    <label>Staff Name</label>
+                    <input type="text" class="form-input" id="botName" placeholder="e.g. Marketing Staff" required>
                 </div>
                 <div class="form-group">
-                    <label>Skill (pilih)</label>
+                    <label>Skills (select)</label>
                     <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:8px">
                         <label style="font-size:13px"><input type="checkbox" value="chat" checked disabled> Chat</label>
                         <label style="font-size:13px"><input type="checkbox" value="memory" checked disabled> Memory</label>
@@ -58,8 +58,8 @@
                     </div>
                 </div>
                 <div class="modal-actions">
-                    <button type="button" class="btn btn-secondary" onclick="closeModal('addBotModal')">Batal</button>
-                    <button type="submit" class="btn btn-primary" id="createBotBtn">Cipta Staff</button>
+                    <button type="button" class="btn btn-secondary" onclick="closeModal('addBotModal')">Cancel</button>
+                    <button type="submit" class="btn btn-primary" id="createBotBtn">Create Staff</button>
                 </div>
             </form>
         </div>
@@ -68,11 +68,11 @@
     <!-- Delete Confirm Modal -->
     <div class="modal-overlay" id="deleteBotModal">
         <div class="modal">
-            <h3>Padam Staff AI</h3>
-            <p style="color:var(--text-light);margin-bottom:16px">Padamkan <strong id="deleteBotName"></strong>? Semua data perbualan, memori, dan tetapan akan hilang. Tindakan ini tak boleh dibatalkan.</p>
+            <h3>Delete AI Staff</h3>
+            <p style="color:var(--text-light);margin-bottom:16px">Delete <strong id="deleteBotName"></strong>? All chat data, memory, and settings will be lost. This action cannot be undone.</p>
             <div class="modal-actions">
-                <button class="btn btn-secondary" onclick="closeModal('deleteBotModal')">Batal</button>
-                <button class="btn btn-danger" id="confirmDeleteBtn">Padam</button>
+                <button class="btn btn-secondary" onclick="closeModal('deleteBotModal')">Cancel</button>
+                <button class="btn btn-danger" id="confirmDeleteBtn">Delete</button>
             </div>
         </div>
     </div>
@@ -98,9 +98,9 @@
                 container.innerHTML = `
                     <div class="card" style="text-align:center;padding:60px">
                         <div style="font-size:48px;margin-bottom:16px">🤖</div>
-                        <h3 style="margin-bottom:8px">Belum Ada Staff AI</h3>
+                        <h3 style="margin-bottom:8px">No AI Staff Yet</h3>
                         <p style="color:var(--text-light);margin-bottom:24px">Klik "Tambah Staff" untuk cipta staff AI pertama anda.</p>
-                        <button class="btn btn-primary" onclick="showAddBotModal()">+ Tambah Staff</button>
+                        <button class="btn btn-primary" onclick="showAddBotModal()">+ Add Staff</button>
                     </div>
                 `;
                 return;
@@ -120,7 +120,7 @@
                     <div style="font-size:13px;color:var(--text-light)">
                         <div>Image: ${c.image}</div>
                         <div>Skills: ${(c.skills||[]).join(', ') || '-'}</div>
-                        <div>Dicipta: ${formatDate(c.created_at)}</div>
+                        <div>Created: ${formatDate(c.created_at)}</div>
                     </div>
                     <div style="margin-top:12px;display:flex;gap:8px">
                         <button class="btn btn-secondary btn-sm" onclick="renameBot(${c.id})">Rename</button>
@@ -136,14 +136,14 @@
     async function createBot(e) {
         e.preventDefault();
         const btn = document.getElementById('createBotBtn');
-        btn.disabled = true; btn.textContent = 'Menghasilkan...';
+        btn.disabled = true; btn.textContent = 'Creating...';
         try {
             await api('/containers', { method: 'POST', body: JSON.stringify({ name: document.getElementById('botName').value }) });
-            showToast('Staff AI berjaya dicipta!', 'success');
+            showToast('AI Staff created successfully!', 'success');
             closeModal('addBotModal');
             await loadBots();
         } catch { /* handled */ }
-        btn.disabled = false; btn.textContent = 'Cipta Staff';
+        btn.disabled = false; btn.textContent = 'Create Staff';
         return false;
     }
 
@@ -151,18 +151,18 @@
         if (!deleteTargetId) return;
         try {
             await api(`/containers/${deleteTargetId}`, { method: 'DELETE' });
-            showToast('Staff AI dipadam', 'success');
+            showToast('AI Staff deleted', 'success');
             closeModal('deleteBotModal');
             await loadBots();
         } catch { /* handled */ }
     });
 
     async function renameBot(id) {
-        const newName = prompt('Nama baru:');
+        const newName = prompt('New name:');
         if (!newName) return;
         try {
             await api(`/containers/${id}`, { method: 'PUT', body: JSON.stringify({ name: newName }) });
-            showToast('Nama dikemaskini', 'success');
+            showToast('Name updated', 'success');
             await loadBots();
         } catch { /* handled */ }
     }

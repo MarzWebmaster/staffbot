@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="ms">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -19,12 +19,12 @@
             </div>
             <nav class="sidebar-nav">
                 <a href="dashboard.html" class="active"><span>📊</span><span>Dashboard</span></a>
-                <a href="bots.html"><span>🤖</span><span>Staff AI Saya</span></a>
+                <a href="bots.html"><span>🤖</span><span>My AI Staff</span></a>
                 <a href="chat.html"><span>💬</span><span>Chat</span></a>
-                <a href="settings.html"><span>⚙️</span><span>Tetapan</span></a>
+                <a href="settings.html"><span>⚙️</span><span>Settings</span></a>
                 <a href="billing.html"><span>💰</span><span>Billing</span></a>
-                <a href="usage.html"><span>📈</span><span>Penggunaan</span></a>
-                <a href="#" onclick="logout()" style="margin-top:20px;border-top:1px solid rgba(255,255,255,0.1);padding-top:20px"><span>🚪</span><span>Log Keluar</span></a>
+                <a href="usage.html"><span>📈</span><span>Usage</span></a>
+                <a href="#" onclick="logout()" style="margin-top:20px;border-top:1px solid rgba(255,255,255,0.1);padding-top:20px"><span>🚪</span><span>Logout</span></a>
             </nav>
             <div id="sidebar-user" style="padding:16px 20px;border-top:1px solid rgba(255,255,255,0.1);margin-top:auto"></div>
         </div>
@@ -40,17 +40,17 @@
 
             <!-- Stats -->
             <div class="grid-4" id="statsGrid">
-                <div class="card stat-card"><div class="stat-label">Bot Aktif</div><div class="stat-value" id="stat-bots">-</div><div class="stat-sub">/ jumlah dibenarkan</div></div>
-                <div class="card stat-card"><div class="stat-label">Status Subscription</div><div class="stat-value" id="stat-sub">-</div><div class="stat-sub">pakej semasa</div></div>
-                <div class="card stat-card"><div class="stat-label">Token Digunakan</div><div class="stat-value" id="stat-tokens">-</div><div class="stat-sub">/ kuota bulanan</div></div>
-                <div class="card stat-card"><div class="stat-label">Akaun</div><div class="stat-value" id="stat-status">-</div><div class="stat-sub">status</div></div>
+                <div class="card stat-card"><div class="stat-label">Active Bots</div><div class="stat-value" id="stat-bots">-</div><div class="stat-sub">/ total allowed</div></div>
+                <div class="card stat-card"><div class="stat-label">Status Subscription</div><div class="stat-value" id="stat-sub">-</div><div class="stat-sub">current plan</div></div>
+                <div class="card stat-card"><div class="stat-label">Tokens Used</div><div class="stat-value" id="stat-tokens">-</div><div class="stat-sub">/ monthly quota</div></div>
+                <div class="card stat-card"><div class="stat-label">Account</div><div class="stat-value" id="stat-status">-</div><div class="stat-sub">status</div></div>
             </div>
 
             <!-- Bots List -->
             <div class="card">
                 <div class="card-header">
-                    <h3>Staff AI Saya</h3>
-                    <button class="btn btn-primary btn-sm" onclick="window.location.href='bots.html'">Urus Staff</button>
+                    <h3>My AI Staff</h3>
+                    <button class="btn btn-primary btn-sm" onclick="window.location.href='bots.html'">Manage Staff</button>
                 </div>
                 <div id="bots-list"><p style="color:var(--text-light)">Loading...</p></div>
             </div>
@@ -58,9 +58,9 @@
             <!-- Recent Activity -->
             <div class="card">
                 <div class="card-header">
-                    <h3>Aktiviti Terkini</h3>
+                    <h3>Recent Activity</h3>
                 </div>
-                <div id="activity-list"><p style="color:var(--text-light)">Tiada aktiviti terkini</p></div>
+                <div id="activity-list"><p style="color:var(--text-light)">No recent activity</p></div>
             </div>
         </div>
     </div>
@@ -87,8 +87,8 @@
                         <div><strong>${c.name}</strong><br><span style="font-size:12px;color:var(--text-light)">${c.image}</span></div>
                         <div>${statusBadge(c.status)}</div>
                     </div>
-                `).join('') : '<p style="color:var(--text-light)">Belum ada bot. Klik "Urus Staff" untuk tambah.</p>';
-        } catch { document.getElementById('bots-list').innerHTML = '<p style="color:var(--text-light)">Gagal load data</p>'; }
+                `).join('') : '<p style="color:var(--text-light)">Belum ada bot. Klik "Manage Staff" untuk tambah.</p>';
+        } catch { document.getElementById('bots-list').innerHTML = '<p style="color:var(--text-light)">Failed to load data</p>'; }
 
         // Load subscription
         try {
