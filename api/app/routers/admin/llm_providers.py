@@ -179,15 +179,20 @@ async def delete_provider(
     admin: Client = Depends(get_current_admin),
     db: AsyncSession = Depends(get_db),
 ):
-    """Soft-delete an LLM provider (set inactive)."""
+    """Hard-delete an LLM provider and its package assignments."""
     result = await db.execute(select(LlmProvider).where(LlmProvider.id == provider_id))
     p = result.scalar_one_or_none()
     if not p:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Provider not found")
 
-    p.is_active = False
+    # Delete package assignments first (FK constraint)
+    from sqlalchemy import delete as sqla_delete
+    await db.execute(sqla_delete(PackageProvider).where(PackageProvider.provider_id == provider_id))
+
+    name = p.display_name
+    await db.delete(p)
     await db.commit()
-    return {"message": f"Provider '{p.display_name}' deactivated"}
+    return {"message": f"Provider '{name}' permanently deleted"}
 
 
 # ── Package-Provider Assignments ───────────────────────────────────
