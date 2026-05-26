@@ -41,7 +41,7 @@ class LlmProviderResponse(LlmProviderBase):
 
 
 class PackageProviderAssign(BaseModel):
-    provider_id: int
+    provider_id: int = 0
     token_quota: float = 0.0
     is_available: bool = True
 
@@ -49,7 +49,7 @@ class PackageProviderAssign(BaseModel):
 class PackageProviderResponse(BaseModel):
     id: int
     package_id: int
-    provider_id: int
+    provider_id: int = 0
     token_quota: float
     is_available: bool
     provider: Optional[LlmProviderResponse] = None
