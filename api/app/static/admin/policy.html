@@ -54,6 +54,8 @@
                     <p style="font-size:13px;color:var(--text-light);margin:0">Toggle skills. Only enabled skills are loaded at runtime.</p>
                     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
                         <input type="text" id="skills-search" placeholder="🔍 Search skills..." oninput="onSkillSearch()" style="width:200px;padding:8px 12px;border:1px solid var(--border);border-radius:8px;font-size:13px;background:#1e293b;color:#e2e8f0">
+                        <button class="btn btn-sm" onclick="enableAllSkills()" style="background:var(--primary);color:white;border:none;padding:8px 14px;border-radius:6px;cursor:pointer;font-weight:600;font-size:12px">✅ Enable All</button>
+                        <button class="btn btn-sm" onclick="disableAllSkills()" style="background:#64748b;color:white;border:none;padding:8px 14px;border-radius:6px;cursor:pointer;font-weight:600;font-size:12px">⬜ Disable All</button>
                         <button class="btn btn-sm" onclick="saveSkills()" style="background:var(--success);color:white;border:none;padding:8px 20px;border-radius:6px;cursor:pointer;font-weight:600">💾 Save Skills</button>
                     </div>
                 </div>
@@ -100,18 +102,37 @@
             <div id="tab-tools" class="tab-content" style="display:none">
                 <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
                     <p style="font-size:13px;color:var(--text-light)">Toggle toolsets. High-risk tools require additional approval.</p>
+                    <button class="btn btn-sm" onclick="enableAllTools()" style="background:var(--primary);color:white;border:none;padding:8px 14px;border-radius:6px;cursor:pointer;font-weight:600;font-size:12px">✅ Enable All</button>
+                    <button class="btn btn-sm" onclick="disableAllTools()" style="background:#64748b;color:white;border:none;padding:8px 14px;border-radius:6px;cursor:pointer;font-weight:600;font-size:12px">⬜ Disable All</button>
                     <button class="btn btn-sm" onclick="saveTools()" style="background:var(--success);color:white;border:none;padding:8px 20px;border-radius:6px;cursor:pointer;font-weight:600">💾 Save Tools</button>
                 </div>
-                <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;align-items:center;background:rgba(255,255,255,0.03);padding:10px 14px;border-radius:8px;border:1px solid var(--border)">
-                    <input type="text" id="new-tool-name" placeholder="Name" style="flex:1;min-width:100px;padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:12px;background:#1e293b;color:#e2e8f0">
-                    <input type="text" id="new-tool-id" placeholder="ID" style="flex:0.7;min-width:80px;padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:12px;background:#1e293b;color:#e2e8f0">
-                    <input type="text" id="new-tool-desc" placeholder="Description" style="flex:2;min-width:140px;padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:12px;background:#1e293b;color:#e2e8f0">
-                    <select id="new-tool-risk" style="padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:12px;background:#1e293b;color:#e2e8f0">
-                        <option value="low">Low Risk</option>
-                        <option value="medium">Medium Risk</option>
-                        <option value="high" selected>High Risk</option>
-                    </select>
-                    <button onclick="addTool()" style="background:var(--primary);color:white;border:none;padding:6px 16px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600">+ Add Tool</button>
+                <div style="margin-bottom:12px;background:rgba(255,255,255,0.03);padding:10px 14px;border-radius:8px;border:1px solid var(--border)">
+                    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:8px">
+                        <input type="text" id="new-tool-name" placeholder="Tool Name" style="flex:1;min-width:120px;padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:12px;background:#1e293b;color:#e2e8f0">
+                        <input type="text" id="new-tool-id" placeholder="ID (e.g. my-tool)" style="flex:1;min-width:120px;padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:12px;background:#1e293b;color:#e2e8f0">
+                        <input type="text" id="new-tool-desc" placeholder="Description" style="flex:2;min-width:160px;padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:12px;background:#1e293b;color:#e2e8f0">
+                        <select id="new-tool-risk" style="flex:0.5;min-width:90px;padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:12px;background:#1e293b;color:#e2e8f0">
+                            <option value="low">Low Risk</option>
+                            <option value="medium">Medium Risk</option>
+                            <option value="high" selected>High Risk</option>
+                        </select>
+                    </div>
+                    <div style="display:flex;gap:8px;margin-bottom:6px;flex-wrap:wrap;align-items:center">
+                        <select id="gen-tool-provider" onchange="loadToolProviderModels()" style="flex:1;min-width:100px;padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:11px;background:#1e293b;color:#e2e8f0">
+                            <option value="">Auto (first active provider)</option>
+                        </select>
+                        <select id="gen-tool-model" style="flex:1;min-width:100px;padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:11px;background:#1e293b;color:#e2e8f0">
+                            <option value="">Default model</option>
+                        </select>
+                        <span style="font-size:10px;color:var(--text-light)">Generate using:</span>
+                    </div>
+                    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:stretch">
+                        <textarea id="new-tool-content" placeholder="Tool definition/JSON schema. Click Generate to auto-create, or type manually." style="flex:3;min-height:60px;padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:12px;font-family:monospace;resize:vertical;background:#1e293b;color:#e2e8f0"></textarea>
+                        <div style="display:flex;flex-direction:column;gap:4px;justify-content:flex-end">
+                            <button onclick="generateToolContent()" style="background:#7C3AED;color:white;border:none;padding:6px 14px;border-radius:6px;cursor:pointer;font-size:11px;font-weight:600">🤖 Generate</button>
+                            <button onclick="addTool()" style="background:var(--primary);color:white;border:none;padding:6px 14px;border-radius:6px;cursor:pointer;font-size:11px;font-weight:600">+ Add Tool</button>
+                        </div>
+                    </div>
                 </div>
                 <div id="tools-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:12px">
                     <p style="color:var(--text-light);grid-column:1/-1">Loading tools...</p>
@@ -149,6 +170,7 @@
         await loadSkills();
         Promise.all([loadTools(), loadPolicy()]);
         setTimeout(loadGenerateProviders, 500);
+        setTimeout(loadToolGenerateProviders, 600);
     }
 
     function switchTab(tab) {
@@ -344,9 +366,11 @@
                 '<div style="flex:1">' +
                     '<div style="font-weight:600;font-size:13px;margin-bottom:4px;color:#e2e8f0">' + esc(t.name) + '</div>' +
                     '<div style="font-size:11px;color:var(--text-light);margin-bottom:4px">' + esc(t.desc) + '</div>' +
+                    (t.content ? '<div style="font-size:10px;color:var(--text-light);margin-bottom:4px;font-family:monospace;background:rgba(0,0,0,0.2);padding:4px 6px;border-radius:4px;max-height:40px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + esc(t.content.substring(0, 80)) + (t.content.length > 80 ? '...' : '') + '</div>' : '') +
                     '<div style="display:flex;gap:6px;align-items:center">' +
                         '<span style="font-size:10px;padding:2px 8px;border-radius:4px;border:1px solid ' + (t.risk === 'high' ? '#FCA5A5' : t.risk === 'medium' ? '#FCD34D' : '#6EE7B7') + ';background:' + (t.risk === 'high' ? '#FEE2E2' : t.risk === 'medium' ? '#FEF3C7' : '#D1FAE5') + ';color:' + (t.risk === 'high' ? '#DC2626' : t.risk === 'medium' ? '#D97706' : '#059669') + '">' + t.risk.toUpperCase() + ' RISK</span>' +
                         '<span style="font-size:10px;color:' + (t.enabled ? 'var(--success)' : 'var(--text-light)') + '">' + (t.enabled ? 'Active' : 'Inactive') + '</span>' +
+                        (t.src === 'custom' ? ' <button onclick="removeTool(\'' + t.id + '\')" style="background:none;border:none;color:#ef4444;cursor:pointer;font-size:14px;margin-left:4px" title="Remove custom tool">🗑️</button>' : '') +
                     '</div>' +
                 '</div>' +
                 '<label style="position:relative;display:inline-block;width:42px;height:22px;flex-shrink:0;margin-left:12px">' +
@@ -384,13 +408,57 @@
         const id = document.getElementById('new-tool-id').value.trim();
         const desc = document.getElementById('new-tool-desc').value.trim();
         const risk = document.getElementById('new-tool-risk').value;
+        const content = document.getElementById('new-tool-content').value.trim();
         if (!name || !id) { showToast('❌ Name and ID required', 'error'); return; }
         if (toolsData.find(t => t.id === id)) { showToast('❌ Tool ID already exists', 'error'); return; }
-        toolsData.unshift({ id, name, desc, risk, enabled: true, src: 'custom' });
-        ['new-tool-name', 'new-tool-id', 'new-tool-desc'].forEach(f => { document.getElementById(f).value = ''; });
+        toolsData.unshift({ id, name, desc, risk, content, enabled: true, src: 'custom' });
+        ['new-tool-name', 'new-tool-id', 'new-tool-desc', 'new-tool-content'].forEach(f => { document.getElementById(f).value = ''; });
         document.getElementById('tools-count').textContent = toolsData.filter(t => t.enabled).length;
         renderTools();
         showToast('✅ Tool added — click 💾 Save Tools to persist', 'success');
+    }
+
+    function removeTool(id) {
+        toolsData = toolsData.filter(t => t.id !== id);
+        document.getElementById('tools-count').textContent = toolsData.filter(t => t.enabled).length;
+        renderTools();
+    }
+
+    async function loadToolProviderModels() {
+        const provSelect = document.getElementById('gen-tool-provider');
+        const modelSelect = document.getElementById('gen-tool-model');
+        const selectedProv = provSelect.value;
+        modelSelect.innerHTML = '<option value="">Default model</option>';
+        if (!selectedProv) return;
+        try {
+            const providers = await api('/admin/providers/providers');
+            const prov = providers.find(p => p.name === selectedProv);
+            if (prov && prov.models) { prov.models.forEach(m => { const opt = document.createElement('option'); opt.value = m; opt.textContent = m; modelSelect.appendChild(opt); }); }
+        } catch {}
+    }
+
+    async function loadToolGenerateProviders() {
+        try {
+            const providers = await api('/admin/providers/providers');
+            const select = document.getElementById('gen-tool-provider');
+            providers.filter(p => p.is_active).forEach(p => { const opt = document.createElement('option'); opt.value = p.name; opt.textContent = p.display_name; select.appendChild(opt); });
+        } catch {}
+    }
+
+    async function generateToolContent() {
+        const name = document.getElementById('new-tool-name').value.trim();
+        const desc = document.getElementById('new-tool-desc').value.trim();
+        if (!name) { showToast('❌ Name required first', 'error'); return; }
+        const btn = event.target;
+        btn.textContent = '⏳ Generating...'; btn.disabled = true;
+        try {
+            const providerName = document.getElementById('gen-tool-provider').value || null;
+            const model = document.getElementById('gen-tool-model').value || null;
+            const res = await api('/admin/policy/tools/generate', { method: 'POST', body: JSON.stringify({ name, description: desc, provider_name: providerName, model }) });
+            if (res.content) { document.getElementById('new-tool-content').value = res.content; showToast('✅ Content generated!', 'success'); }
+            else { showToast('❌ No content returned', 'error'); }
+        } catch (e) { showToast('❌ ' + e.message, 'error'); }
+        finally { btn.textContent = '🤖 Generate'; btn.disabled = false; }
     }
 
     // ── Policy ─────────────────────────────────────────────────
@@ -465,6 +533,27 @@
     async function savePolicy() {
         try { await api('/admin/policy/policy', { method: 'PUT', body: JSON.stringify(collectPolicy()) }); showToast('✅ Policy saved!', 'success'); }
         catch (e) { showToast('❌ ' + e.message, 'error'); }
+    }
+
+    function enableAllSkills() {
+        skillsData.forEach(s => s.enabled = true);
+        document.getElementById('skills-count').textContent = skillsData.length;
+        resetAndRender();
+    }
+    function disableAllSkills() {
+        skillsData.forEach(s => s.enabled = false);
+        document.getElementById('skills-count').textContent = 0;
+        resetAndRender();
+    }
+    function enableAllTools() {
+        toolsData.forEach(t => t.enabled = true);
+        document.getElementById('tools-count').textContent = toolsData.length;
+        renderTools();
+    }
+    function disableAllTools() {
+        toolsData.forEach(t => t.enabled = false);
+        document.getElementById('tools-count').textContent = 0;
+        renderTools();
     }
 
     init();
