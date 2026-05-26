@@ -58,7 +58,7 @@
         renderSidebar('affiliate-settings');
         renderSidebarUser(user);
         try {
-            const s = await api('/admin/settings?prefix=affiliate_');
+            const s = await api('/admin/settings/?prefix=affiliate_');
             s.forEach(setting => {
                 const el = document.getElementById('aff-' + setting.key.replace('affiliate_', ''));
                 if (el) el.value = setting.value || el.value;
@@ -76,7 +76,7 @@
                 {key: 'affiliate_cookie_days', value: document.getElementById('aff-cookie-days').value},
             ];
             for (const s of settings) {
-                await api('/admin/settings', {method: 'PUT', body: JSON.stringify({key: s.key, value: s.value})});
+                await api('/admin/settings/', {method: 'PUT', body: JSON.stringify({key: s.key, value: s.value})});
             }
             showToast('✅ Affiliate settings saved!', 'success');
         } catch(e) {

@@ -16,6 +16,7 @@ router = APIRouter()
 
 
 @router.get("/")
+@router.get("")
 async def get_all_settings(
     admin: Client = Depends(get_current_admin),
     db: AsyncSession = Depends(get_db),
@@ -35,6 +36,7 @@ async def get_all_settings(
 
 
 @router.put("/")
+@router.put("")
 async def update_setting(
     data: SettingUpdate,
     admin: Client = Depends(get_current_admin),

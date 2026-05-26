@@ -94,7 +94,7 @@
 
     async function loadSettings() {
         try {
-            const s = await api('/admin/settings');
+            const s = await api('/admin/settings/');
             s.forEach(setting => {
                 const inputId = Object.keys(SETTING_KEYS).find(k => SETTING_KEYS[k].key === setting.key);
                 if (inputId && document.getElementById(inputId)) {
@@ -112,7 +112,7 @@
             for (const [inputId, cfg] of Object.entries(SETTING_KEYS)) {
                 const val = document.getElementById(inputId).value.trim();
                 if (val) {
-                    await api('/admin/settings', { method: 'PUT', body: JSON.stringify({
+                    await api('/admin/settings/', { method: 'PUT', body: JSON.stringify({
                         key: cfg.key,
                         value: val,
                         encrypted: cfg.encrypted,
