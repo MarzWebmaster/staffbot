@@ -7,6 +7,7 @@ from typing import Optional
 from app.database import get_db
 from app.models.client import Client
 from app.models.package import Package
+from app.models.llm_provider import PackageProvider
 from app.schemas.admin import PackageCreate, PackageUpdate
 from app.middleware.auth import get_current_admin
 from app.services.docker_service import DockerService
@@ -220,15 +221,20 @@ async def delete_package(
     admin: Client = Depends(get_current_admin),
     db: AsyncSession = Depends(get_db),
 ):
-    """Soft-delete a package (set inactive)."""
+    """Hard-delete a package and its provider assignments."""
     result = await db.execute(select(Package).where(Package.id == package_id))
     pkg = result.scalar_one_or_none()
     if not pkg:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Package not found")
 
-    pkg.is_active = False
+    # Delete package-provider assignments first (FK constraint)
+    from sqlalchemy import delete as sqla_delete
+    await db.execute(sqla_delete(PackageProvider).where(PackageProvider.package_id == package_id))
+
+    name = pkg.name
+    await db.delete(pkg)
     await db.commit()
-    return {"message": f"Package '{pkg.name}' deactivated"}
+    return {"message": f"Package '{name}' permanently deleted"}
 
 
 # ── Helpers ────────────────────────────────────────────
