@@ -41,6 +41,7 @@ class PackageCreate(BaseModel):
     sort_order: int = 0
     trial_days: int = 0
     is_public: bool = True
+    badge: Optional[str] = None
 
 
 class PackageUpdate(BaseModel):
@@ -61,6 +62,7 @@ class PackageUpdate(BaseModel):
     is_active: Optional[bool] = None
     trial_days: Optional[int] = None
     is_public: Optional[bool] = None
+    badge: Optional[str] = None
 
 
 class SettingUpdate(BaseModel):

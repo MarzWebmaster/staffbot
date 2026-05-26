@@ -29,4 +29,5 @@ class Package(Base):
     trial_days = Column(Integer, default=0)
     is_public = Column(Boolean, default=True)
     is_active = Column(Boolean, default=True)
+    badge = Column(String(50), nullable=True)
     created_at = Column(DateTime, default=datetime.now)

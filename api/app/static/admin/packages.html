@@ -17,6 +17,9 @@
         .public-badge { font-size: 11px; padding: 3px 10px; border-radius: 12px; font-weight: 500; }
         .public-badge.public { background: rgba(34,197,94,0.15); color: #22c55e; }
         .public-badge.private { background: rgba(239,68,68,0.15); color: #ef4444; }
+        .pkg-badge-tag { font-size: 11px; font-weight: 600; padding: 3px 10px; border-radius: 6px; text-transform: uppercase; letter-spacing: 0.5px; }
+        .badge-popular { background: linear-gradient(135deg, #3b82f6, #8b5cf6); color: #fff; }
+        .badge-best { background: linear-gradient(135deg, #f59e0b, #ef4444); color: #fff; }
     </style>
 </head>
 <body>
@@ -50,6 +53,19 @@
                     <div class="form-group"><label>Monthly Price (RM)</label><input type="number" class="form-input" id="pkgPrice" step="0.01" required></div>
                 </div>
                 
+                <div style="border-top:1px solid var(--border);margin:12px 0;padding-top:12px">
+                    <p style="font-size:12px;font-weight:600;margin-bottom:8px;color:var(--text-light);text-transform:uppercase">🏷️ Homepage Badge</p>
+                    <div style="display:flex;gap:16px;align-items:center">
+                        <div class="form-group" style="flex:1">
+                            <select class="form-input" id="pkgBadge">
+                                <option value="">— None —</option>
+                                <option value="most_popular">🌟 Most Popular</option>
+                                <option value="best_choice">🏆 Best Choice</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
                 <div style="border-top:1px solid var(--border);margin:12px 0;padding-top:12px">
                     <p style="font-size:12px;font-weight:600;margin-bottom:8px;color:var(--text-light);text-transform:uppercase">🧪 Trial & Visibility</p>
                     <div style="display:flex;gap:16px;align-items:center">
@@ -134,7 +150,6 @@
     }
 
     function renderCategoryCheckboxes() {
-        // Skills
         document.getElementById('skillsCheckboxes').innerHTML = skillCategories.map(c => {
             const checked = selectedSkills.includes(c.id);
             return '<label class="cat-checkbox' + (checked ? ' checked' : '') + '" onclick="toggleSkill(' + c.id + ', this)">' +
@@ -144,7 +159,6 @@
             '</label>';
         }).join('');
 
-        // Tools
         document.getElementById('toolsCheckboxes').innerHTML = toolCategories.map(c => {
             const checked = selectedTools.includes(c.id);
             return '<label class="cat-checkbox' + (checked ? ' checked' : '') + '" onclick="toggleTool(' + c.id + ', this)">' +
@@ -181,6 +195,7 @@
         document.getElementById('pkgStorage').value = '10';
         document.getElementById('pkgTrialDays').value = '0';
         document.getElementById('pkgVisibility').value = 'true';
+        document.getElementById('pkgBadge').value = '';
         document.getElementById('pkgDesc').value = '';
         document.getElementById('pkgFeatures').value = '';
         document.getElementById('pkgSort').value = '0';
@@ -205,6 +220,7 @@
         document.getElementById('pkgStorage').value = pkg.storage_limit_gb || 10;
         document.getElementById('pkgTrialDays').value = pkg.trial_days || 0;
         document.getElementById('pkgVisibility').value = pkg.is_public ? 'true' : 'false';
+        document.getElementById('pkgBadge').value = pkg.badge || '';
         document.getElementById('pkgDesc').value = pkg.description || '';
         document.getElementById('pkgFeatures').value = (pkg.features || []).join('\n');
         document.getElementById('pkgSort').value = pkg.sort_order || 0;
@@ -230,6 +246,7 @@
             storage_limit_gb: parseInt(document.getElementById('pkgStorage').value),
             trial_days: parseInt(document.getElementById('pkgTrialDays').value),
             is_public: document.getElementById('pkgVisibility').value === 'true',
+            badge: document.getElementById('pkgBadge').value || null,
             description: document.getElementById('pkgDesc').value,
             features: document.getElementById('pkgFeatures').value.split('\n').filter(f => f.trim()),
             skill_category_ids: selectedSkills,
@@ -253,6 +270,12 @@
         return false;
     }
 
+    function badgeHtml(badge) {
+        if (badge === 'most_popular') return '<span class="pkg-badge-tag badge-popular">🌟 Most Popular</span>';
+        if (badge === 'best_choice') return '<span class="pkg-badge-tag badge-best">🏆 Best Choice</span>';
+        return '';
+    }
+
     async function loadPackages() {
         try {
             const pkgs = await api('/admin/packages/all');
@@ -261,37 +284,40 @@
                 return;
             }
             document.getElementById('packagesContainer').innerHTML = 
-                '<div class="grid-3">' + pkgs.map(p => '\
-                    <div class="package-card" style="' + (!p.is_active ? 'opacity:0.6' : '') + '">\
-                        <div style="display:flex;justify-content:space-between;align-items:start;margin-bottom:12px">\
-                            <div>\
-                                <h3 style="font-size:18px;margin-bottom:2px">' + (p.display_name || p.name) + '</h3>\
-                                <span style="font-size:12px;color:var(--text-light)">' + p.name + '</span>\
-                            </div>\
-                            <div style="display:flex;gap:6px;align-items:center">\
-                                <span class="public-badge ' + (p.is_public ? 'public' : 'private') + '">' + (p.is_public ? 'Public' : 'Private') + '</span>\
-                                ' + (p.trial_days > 0 ? '<span style="font-size:11px;background:rgba(168,85,247,0.15);color:#a855f7;padding:3px 10px;border-radius:12px">' + p.trial_days + 'd trial</span>' : '') + '\
-                            </div>\
-                        </div>\
-                        <div style="font-size:24px;font-weight:700;margin-bottom:12px">RM' + (p.price_monthly || 0) + '<span style="font-size:14px;font-weight:400;color:var(--text-light)">/month</span></div>\
-                        <div style="font-size:13px;color:var(--text-light);line-height:1.7;margin-bottom:12px">\
-                            <div>🤖 ' + p.bot_limit + ' bot(s) · 👥 ' + (p.sub_ejen_limit || 0) + ' sub ejen</div>\
-                            <div>🔑 ' + (p.managed_tokens || 0).toLocaleString() + ' tokens</div>\
-                            <div style="margin-top:6px;padding-top:6px;border-top:1px solid var(--border);font-size:12px">\
-                                <span style="display:inline-block;background:#EEF2FF;color:#4338CA;padding:2px 8px;border-radius:4px;margin:2px">🖥 ' + (p.cpu_limit || 1) + ' CPU</span>\
-                                <span style="display:inline-block;background:#FEF3C7;color:#92400E;padding:2px 8px;border-radius:4px;margin:2px">💾 ' + (p.memory_limit_mb || 512) + 'MB</span>\
-                                <span style="display:inline-block;background:#D1FAE5;color:#065F46;padding:2px 8px;border-radius:4px;margin:2px">📦 ' + (p.storage_limit_gb || 10) + 'GB</span>\
-                            </div>\
-                            ' + ((p.skill_category_ids || []).length > 0 ? '<div style="font-size:11px;color:rgba(255,255,255,0.4);margin-top:4px">🧠 ' + (p.skill_category_ids || []).length + ' skill categories</div>' : '') + '\
-                            ' + ((p.tool_category_ids || []).length > 0 ? '<div style="font-size:11px;color:rgba(255,255,255,0.4)">🔧 ' + (p.tool_category_ids || []).length + ' tool categories</div>' : '') + '\
-                        </div>\
-                        ' + (p.description ? '<div style="font-size:12px;color:var(--text-light);margin-bottom:12px;font-style:italic">' + p.description + '</div>' : '') + '\
-                        <div style="display:flex;gap:8px;margin-top:auto">\
-                            <button class="btn btn-sm btn-ghost" onclick=\'showEditPackage(' + JSON.stringify(p).replace(/\'/g, "&#39;") + ')\'>✏️ Edit</button>\
-                            <button class="btn btn-sm btn-ghost" onclick="togglePackageActive(" + p.id + "," + !p.is_active + ")>' + (p.is_active ? '🚫' : '✅') + '</button> <button class="btn btn-sm btn-ghost" style="color:#ef4444" onclick="deletePackage(' + p.id + ')">🗑️ Delete</button>\
-                        </div>\
-                    </div>\
-                ').join('') + '</div>';
+                '<div class="grid-3">' + pkgs.map(p => {
+                    const esc = JSON.stringify(p).replace(/'/g, "&#39;");
+                    return '<div class="package-card" style="' + (!p.is_active ? 'opacity:0.6' : '') + '">' +
+                        '<div style="display:flex;justify-content:space-between;align-items:start;margin-bottom:12px">' +
+                            '<div>' +
+                                '<h3 style="font-size:18px;margin-bottom:2px">' + (p.display_name || p.name) + '</h3>' +
+                                '<span style="font-size:12px;color:var(--text-light)">' + p.name + '</span>' +
+                            '</div>' +
+                            '<div style="display:flex;gap:6px;align-items:center">' +
+                                badgeHtml(p.badge) +
+                                '<span class="public-badge ' + (p.is_public ? 'public' : 'private') + '">' + (p.is_public ? 'Public' : 'Private') + '</span>' +
+                                (p.trial_days > 0 ? '<span style="font-size:11px;background:rgba(168,85,247,0.15);color:#a855f7;padding:3px 10px;border-radius:12px">' + p.trial_days + 'd trial</span>' : '') +
+                            '</div>' +
+                        '</div>' +
+                        '<div style="font-size:24px;font-weight:700;margin-bottom:12px">RM' + (p.price_monthly || 0) + '<span style="font-size:14px;font-weight:400;color:var(--text-light)">/month</span></div>' +
+                        '<div style="font-size:13px;color:var(--text-light);line-height:1.7;margin-bottom:12px">' +
+                            '<div>🤖 ' + p.bot_limit + ' bot(s) · 👥 ' + (p.sub_ejen_limit || 0) + ' sub ejen</div>' +
+                            '<div>🔑 ' + (p.managed_tokens || 0).toLocaleString() + ' tokens</div>' +
+                            '<div style="margin-top:6px;padding-top:6px;border-top:1px solid var(--border);font-size:12px">' +
+                                '<span style="display:inline-block;background:#EEF2FF;color:#4338CA;padding:2px 8px;border-radius:4px;margin:2px">🖥 ' + (p.cpu_limit || 1) + ' CPU</span>' +
+                                '<span style="display:inline-block;background:#FEF3C7;color:#92400E;padding:2px 8px;border-radius:4px;margin:2px">💾 ' + (p.memory_limit_mb || 512) + 'MB</span>' +
+                                '<span style="display:inline-block;background:#D1FAE5;color:#065F46;padding:2px 8px;border-radius:4px;margin:2px">📦 ' + (p.storage_limit_gb || 10) + 'GB</span>' +
+                            '</div>' +
+                            ((p.skill_category_ids || []).length > 0 ? '<div style="font-size:11px;color:rgba(255,255,255,0.4);margin-top:4px">🧠 ' + (p.skill_category_ids || []).length + ' skill categories</div>' : '') +
+                            ((p.tool_category_ids || []).length > 0 ? '<div style="font-size:11px;color:rgba(255,255,255,0.4)">🔧 ' + (p.tool_category_ids || []).length + ' tool categories</div>' : '') +
+                        '</div>' +
+                        (p.description ? '<div style="font-size:12px;color:var(--text-light);margin-bottom:12px;font-style:italic">' + p.description + '</div>' : '') +
+                        '<div style="display:flex;gap:8px;margin-top:auto">' +
+                            '<button class="btn btn-sm btn-ghost" onclick=\'showEditPackage(' + esc + ')\'>✏️ Edit</button>' +
+                            '<button class="btn btn-sm btn-ghost" onclick=\'togglePackageActive(' + p.id + ',' + !p.is_active + ')\'>' + (p.is_active ? '🚫' : '✅') + '</button>' +
+                            '<button class="btn btn-sm btn-ghost" style="color:#ef4444" onclick=\'deletePackage(' + p.id + ')\'>🗑️ Delete</button>' +
+                        '</div>' +
+                    '</div>';
+                }).join('') + '</div>';
         } catch(e) {
             document.getElementById('packagesContainer').innerHTML = '<p style="color:#ef4444">Failed to load packages: ' + (e.message || 'Unknown error') + '</p>';
         }

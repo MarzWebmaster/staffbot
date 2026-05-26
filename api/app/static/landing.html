@@ -61,6 +61,7 @@
         .plan { background: white; border-radius: 16px; padding: 32px; border: 1px solid var(--border); position: relative; }
         .plan.featured { border: 2px solid var(--gold); transform: scale(1.03); }
         .badge { position: absolute; top: -12px; left: 50%; transform: translateX(-50%); background: var(--gold); color: var(--navy); padding: 4px 16px; border-radius: 20px; font-size: 12px; font-weight: 700; }
+        .badge-best { background: linear-gradient(135deg, #f59e0b, #ef4444); color: #fff; }
         .plan h3 { font-size: 20px; margin-bottom: 8px; }
         .price { font-size: 36px; font-weight: 800; margin-bottom: 8px; }
         .price span { font-size: 14px; font-weight: 400; color: var(--muted); }
@@ -484,12 +485,14 @@ async function loadPublicPackages() {
         
         const plansDiv = document.getElementById('pricingPlans');
         plansDiv.innerHTML = pkgs.map((p, i) => {
-            const isFeatured = i === 1;
+            const isFeatured = p.badge === 'most_popular' || p.badge === 'best_choice';
+            const badgeLabel = p.badge === 'most_popular' ? 'Most Popular' : (p.badge === 'best_choice' ? 'Best Choice' : '');
+            const badgeClass = p.badge === 'best_choice' ? 'badge badge-best' : 'badge';
             const features = (p.features || []).slice(0, 5);
             const skillCount = (p.skill_category_ids || []).length;
             const toolCount = (p.tool_category_ids || []).length;
             return '<div class="plan' + (isFeatured ? ' featured' : '') + '">' +
-                (isFeatured ? '<div class="badge">Most Popular</div>' : '') +
+                (badgeLabel ? '<div class="' + badgeClass + '">' + badgeLabel + '</div>' : '') +
                 (p.trial_days > 0 ? '<div style="text-align:center;margin-bottom:8px"><span style="background:rgba(168,85,247,0.12);color:#a855f7;padding:4px 12px;border-radius:12px;font-size:12px;font-weight:600">' + p.trial_days + ' Days Free Trial</span></div>' : '') +
                 '<h3>' + (p.display_name || p.name) + '</h3>' +
                 '<div class="price">RM' + (p.price_monthly || 0) + ' <span>/month</span></div>' +

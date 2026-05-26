@@ -96,6 +96,7 @@ async def create_package(
         is_active=True,
         trial_days=data.trial_days,
         is_public=data.is_public,
+        badge=data.badge,
     )
     db.add(pkg)
     await db.commit()
@@ -263,7 +264,9 @@ def _pkg_to_dict(pkg: Package, admin: bool = False) -> dict:
             "sort_order": pkg.sort_order,
             "is_active": pkg.is_active,
             "trial_days": pkg.trial_days or 0,
+            "badge": pkg.badge,
             "is_public": pkg.is_public if pkg.is_public is not None else True,
+            "badge": pkg.badge,
         })
     return data
 
@@ -298,6 +301,7 @@ async def get_public_packages(
             "skill_category_ids": pkg.skill_category_ids or [],
             "tool_category_ids": pkg.tool_category_ids or [],
             "trial_days": pkg.trial_days or 0,
+            "badge": pkg.badge,
             "sort_order": pkg.sort_order,
         })
     return data
