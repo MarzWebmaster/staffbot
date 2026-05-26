@@ -75,6 +75,47 @@ async def list_affiliates(
     return response
 
 
+@router.get("/leaderboard")
+async def get_leaderboard(
+    limit: int = 20,
+    admin: Client = Depends(get_current_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Get full affiliate leaderboard (admin sees everything)."""
+    result = await db.execute(
+        select(Affiliate)
+        .where(Affiliate.total_earnings > 0)
+        .order_by(Affiliate.total_earnings.desc())
+        .limit(limit)
+    )
+    affiliates = result.scalars().all()
+
+    entries = []
+    for rank, aff in enumerate(affiliates, 1):
+        client_data = None
+        if aff.client_id:
+            c_result = await db.execute(select(Client).where(Client.id == aff.client_id))
+            client_data = c_result.scalar_one_or_none()
+
+        name = client_data.name if client_data else "Unknown"
+        # Mask name: show first letter + *** + last letter if long enough
+        if len(name) > 3:
+            masked = f"{name[0]}***{name[-1]}"
+        elif len(name) > 1:
+            masked = f"{name[0]}***"
+        else:
+            masked = "***"
+
+        entries.append({
+            "rank": rank,
+            "name_masked": masked,
+            "total_earnings": aff.total_earnings,
+            "total_referrals": aff.total_referrals,
+            "commission_rate": aff.commission_rate,
+        })
+
+    return {"entries": entries, "total_affiliates": len(entries)}
+
 @router.get("/{affiliate_id}", response_model=AffiliateProfileResponse)
 async def get_affiliate(
     affiliate_id: int,
@@ -302,44 +343,3 @@ async def get_affiliate_stats(
 
 
 # ── Leaderboard ────────────────────────────────────────────────────
-
-@router.get("/leaderboard")
-async def get_leaderboard(
-    limit: int = 20,
-    admin: Client = Depends(get_current_admin),
-    db: AsyncSession = Depends(get_db),
-):
-    """Get full affiliate leaderboard (admin sees everything)."""
-    result = await db.execute(
-        select(Affiliate)
-        .where(Affiliate.total_earnings > 0)
-        .order_by(Affiliate.total_earnings.desc())
-        .limit(limit)
-    )
-    affiliates = result.scalars().all()
-
-    entries = []
-    for rank, aff in enumerate(affiliates, 1):
-        client_data = None
-        if aff.client_id:
-            c_result = await db.execute(select(Client).where(Client.id == aff.client_id))
-            client_data = c_result.scalar_one_or_none()
-
-        name = client_data.name if client_data else "Unknown"
-        # Mask name: show first letter + *** + last letter if long enough
-        if len(name) > 3:
-            masked = f"{name[0]}***{name[-1]}"
-        elif len(name) > 1:
-            masked = f"{name[0]}***"
-        else:
-            masked = "***"
-
-        entries.append({
-            "rank": rank,
-            "name_masked": masked,
-            "total_earnings": aff.total_earnings,
-            "total_referrals": aff.total_referrals,
-            "commission_rate": aff.commission_rate,
-        })
-
-    return {"entries": entries, "total_affiliates": len(entries)}

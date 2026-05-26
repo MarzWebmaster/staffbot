@@ -240,3 +240,77 @@ async def get_system_health(
         server_b_status=server_b_status,
         uptime=0.0,  # TODO: track app start time
     )
+
+
+@router.get("/usage/tokens")
+async def get_chart_token_usage(
+    admin: Client = Depends(get_current_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Get token usage for dashboard chart (7 days)."""
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    week_ago = now - timedelta(days=7)
+    
+    from sqlalchemy import text
+    
+    result = await db.execute(
+        text("""
+            SELECT DATE(created_at) AS day, SUM(total_tokens) AS tokens
+            FROM token_usage_log
+            WHERE created_at >= :start
+            GROUP BY DATE(created_at)
+            ORDER BY day
+        """),
+        {"start": week_ago}
+    )
+    rows = result.all()
+    
+    labels = []
+    values = []
+    for row in rows:
+        labels.append(row.day.strftime("%b %d") if row.day else "N/A")
+        values.append(row.tokens or 0)
+    
+    return {"labels": labels, "values": values}
+
+
+@router.get("/activity")
+async def get_recent_activity(
+    admin: Client = Depends(get_current_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Get recent user activity for dashboard."""
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    week_ago = now - timedelta(days=7)
+    
+    # Get recent registrations
+    users_result = await db.execute(
+        select(Client).order_by(Client.created_at.desc()).limit(5)
+    )
+    users = users_result.scalars().all()
+    
+    # Get recent token usage
+    usage_result = await db.execute(
+        select(TokenUsageLog).order_by(TokenUsageLog.created_at.desc()).limit(5)
+    )
+    usage_logs = usage_result.scalars().all()
+    
+    activities = []
+    for u in users:
+        activities.append({
+            "type": "user_registered",
+            "description": f"User {u.name} ({u.email}) registered",
+            "timestamp": u.created_at.isoformat() if u.created_at else None,
+        })
+    
+    for log in usage_logs:
+        activities.append({
+            "type": "token_usage",
+            "description": f"Used {log.total_tokens} tokens via {log.provider or 'unknown'}",
+            "timestamp": log.created_at.isoformat() if log.created_at else None,
+        })
+    
+    # Sort by timestamp descending
+    activities.sort(key=lambda a: a["timestamp"] or "", reverse=True)
+    
+    return activities[:10]

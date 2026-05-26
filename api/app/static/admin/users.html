@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Users — StaffBot.my Admin</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="stylesheet" href="/static/css/app.css?v=1779706646">
+    <link rel="stylesheet" href="/static/css/app.css?v=1779798256">
     <style>
         .status-badge { padding: 3px 10px; border-radius: 12px; font-size: 12px; font-weight: 500; display: inline-block; }
         .status-badge.active { background: rgba(34,197,94,0.15); color: #22c55e; }
@@ -21,7 +21,7 @@
     <div class="app-layout">
         <div class="sidebar" style="background:#111827">
             <div class="sidebar-brand"><h2>StaffBot.my</h2><span>Admin Panel</span></div>
-            <nav id="sidebar-nav"></nav>
+            <nav class="sidebar-nav" id="sidebar-nav"></nav>
             <div id="sidebar-user" style="padding:16px 20px;border-top:1px solid rgba(255,255,255,0.1);margin-top:auto"></div>
         </div>
         <div class="main-content">
@@ -85,7 +85,7 @@
         </div>
     </div>
     <div id="toast-container" class="toast-container"></div>
-    <script src="/static/js/app.js?v=1779706646"></script>
+    <script src="/static/js/app.js?v=1779798256"></script>
     <script>
     let allUsers = [];
     const PAGE_SIZE = 5;
