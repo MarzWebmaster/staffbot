@@ -84,14 +84,15 @@ async def delete_topup_package(
     admin: Client = Depends(get_current_admin),
     db: AsyncSession = Depends(get_db),
 ):
-    """Soft-delete a top-up package."""
+    """Hard-delete a top-up package."""
     result = await db.execute(select(TokenTopupPackage).where(TokenTopupPackage.id == pkg_id))
     pkg = result.scalar_one_or_none()
     if not pkg:
         raise HTTPException(status_code=404, detail="Package not found")
-    pkg.is_active = False
+    name = pkg.name
+    await db.delete(pkg)
     await db.commit()
-    return {"message": "Top-up package deactivated"}
+    return {"message": f"Top-up package '{name}' permanently deleted"}
 
 
 @router.get("/history", response_model=list[dict])

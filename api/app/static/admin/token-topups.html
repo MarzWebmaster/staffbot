@@ -84,6 +84,7 @@
                     <div style="display:flex;gap:8px;margin-top:12px">
                         <button class="btn btn-secondary btn-sm" style="flex:1" onclick="editPackage(${p.id})">Edit</button>
                         <button class="btn btn-${p.is_active ? 'danger' : 'success'} btn-sm" onclick="togglePackage(${p.id},${!p.is_active})">${p.is_active ? 'Deactivate' : 'Activate'}</button>
+                        <button class="btn btn-danger btn-sm" onclick="deletePackage(${p.id},'${p.name.replace(/'/g,"\\'")}')" title="Delete permanently">🗑️</button>
                     </div>
                 </div>
             `).join('');
@@ -155,6 +156,17 @@
             showToast(activate ? 'Activated' : 'Deactivated', 'success');
             loadPackages();
         } catch {}
+    }
+
+    async function deletePackage(id, name) {
+        if (!confirm(`⚠️ DELETE "${name}" permanently?\n\nThis action cannot be undone.`)) return;
+        try {
+            await api(TOPUP_BASE + id, { method: 'DELETE' });
+            showToast(`"${name}" deleted`, 'success');
+            loadPackages();
+        } catch (e) {
+            showToast('Failed to delete: ' + (e.message || 'Unknown error'), 'error');
+        }
     }
 
     init();
