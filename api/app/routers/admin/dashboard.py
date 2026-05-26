@@ -44,7 +44,7 @@ async def get_dashboard_stats(
 
     # Pending deployments
     pending_result = await db.execute(
-        select(func.count(Client.id)).where(Client.status == "pending")
+        select(func.count(Container.id)).where(Container.status == "pending")
     )
     pending_deployments = pending_result.scalar() or 0
 

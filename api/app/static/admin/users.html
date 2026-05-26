@@ -190,7 +190,7 @@
 
     async function loadUsers() {
         try {
-            let url = '/admin/users/?';
+            let url = '/admin/users?';
             const search = document.getElementById('searchUser').value.trim();
             const status = document.getElementById('statusFilter').value;
             if (search) url += 'search=' + encodeURIComponent(search) + '&';
