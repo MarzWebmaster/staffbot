@@ -127,6 +127,8 @@
         if (!user) return;
         renderSidebar('providers');
         renderSidebarUser(user);
+        // Preload packages for name lookup
+        try { _packages = await api('/admin/packages/'); } catch { _packages = []; }
         await loadProviders();
         await loadAssignments();
     }
@@ -164,10 +166,13 @@
                 tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--text-light)">No assignments yet.</td></tr>';
                 return;
             }
+            // Build package ID → name lookup
+            const pkgMap = {};
+            for (const pkg of _packages) { pkgMap[pkg.id] = pkg.display_name; }
             tbody.innerHTML = assigns.map(a => `
                 <tr>
                     <td>${a.provider ? a.provider.display_name : 'ID: '+a.provider_id}</td>
-                    <td>${a.pkg_name || 'Package #'+a.package_id}</td>
+                    <td>${pkgMap[a.package_id] || 'Package #'+a.package_id}</td>
                     <td>${a.token_quota > 0 ? Number(a.token_quota).toLocaleString() : 'Package default'}</td>
                     <td>${a.is_available ? '<span class="status-badge status-active">Yes</span>' : '<span class="status-badge status-error">No</span>'}</td>
                     <td>
