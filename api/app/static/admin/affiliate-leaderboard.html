@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="ms">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Leaderboard — StaffBot.my</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="/static/css/app.css?v=1779798256">
+</head>
+<body>
+    <button class="sidebar-toggle" onclick="toggleSidebar()">☰</button>
+    <div class="sidebar-overlay" onclick="toggleSidebar()"></div>
+    <div class="app-layout">
+        <div class="sidebar" style="background:#111827">
+            <div class="sidebar-brand"><h2>StaffBot.my</h2><span>Admin Panel</span></div>
+            <nav class="sidebar-nav" id="sidebar-nav"></nav>
+            <div id="sidebar-user" style="padding:16px 20px;border-top:1px solid rgba(255,255,255,0.1);margin-top:auto"></div>
+        </div>
+        <div class="main-content">
+            <div class="topbar">
+                <h1>🏆 Leaderboard</h1>
+            </div>
+
+            <div class="card">
+                <div class="card-header"><h3>🏆 Top Affiliates</h3></div>
+                <div style="overflow-x:auto">
+                    <table class="data-table" id="leaderboardTable">
+                        <thead><tr><th>#</th><th>Name</th><th>Total Earnings</th><th>Referrals</th><th>Rate</th></tr></thead>
+                        <tbody id="leaderboardBody"><tr><td colspan="5" style="text-align:center;color:var(--text-light)">Loading...</td></tr></tbody>
+                    </table>
+                </div>
+            </div>
+    <script>
+    async function init() {
+        const user = await checkAdminAuth('/admin/login.html');
+        if (!user) return;
+        renderSidebar('affiliates');
+        renderSidebarUser(user);
+        await loadLeaderboard();
+    }
+
+    async function loadLeaderboard() {
+        try {
+            const lb = await api('/admin/affiliates/leaderboard?limit=20');
+            const tbody = document.getElementById('leaderboardBody');
+            if (!lb.entries.length) {
+                tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--text-light)">Tiada data leaderboard.</td></tr>';
+                return;
+            }
+            tbody.innerHTML = lb.entries.map(e => `
+                <tr>
+                    <td><strong>#${e.rank}</strong></td>
+                    <td>${e.name_masked}</td>
+                    <td><strong>RM${(e.total_earnings||0).toFixed(2)}</strong></td>
+                    <td>${e.total_referrals||0}</td>
+                    <td>${e.commission_rate}%</td>
+                </tr>
+            `).join('');
+        } catch {}
+    }
+    </script>    </div>
+    <div id="toast-container" class="toast-container"></div>
+    <script src="/static/js/app.js?v=1779798256"></script>
+    <script>
+    init();
+    </script>
+</body>
+</html>

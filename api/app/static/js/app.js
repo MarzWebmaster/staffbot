@@ -142,9 +142,9 @@ function renderSidebar(active) {
             href: 'affiliates.html',
             icon: '🤝', label: 'Affiliate', id: 'affiliate', submenu: [
                 { href: 'affiliates.html', label: '📊 Dashboard', id: 'affiliates' },
-                { href: 'affiliates.html#affiliate-list', label: '📋 Affiliates List', id: 'affiliate-list' },
-                { href: 'affiliates.html#payout-requests', label: '💰 Payouts', id: 'payout-requests' },
-                { href: 'affiliates.html#leaderboard', label: '🏆 Leaderboard', id: 'leaderboard' },
+                { href: 'affiliate-list.html', label: '📋 Affiliates List', id: 'affiliate-list' },
+                { href: 'affiliate-payouts.html', label: '💰 Payouts', id: 'payout-requests' },
+                { href: 'affiliate-leaderboard.html', label: '🏆 Leaderboard', id: 'leaderboard' },
                 { href: 'affiliate-settings.html', label: '⚙️ Settings', id: 'affiliate-settings' }
             ]
         },

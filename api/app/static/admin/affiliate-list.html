@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="ms">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Affiliates List — StaffBot.my</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="/static/css/app.css?v=1779798256">
+</head>
+<body>
+    <button class="sidebar-toggle" onclick="toggleSidebar()">☰</button>
+    <div class="sidebar-overlay" onclick="toggleSidebar()"></div>
+    <div class="app-layout">
+        <div class="sidebar" style="background:#111827">
+            <div class="sidebar-brand"><h2>StaffBot.my</h2><span>Admin Panel</span></div>
+            <nav class="sidebar-nav" id="sidebar-nav"></nav>
+            <div id="sidebar-user" style="padding:16px 20px;border-top:1px solid rgba(255,255,255,0.1);margin-top:auto"></div>
+        </div>
+        <div class="main-content">
+            <div class="topbar">
+                <h1>📋 Affiliates List</h1>
+            </div>
+
+            <div class="card">
+                <div class="card-header">
+                    <h3>Senarai Affiliates</h3>
+                    <div style="display:flex;gap:8px">
+                        <select id="statusFilter" class="form-control" style="width:auto" onchange="loadAffiliates()">
+                            <option value="">Semua Status</option>
+                            <option value="active">Active</option>
+                            <option value="suspended">Suspended</option>
+                        </select>
+                        <input type="text" id="searchInput" class="form-control" placeholder="Cari..." style="width:200px" onkeyup="loadAffiliates()">
+                    </div>
+                </div>
+                <div style="overflow-x:auto">
+                    <table class="data-table" id="affiliatesTable">
+                        <thead><tr><th>Affiliate</th><th>Referral Code</th><th>Earnings</th><th>Referrals</th><th>Clicks</th><th>Rate</th><th>Status</th><th>Tindakan</th></tr></thead>
+                        <tbody id="affiliatesBody"><tr><td colspan="8" style="text-align:center;color:var(--text-light)">Loading...</td></tr></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Edit Affiliate Modal -->
+            <div class="modal-overlay" id="editAffiliateModal">
+                <div class="modal">
+                    <div class="modal-header"><h3>Edit Affiliate</h3><button class="modal-close" onclick="closeModal('editAffiliateModal')">&times;</button></div>
+                    <form onsubmit="updateAffiliate(event)">
+                        <div class="modal-body">
+                            <input type="hidden" id="editAffId">
+                            <div class="form-group"><label>Commission Rate (%)</label><input type="number" id="editRate" class="form-control" step="0.1" min="0" max="100"></div>
+                            <div class="form-group"><label>Min Payout (RM)</label><input type="number" id="editMinPayout" class="form-control" step="1"></div>
+                            <div class="form-group"><label><input type="checkbox" id="editAutoApprove"> Auto Approve Referrals</label></div>
+                            <div class="form-group"><label>Status</label><select id="editStatus" class="form-control"><option value="active">Active</option><option value="suspended">Suspended</option></select></div>
+                            <div class="form-group"><label>Notes</label><textarea id="editNotes" class="form-control" rows="2"></textarea></div>
+                        </div>
+                        <div class="modal-footer"><button type="button" class="btn btn-ghost" onclick="closeModal('editAffiliateModal')">Batal</button><button type="submit" class="btn btn-primary">Simpan</button></div>
+                    </form>
+                </div>
+            </div>
+    <script>
+    async function init() {
+        const user = await checkAdminAuth('/admin/login.html');
+        if (!user) return;
+        renderSidebar('affiliates');
+        renderSidebarUser(user);
+        await loadAffiliates();
+    }
+
+    async function loadAffiliates() {
+        try {
+            const search = document.getElementById('searchInput').value;
+            const status = document.getElementById('statusFilter').value;
+            let url = '/admin/affiliates/?limit=100';
+            if (status) url += '&status_filter=' + status;
+            const affs = await api(url);
+            const tbody = document.getElementById('affiliatesBody');
+            if (!affs.length) {
+                tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--text-light)">Tiada affiliate.</td></tr>';
+                return;
+            }
+            tbody.innerHTML = affs.map(a => `
+                <tr>
+                    <td><strong>${a.client_name||'Unknown'}</strong><br><small style="color:var(--text-light)">ID: ${a.client_id}</small></td>
+                    <td><code>${a.referral_code}</code></td>
+                    <td><strong>RM${(a.total_earnings||0).toFixed(2)}</strong><br><small style="color:var(--text-light)">Pending: RM${(a.pending_earnings||0).toFixed(2)}</small></td>
+                    <td>${a.total_referrals||0}</td>
+                    <td>${a.total_clicks||0}</td>
+                    <td>${a.commission_rate}%</td>
+                    <td>${a.status === 'active' ? '<span class="status-badge status-active">Active</span>' : '<span class="status-badge status-error">Suspended</span>'}</td>
+                    <td><button class="btn btn-sm btn-ghost" onclick="openEditAffiliate(${a.id})">✏️</button></td>
+                </tr>
+            `).join('');
+        } catch {}
+    }
+
+    function openEditAffiliate(id) {
+        api('/admin/affiliates/' + id).then(a => {
+            document.getElementById('editAffId').value = a.id;
+            document.getElementById('editRate').value = a.commission_rate;
+            document.getElementById('editMinPayout').value = a.min_payout;
+            document.getElementById('editAutoApprove').checked = a.is_auto_approve;
+            document.getElementById('editStatus').value = a.status;
+            document.getElementById('editNotes').value = a.notes||'';
+            openModal('editAffiliateModal');
+        });
+    }
+
+    async function updateAffiliate(e) {
+        e.preventDefault();
+        const id = document.getElementById('editAffId').value;
+        try {
+            await api('/admin/affiliates/' + id, {
+                method: 'PUT',
+                body: JSON.stringify({
+                    commission_rate: parseFloat(document.getElementById('editRate').value),
+                    min_payout: parseFloat(document.getElementById('editMinPayout').value),
+                    is_auto_approve: document.getElementById('editAutoApprove').checked,
+                    status: document.getElementById('editStatus').value,
+                    notes: document.getElementById('editNotes').value,
+                }),
+            });
+            showToast('Affiliate updated', 'success');
+            closeModal('editAffiliateModal');
+            await loadAffiliates();
+        } catch {}
+    }
+    </script>    </div>
+    <div id="toast-container" class="toast-container"></div>
+    <script src="/static/js/app.js?v=1779798256"></script>
+    <script>
+    init();
+    </script>
+</body>
+</html>
