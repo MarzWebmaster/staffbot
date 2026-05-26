@@ -39,6 +39,8 @@ class PackageCreate(BaseModel):
     skill_category_ids: list = []
     tool_category_ids: list = []
     sort_order: int = 0
+    trial_days: int = 0
+    is_public: bool = True
 
 
 class PackageUpdate(BaseModel):
@@ -57,6 +59,8 @@ class PackageUpdate(BaseModel):
     tool_category_ids: Optional[list] = None
     sort_order: Optional[int] = None
     is_active: Optional[bool] = None
+    trial_days: Optional[int] = None
+    is_public: Optional[bool] = None
 
 
 class SettingUpdate(BaseModel):

@@ -93,6 +93,8 @@ async def create_package(
         tool_category_ids=data.tool_category_ids,
         sort_order=data.sort_order,
         is_active=True,
+        trial_days=data.trial_days,
+        is_public=data.is_public,
     )
     db.add(pkg)
     await db.commit()
@@ -254,5 +256,42 @@ def _pkg_to_dict(pkg: Package, admin: bool = False) -> dict:
         data.update({
             "sort_order": pkg.sort_order,
             "is_active": pkg.is_active,
+            "trial_days": pkg.trial_days or 0,
+            "is_public": pkg.is_public if pkg.is_public is not None else True,
+        })
+    return data
+
+# Public endpoints (no auth required)
+public_router = APIRouter()
+
+@public_router.get("/public")
+async def get_public_packages(
+    db: AsyncSession = Depends(get_db),
+):
+    """Get public packages — no auth required. Used by landing page."""
+    result = await db.execute(
+        select(Package).where(Package.is_public == True, Package.is_active == True).order_by(Package.sort_order)
+    )
+    packages = result.scalars().all()
+    data = []
+    for pkg in packages:
+        data.append({
+            "id": pkg.id,
+            "name": pkg.name,
+            "display_name": pkg.display_name or pkg.name,
+            "price_monthly": pkg.price_monthly,
+            "price_yearly": pkg.price_yearly,
+            "description": pkg.description or "",
+            "features": pkg.features or [],
+            "bot_limit": pkg.bot_limit,
+            "sub_ejen_limit": pkg.sub_ejen_limit,
+            "managed_tokens": pkg.managed_tokens,
+            "cpu_limit": pkg.cpu_limit,
+            "memory_limit_mb": pkg.memory_limit_mb,
+            "storage_limit_gb": pkg.storage_limit_gb,
+            "skill_category_ids": pkg.skill_category_ids or [],
+            "tool_category_ids": pkg.tool_category_ids or [],
+            "trial_days": pkg.trial_days or 0,
+            "sort_order": pkg.sort_order,
         })
     return data

@@ -26,5 +26,7 @@ class Package(Base):
     skill_category_ids = Column(JSON, default=list)
     tool_category_ids = Column(JSON, default=list)
     sort_order = Column(Integer, default=0)
+    trial_days = Column(Integer, default=0)
+    is_public = Column(Boolean, default=True)
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=datetime.now)

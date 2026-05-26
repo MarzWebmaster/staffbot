@@ -6,6 +6,18 @@
     <title>Packages — StaffBot.my Admin</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="/static/css/app.css?v=1779798256">
+    <style>
+        .cat-checkbox { display: flex; align-items: center; gap: 6px; padding: 8px 12px; border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; background: rgba(255,255,255,0.03); cursor: pointer; font-size: 13px; color: rgba(255,255,255,0.8); transition: all 0.2s; }
+        .cat-checkbox:hover { border-color: rgba(59,130,246,0.4); background: rgba(59,130,246,0.08); }
+        .cat-checkbox.checked { border-color: rgba(59,130,246,0.6); background: rgba(59,130,246,0.12); color: #60a5fa; }
+        .cat-checkbox input { display: none; }
+        .cat-id-badge { font-size: 10px; color: rgba(255,255,255,0.3); margin-left: 4px; }
+        .package-card { background: #1e293b; border: 1px solid rgba(255,255,255,0.08); border-radius: 16px; padding: 24px; position: relative; }
+        .package-card:hover { border-color: rgba(59,130,246,0.3); }
+        .public-badge { font-size: 11px; padding: 3px 10px; border-radius: 12px; font-weight: 500; }
+        .public-badge.public { background: rgba(34,197,94,0.15); color: #22c55e; }
+        .public-badge.private { background: rgba(239,68,68,0.15); color: #ef4444; }
+    </style>
 </head>
 <body>
     <button class="sidebar-toggle" onclick="toggleSidebar()">☰</button>
@@ -18,7 +30,7 @@
         </div>
         <div class="main-content">
             <div class="topbar">
-                <h1>Packages</h1>
+                <h1>📦 Packages</h1>
                 <button class="btn btn-primary" onclick="showAddPackage()">+ Add Package</button>
             </div>
             <div id="packagesContainer"><p style="color:var(--text-light)">Loading...</p></div>
@@ -27,28 +39,65 @@
 
     <!-- Add/Edit Package Modal -->
     <div class="modal-overlay" id="packageModal">
-        <div class="modal" style="width:700px">
+        <div class="modal" style="width:800px;max-height:85vh;overflow-y:auto">
             <h3 id="pkgModalTitle">Add Package</h3>
             <form onsubmit="return savePackage(event)">
                 <input type="hidden" id="pkgId">
-                <div class="grid-3">
-                    <div class="form-group"><label>Name</label><input type="text" class="form-input" id="pkgName" required></div>
-                    <div class="form-group"><label>Display Name</label><input type="text" class="form-input" id="pkgDisplay" required></div>
+                
+                <div class="grid-3" style="margin-bottom:12px">
+                    <div class="form-group"><label>Name (key)</label><input type="text" class="form-input" id="pkgName" placeholder="basic" required></div>
+                    <div class="form-group"><label>Display Name</label><input type="text" class="form-input" id="pkgDisplay" placeholder="Basic" required></div>
                     <div class="form-group"><label>Monthly Price (RM)</label><input type="number" class="form-input" id="pkgPrice" step="0.01" required></div>
-                    <div class="form-group"><label>Bot Limit</label><input type="number" class="form-input" id="pkgBots" value="1"></div>
-                    <div class="form-group"><label>Managed Tokens</label><input type="number" class="form-input" id="pkgTokens" value="0"></div>
-                    <div class="form-group"><label>Sort Order</label><input type="number" class="form-input" id="pkgSort" value="0"></div>
                 </div>
-                <div style="border-top:1px solid var(--border);margin:16px 0;padding-top:16px">
-                    <p style="font-size:13px;font-weight:600;margin-bottom:12px;color:var(--text-light)">CONTAINER RESOURCES</p>
-                    <div class="grid-3">
-                        <div class="form-group"><label>CPU Limit (cores)</label><input type="number" class="form-input" id="pkgCpu" value="1" step="0.5" min="0.5" max="8"></div>
-                        <div class="form-group"><label>RAM Limit (MB)</label><input type="number" class="form-input" id="pkgRam" value="512" step="128" min="128"></div>
-                        <div class="form-group"><label>Storage Limit (GB)</label><input type="number" class="form-input" id="pkgStorage" value="10" step="5" min="1"></div>
+                
+                <div style="border-top:1px solid var(--border);margin:12px 0;padding-top:12px">
+                    <p style="font-size:12px;font-weight:600;margin-bottom:8px;color:var(--text-light);text-transform:uppercase">🧪 Trial & Visibility</p>
+                    <div style="display:flex;gap:16px;align-items:center">
+                        <div class="form-group" style="flex:1"><label>Trial Days</label><input type="number" class="form-input" id="pkgTrialDays" value="0" min="0" max="365" placeholder="0 = no trial"></div>
+                        <div class="form-group" style="flex:1">
+                            <label>Visibility</label>
+                            <select class="form-input" id="pkgVisibility">
+                                <option value="true">🌐 Public — Show on website</option>
+                                <option value="false">🔒 Private — Admin only</option>
+                            </select>
+                        </div>
                     </div>
                 </div>
-                <div class="form-group"><label>Description</label><textarea class="form-input" id="pkgDesc" rows="3"></textarea></div>
-                <div class="form-group"><label>Features (one per line)</label><textarea class="form-input" id="pkgFeatures" rows="4" placeholder="Chat with AI&#10;Persistent memory&#10;Google Drive integration"></textarea></div>
+
+                <div style="border-top:1px solid var(--border);margin:12px 0;padding-top:12px">
+                    <p style="font-size:12px;font-weight:600;margin-bottom:8px;color:var(--text-light);text-transform:uppercase">⚙️ Limits</p>
+                    <div class="grid-3">
+                        <div class="form-group"><label>Bot Limit</label><input type="number" class="form-input" id="pkgBots" value="1" min="1"></div>
+                        <div class="form-group"><label>Sub Ejen Limit</label><input type="number" class="form-input" id="pkgSubEjen" value="3" min="0"></div>
+                        <div class="form-group"><label>Managed Tokens</label><input type="number" class="form-input" id="pkgTokens" value="0"></div>
+                    </div>
+                </div>
+
+                <div style="border-top:1px solid var(--border);margin:12px 0;padding-top:12px">
+                    <p style="font-size:12px;font-weight:600;margin-bottom:8px;color:var(--text-light);text-transform:uppercase">🖥 Container Resources</p>
+                    <div class="grid-3">
+                        <div class="form-group"><label>CPU (cores)</label><input type="number" class="form-input" id="pkgCpu" value="1" step="0.5" min="0.5" max="8"></div>
+                        <div class="form-group"><label>RAM (MB)</label><input type="number" class="form-input" id="pkgRam" value="512" step="128" min="128"></div>
+                        <div class="form-group"><label>Storage (GB)</label><input type="number" class="form-input" id="pkgStorage" value="10" step="5" min="1"></div>
+                    </div>
+                </div>
+
+                <!-- Skills Categories -->
+                <div style="border-top:1px solid var(--border);margin:12px 0;padding-top:12px">
+                    <p style="font-size:12px;font-weight:600;margin-bottom:8px;color:var(--text-light);text-transform:uppercase">🧠 Skills Categories <span style="font-weight:400;color:rgba(255,255,255,0.3)">(enable/disable per package)</span></p>
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px" id="skillsCheckboxes"></div>
+                </div>
+
+                <!-- Tools Categories -->
+                <div style="border-top:1px solid var(--border);margin:12px 0;padding-top:12px">
+                    <p style="font-size:12px;font-weight:600;margin-bottom:8px;color:var(--text-light);text-transform:uppercase">🔧 Tools Categories <span style="font-weight:400;color:rgba(255,255,255,0.3)">(enable/disable per package)</span></p>
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px" id="toolsCheckboxes"></div>
+                </div>
+
+                <div class="form-group"><label>Description</label><textarea class="form-input" id="pkgDesc" rows="2"></textarea></div>
+                <div class="form-group"><label>Features (one per line)</label><textarea class="form-input" id="pkgFeatures" rows="4" placeholder="1 AI Agent&#10;WhatsApp + Telegram + Email&#10;5M tokens/month"></textarea></div>
+                <div class="form-group"><label>Sort Order</label><input type="number" class="form-input" id="pkgSort" value="0" min="0"></div>
+
                 <div class="modal-actions">
                     <button type="button" class="btn btn-secondary" onclick="closeModal('packageModal')">Cancel</button>
                     <button type="submit" class="btn btn-primary" id="savePkgBtn">Save</button>
@@ -57,176 +106,205 @@
         </div>
     </div>
 
-    <!-- Apply Results Modal -->
-    <div class="modal-overlay" id="applyResultModal">
-        <div class="modal" style="width:700px;max-height:80vh;overflow-y:auto">
-            <h3 id="applyResultTitle">Apply Resources</h3>
-            <div id="applyResultBody"></div>
-            <div class="modal-actions">
-                <button type="button" class="btn btn-primary" onclick="closeModal('applyResultModal')">Done</button>
-            </div>
-        </div>
-    </div>
-
     <div id="toast-container" class="toast-container"></div>
     <script src="/static/js/app.js?v=1779798256"></script>
     <script>
+    let skillCategories = [];
+    let toolCategories = [];
+    let selectedSkills = [];
+    let selectedTools = [];
+
     async function init() {
         const user = await checkAdminAuth('/admin/login.html');
         if (!user) return;
         renderSidebar('packages');
         renderSidebarUser(user);
+        await loadCategories();
         loadPackages();
     }
 
-    async function loadPackages() {
+    async function loadCategories() {
         try {
-            const pkgs = await api('/admin/packages/all');
-            document.getElementById('packagesContainer').innerHTML = 
-                `<div class="grid-3">${pkgs.map(p => `
-                    <div class="card" style="position:relative;${!p.is_active ? 'opacity:0.6' : ''}">
-                        ${!p.is_active ? '<div style="position:absolute;top:12px;right:12px;font-size:11px;background:var(--border);padding:2px 8px;border-radius:4px">Inactive</div>' : ''}
-                        <h3 style="font-size:18px;margin-bottom:4px">${p.display_name || p.name}</h3>
-                        <div style="font-size:24px;font-weight:700">${formatCurrency(p.price_monthly)}<span style="font-size:14px;font-weight:400;color:var(--text-light)\">/month</span></div>
-                        <div style="margin:12px 0;font-size:13px;color:var(--text-light)">
-                            <div>🤖 ${p.bot_limit} bot(s)</div>
-                            <div>🔑 ${p.managed_tokens} tokens</div>
-                            <div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--border);font-size:12px">
-                                <span style="display:inline-block;background:#EEF2FF;color:#4338CA;padding:2px 8px;border-radius:4px;margin:2px">🖥 ${p.cpu_limit || 1} CPU</span>
-                                <span style="display:inline-block;background:#FEF3C7;color:#92400E;padding:2px 8px;border-radius:4px;margin:2px">💾 ${p.memory_limit_mb || 512}MB RAM</span>
-                                <span style="display:inline-block;background:#D1FAE5;color:#065F46;padding:2px 8px;border-radius:4px;margin:2px">📦 ${p.storage_limit_gb || 10}GB</span>
-                            </div>
-                            ${p.description ? `<div style="margin-top:8px">${p.description}</div>` : ''}
-                        </div>
-                        <div style="display:flex;gap:8px;flex-wrap:wrap">
-                            <button class="btn btn-secondary btn-sm" onclick="editPackage(${p.id})">Edit</button>
-                            <button class="btn btn-${p.is_active ? 'danger' : 'success'} btn-sm" onclick="togglePackage(${p.id},${!p.is_active})">${p.is_active ? 'Deactivate' : 'Activate'}</button>
-                            <button class="btn btn-sm" style="background:#4338CA;color:white" onclick="applyResources(${p.id},'${p.display_name || p.name}')" title="Apply CPU/RAM limits to running containers">
-                                🔄 Apply
-                            </button>
-                        </div>
-                    </div>
-                `).join('')}</div>`;
-        } catch {}
+            const sc = await api('/admin/packages/categories');
+            skillCategories = sc.skill_categories || [];
+            toolCategories = sc.tool_categories || [];
+        } catch(e) {
+            console.log('Failed to load categories:', e);
+        }
+    }
+
+    function renderCategoryCheckboxes() {
+        // Skills
+        document.getElementById('skillsCheckboxes').innerHTML = skillCategories.map(c => {
+            const checked = selectedSkills.includes(c.id);
+            return '<label class="cat-checkbox' + (checked ? ' checked' : '') + '" onclick="toggleSkill(' + c.id + ', this)">' +
+                '<input type="checkbox" value="' + c.id + '"' + (checked ? ' checked' : '') + '>' +
+                c.display_name || c.name +
+                '<span class="cat-id-badge">#' + c.id + '</span>' +
+            '</label>';
+        }).join('');
+
+        // Tools
+        document.getElementById('toolsCheckboxes').innerHTML = toolCategories.map(c => {
+            const checked = selectedTools.includes(c.id);
+            return '<label class="cat-checkbox' + (checked ? ' checked' : '') + '" onclick="toggleTool(' + c.id + ', this)">' +
+                '<input type="checkbox" value="' + c.id + '"' + (checked ? ' checked' : '') + '>' +
+                c.display_name || c.name +
+                '<span class="cat-id-badge">#' + c.id + '</span>' +
+            '</label>';
+        }).join('');
+    }
+
+    function toggleSkill(id, el) {
+        const idx = selectedSkills.indexOf(id);
+        if (idx >= 0) { selectedSkills.splice(idx, 1); el.classList.remove('checked'); }
+        else { selectedSkills.push(id); el.classList.add('checked'); }
+    }
+
+    function toggleTool(id, el) {
+        const idx = selectedTools.indexOf(id);
+        if (idx >= 0) { selectedTools.splice(idx, 1); el.classList.remove('checked'); }
+        else { selectedTools.push(id); el.classList.add('checked'); }
     }
 
     function showAddPackage() {
         document.getElementById('pkgModalTitle').textContent = 'Add Package';
         document.getElementById('pkgId').value = '';
-        ['pkgName','pkgDisplay','pkgPrice','pkgBots','pkgTokens','pkgSort','pkgCpu','pkgRam','pkgStorage','pkgDesc','pkgFeatures'].forEach(id => document.getElementById(id).value = '');
+        document.getElementById('pkgName').value = '';
+        document.getElementById('pkgDisplay').value = '';
+        document.getElementById('pkgPrice').value = '';
+        document.getElementById('pkgBots').value = '1';
+        document.getElementById('pkgSubEjen').value = '3';
+        document.getElementById('pkgTokens').value = '0';
         document.getElementById('pkgCpu').value = '1';
         document.getElementById('pkgRam').value = '512';
         document.getElementById('pkgStorage').value = '10';
+        document.getElementById('pkgTrialDays').value = '0';
+        document.getElementById('pkgVisibility').value = 'true';
+        document.getElementById('pkgDesc').value = '';
+        document.getElementById('pkgFeatures').value = '';
+        document.getElementById('pkgSort').value = '0';
+        selectedSkills = [];
+        selectedTools = [];
+        renderCategoryCheckboxes();
+        document.getElementById('savePkgBtn').textContent = 'Add Package';
         openModal('packageModal');
     }
 
-    async function editPackage(id) {
-        try {
-            const pkgs = await api('/admin/packages/all');
-            const pkg = pkgs.find(p => p.id === id);
-            if (!pkg) return;
-            document.getElementById('pkgModalTitle').textContent = 'Edit Package';
-            document.getElementById('pkgId').value = id;
-            document.getElementById('pkgName').value = pkg.name || '';
-            document.getElementById('pkgDisplay').value = pkg.display_name || '';
-            document.getElementById('pkgPrice').value = pkg.price_monthly || 0;
-            document.getElementById('pkgBots').value = pkg.bot_limit || 1;
-            document.getElementById('pkgTokens').value = pkg.managed_tokens || 0;
-            document.getElementById('pkgSort').value = pkg.sort_order || 0;
-            document.getElementById('pkgCpu').value = pkg.cpu_limit || 1;
-            document.getElementById('pkgRam').value = pkg.memory_limit_mb || 512;
-            document.getElementById('pkgStorage').value = pkg.storage_limit_gb || 10;
-            document.getElementById('pkgDesc').value = pkg.description || '';
-            document.getElementById('pkgFeatures').value = (pkg.features || []).join('\\n');
-            openModal('packageModal');
-        } catch {}
+    function showEditPackage(pkg) {
+        document.getElementById('pkgModalTitle').textContent = 'Edit ' + (pkg.display_name || pkg.name);
+        document.getElementById('pkgId').value = pkg.id;
+        document.getElementById('pkgName').value = pkg.name || '';
+        document.getElementById('pkgDisplay').value = pkg.display_name || '';
+        document.getElementById('pkgPrice').value = pkg.price_monthly || 0;
+        document.getElementById('pkgBots').value = pkg.bot_limit || 1;
+        document.getElementById('pkgSubEjen').value = pkg.sub_ejen_limit || 0;
+        document.getElementById('pkgTokens').value = pkg.managed_tokens || 0;
+        document.getElementById('pkgCpu').value = pkg.cpu_limit || 1;
+        document.getElementById('pkgRam').value = pkg.memory_limit_mb || 512;
+        document.getElementById('pkgStorage').value = pkg.storage_limit_gb || 10;
+        document.getElementById('pkgTrialDays').value = pkg.trial_days || 0;
+        document.getElementById('pkgVisibility').value = pkg.is_public ? 'true' : 'false';
+        document.getElementById('pkgDesc').value = pkg.description || '';
+        document.getElementById('pkgFeatures').value = (pkg.features || []).join('\n');
+        document.getElementById('pkgSort').value = pkg.sort_order || 0;
+        selectedSkills = pkg.skill_category_ids || [];
+        selectedTools = pkg.tool_category_ids || [];
+        renderCategoryCheckboxes();
+        document.getElementById('savePkgBtn').textContent = 'Save Changes';
+        openModal('packageModal');
     }
 
     async function savePackage(e) {
         e.preventDefault();
         const id = document.getElementById('pkgId').value;
-        const data = {
+        const body = {
             name: document.getElementById('pkgName').value,
             display_name: document.getElementById('pkgDisplay').value,
             price_monthly: parseFloat(document.getElementById('pkgPrice').value),
             bot_limit: parseInt(document.getElementById('pkgBots').value),
+            sub_ejen_limit: parseInt(document.getElementById('pkgSubEjen').value),
             managed_tokens: parseFloat(document.getElementById('pkgTokens').value),
-            sort_order: parseInt(document.getElementById('pkgSort').value),
-            cpu_limit: parseFloat(document.getElementById('pkgCpu').value) || 1,
-            memory_limit_mb: parseInt(document.getElementById('pkgRam').value) || 512,
-            storage_limit_gb: parseInt(document.getElementById('pkgStorage').value) || 10,
+            cpu_limit: parseFloat(document.getElementById('pkgCpu').value),
+            memory_limit_mb: parseInt(document.getElementById('pkgRam').value),
+            storage_limit_gb: parseInt(document.getElementById('pkgStorage').value),
+            trial_days: parseInt(document.getElementById('pkgTrialDays').value),
+            is_public: document.getElementById('pkgVisibility').value === 'true',
             description: document.getElementById('pkgDesc').value,
-            features: document.getElementById('pkgFeatures').value.split('\\n').filter(Boolean),
+            features: document.getElementById('pkgFeatures').value.split('\n').filter(f => f.trim()),
+            skill_category_ids: selectedSkills,
+            tool_category_ids: selectedTools,
+            sort_order: parseInt(document.getElementById('pkgSort').value) || 0,
         };
-        if (id) await api(`/admin/packages/${id}`, { method: 'PUT', body: JSON.stringify(data) });
-        else await api('/admin/packages', { method: 'POST', body: JSON.stringify(data) });
-        closeModal('packageModal');
-        showToast(id ? 'Package updated' : 'Package added', 'success');
-        loadPackages();
+
+        try {
+            if (id) {
+                await api('/admin/packages/' + id, { method: 'PUT', body: JSON.stringify(body) });
+                showToast('Package updated', 'success');
+            } else {
+                await api('/admin/packages/create', { method: 'POST', body: JSON.stringify(body) });
+                showToast('Package created', 'success');
+            }
+            closeModal('packageModal');
+            loadPackages();
+        } catch(e) {
+            showToast(e.message || 'Failed to save', 'error');
+        }
         return false;
     }
 
-    async function togglePackage(id, activate) {
-        if (!activate) await api(`/admin/packages/${id}`, { method: 'DELETE' });
-        else await api(`/admin/packages/${id}`, { method: 'PUT', body: JSON.stringify({ is_active: true }) });
-        showToast(`Package ${activate ? 'activated' : 'deactivated'}`, 'success');
-        loadPackages();
+    async function loadPackages() {
+        try {
+            const pkgs = await api('/admin/packages/all');
+            if (!pkgs.length) {
+                document.getElementById('packagesContainer').innerHTML = '<p style="color:var(--text-light);text-align:center;padding:40px">No packages yet. Click "+ Add Package" to create one.</p>';
+                return;
+            }
+            document.getElementById('packagesContainer').innerHTML = 
+                '<div class="grid-3">' + pkgs.map(p => '\
+                    <div class="package-card" style="' + (!p.is_active ? 'opacity:0.6' : '') + '">\
+                        <div style="display:flex;justify-content:space-between;align-items:start;margin-bottom:12px">\
+                            <div>\
+                                <h3 style="font-size:18px;margin-bottom:2px">' + (p.display_name || p.name) + '</h3>\
+                                <span style="font-size:12px;color:var(--text-light)">' + p.name + '</span>\
+                            </div>\
+                            <div style="display:flex;gap:6px;align-items:center">\
+                                <span class="public-badge ' + (p.is_public ? 'public' : 'private') + '">' + (p.is_public ? 'Public' : 'Private') + '</span>\
+                                ' + (p.trial_days > 0 ? '<span style="font-size:11px;background:rgba(168,85,247,0.15);color:#a855f7;padding:3px 10px;border-radius:12px">' + p.trial_days + 'd trial</span>' : '') + '\
+                            </div>\
+                        </div>\
+                        <div style="font-size:24px;font-weight:700;margin-bottom:12px">RM' + (p.price_monthly || 0) + '<span style="font-size:14px;font-weight:400;color:var(--text-light)">/month</span></div>\
+                        <div style="font-size:13px;color:var(--text-light);line-height:1.7;margin-bottom:12px">\
+                            <div>🤖 ' + p.bot_limit + ' bot(s) · 👥 ' + (p.sub_ejen_limit || 0) + ' sub ejen</div>\
+                            <div>🔑 ' + (p.managed_tokens || 0).toLocaleString() + ' tokens</div>\
+                            <div style="margin-top:6px;padding-top:6px;border-top:1px solid var(--border);font-size:12px">\
+                                <span style="display:inline-block;background:#EEF2FF;color:#4338CA;padding:2px 8px;border-radius:4px;margin:2px">🖥 ' + (p.cpu_limit || 1) + ' CPU</span>\
+                                <span style="display:inline-block;background:#FEF3C7;color:#92400E;padding:2px 8px;border-radius:4px;margin:2px">💾 ' + (p.memory_limit_mb || 512) + 'MB</span>\
+                                <span style="display:inline-block;background:#D1FAE5;color:#065F46;padding:2px 8px;border-radius:4px;margin:2px">📦 ' + (p.storage_limit_gb || 10) + 'GB</span>\
+                            </div>\
+                            ' + ((p.skill_category_ids || []).length > 0 ? '<div style="font-size:11px;color:rgba(255,255,255,0.4);margin-top:4px">🧠 ' + (p.skill_category_ids || []).length + ' skill categories</div>' : '') + '\
+                            ' + ((p.tool_category_ids || []).length > 0 ? '<div style="font-size:11px;color:rgba(255,255,255,0.4)">🔧 ' + (p.tool_category_ids || []).length + ' tool categories</div>' : '') + '\
+                        </div>\
+                        ' + (p.description ? '<div style="font-size:12px;color:var(--text-light);margin-bottom:12px;font-style:italic">' + p.description + '</div>' : '') + '\
+                        <div style="display:flex;gap:8px;margin-top:auto">\
+                            <button class="btn btn-sm btn-ghost" onclick=\'showEditPackage(' + JSON.stringify(p).replace(/\'/g, "&#39;") + ')\'>✏️ Edit</button>\
+                            <button class="btn btn-sm btn-ghost" style="color:#ef4444" onclick="deletePackage(' + p.id + ')">🗑️ Delete</button>\
+                        </div>\
+                    </div>\
+                ').join('') + '</div>';
+        } catch(e) {
+            document.getElementById('packagesContainer').innerHTML = '<p style="color:#ef4444">Failed to load packages: ' + (e.message || 'Unknown error') + '</p>';
+        }
     }
 
-    async function applyResources(packageId, packageName) {
-        if (!confirm(`Apply CPU/RAM limits from "${packageName}" to all running containers with this package?\\n\\nStorage changes require container recreation.`)) return;
-
-        document.getElementById('applyResultTitle').textContent = `Applying: ${packageName}`;
-        document.getElementById('applyResultBody').innerHTML = '<p>Applying resource limits...</p>';
-        openModal('applyResultModal');
-
+    async function deletePackage(id) {
+        if (!confirm('Delete this package? This cannot be undone.')) return;
         try {
-            const result = await api(`/admin/packages/${packageId}/apply`, { method: 'POST' });
-
-            let html = '';
-            const limits = result.new_limits;
-            html += `<div style="margin-bottom:16px;padding:12px;background:#F3F4F6;border-radius:8px">
-                <strong>New Limits:</strong> 🖥 ${limits.cpu} CPU · 💾 ${limits.ram_mb}MB RAM · 📦 ${limits.storage_gb}GB
-            </div>`;
-
-            const updated = result.updated_cpu_ram || [];
-            const warnings = result.storage_warnings || [];
-
-            if (updated.length > 0) {
-                html += `<div style="margin-bottom:12px">
-                    <strong style="color:#065F46">✅ CPU/RAM Updated (${updated.length} container(s))</strong>
-                    <ul style="margin:8px 0 0 16px;font-size:13px">`;
-                updated.forEach(u => {
-                    html += `<li style="margin-bottom:6px">
-                        <strong>${u.client_name}</strong> — ${u.container_name}
-                        <span style="color:var(--text-light);font-size:12px">${u.result.test_mode ? '(Simulated)' : '(Applied live)'}</span>
-                    </li>`;
-                });
-                html += `</ul></div>`;
-            }
-
-            if (warnings.length > 0) {
-                html += `<div style="margin-bottom:12px">
-                    <strong style="color:#92400E">⚠️ Warnings (${warnings.length})</strong>
-                    <ul style="margin:8px 0 0 16px;font-size:13px">`;
-                warnings.forEach(w => {
-                    html += `<li style="margin-bottom:6px">
-                        <strong>${w.client_name}</strong> — ${w.container_name || `(client #${w.client_id})`}
-                        <br><span style="color:var(--text-light)">${w.warning || w.error || w.reason}</span>
-                    </li>`;
-                });
-                html += `</ul></div>`;
-            }
-
-            if (updated.length === 0 && warnings.length === 0) {
-                html += `<p style="color:var(--text-light)">No running containers found for this package.</p>`;
-            }
-
-            document.getElementById('applyResultBody').innerHTML = html;
-            showToast(result.message, 'success');
-        } catch (err) {
-            document.getElementById('applyResultBody').innerHTML = `<p style="color:var(--danger)">Error: ${err.message}</p>`;
-            showToast('Failed to apply resources', 'error');
+            await api('/admin/packages/' + id, { method: 'DELETE' });
+            showToast('Package deleted', 'success');
+            loadPackages();
+        } catch(e) {
+            showToast(e.message || 'Failed to delete', 'error');
         }
     }
 

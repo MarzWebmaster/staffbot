@@ -432,49 +432,8 @@
     <div class="container">
         <h2 class="section-title">Simple Pricing</h2>
         <p class="section-sub">Choose the plan that fits. Upgrade anytime.</p>
-        <div class="plans">
-            <div class="plan">
-                <h3>Basic</h3>
-                <div class="price">RM49 <span>/month</span></div>
-                <p class="desc">For solo entrepreneurs starting their AI journey.</p>
-                <ul>
-                    <li>1 AI Agent + 3 Sub Ejen</li>
-                    <li>5,000,000 tokens/month</li>
-                    <li>4 Skill Categories</li>
-                    <li>WhatsApp + Telegram + Email</li>
-                    <li>Standard Support</li>
-                </ul>
-                <a href="#register" class="btn btn-primary">Get Started</a>
-            </div>
-            <div class="plan featured">
-                <div class="badge">Most Popular</div>
-                <h3>Business</h3>
-                <div class="price">RM99 <span>/month</span></div>
-                <p class="desc">For growing businesses needing more AI power.</p>
-                <ul>
-                    <li>3 AI Agents + 9 Sub Ejen</li>
-                    <li>10,000,000 tokens/month</li>
-                    <li>7 Skill Categories</li>
-                    <li>All Messaging + Drive + Calendar</li>
-                    <li>Stripe Payment Integration</li>
-                    <li>Priority Support</li>
-                </ul>
-                <a href="#register" class="btn btn-primary">Choose Business</a>
-            </div>
-            <div class="plan">
-                <h3>Enterprise</h3>
-                <div class="price">RM499 <span>/month</span></div>
-                <p class="desc">For established businesses with full AI workforce.</p>
-                <ul>
-                    <li>10 AI Agents + 30 Sub Ejen</li>
-                    <li>100,000,000 tokens/month</li>
-                    <li>All Skills & Tools</li>
-                    <li>Bring Your Own Key (BYOK)</li>
-                    <li>All Integrations</li>
-                    <li>24/7 Premium Support</li>
-                </ul>
-                <a href="#register" class="btn btn-primary">Contact Sales</a>
-            </div>
+        <div class="plans" id="pricingPlans">
+            <div class="plan"><p style="text-align:center;padding:40px">Loading plans...</p></div>
         </div>
     </div>
 </section>
@@ -489,7 +448,7 @@
             <div class="form-group"><label>Email Address</label><input type="email" id="regEmail" required placeholder="you@company.com"></div>
             <div class="form-group"><label>Company Name</label><input type="text" id="regCompany" placeholder="Your Company Sdn Bhd"></div>
             <div class="form-group"><label>Phone (WhatsApp)</label><input type="tel" id="regPhone" placeholder="e.g. 60123456789"><div class="hint">We'll send login details here</div></div>
-            <div class="form-group"><label>Choose Plan</label><select id="regPlan"><option value="basic">Basic — RM49/month</option><option value="business" selected>Business — RM99/month</option><option value="enterprise">Enterprise — RM499/month</option></select></div>
+            <div class="form-group"><label>Choose Plan</label><select id="regPlan"><option value="">Loading plans...</option></select></div>
             <div class="form-group"><label>Password</label><input type="password" id="regPassword" required placeholder="Min 8 chars, uppercase + special" minlength="8"></div>
             <button type="submit" class="btn-submit" id="regBtn">Start My Free Trial</button>
             <p style="text-align:center;font-size:12px;color:var(--muted);margin-top:12px">By signing up you agree to our Terms of Service</p>
@@ -517,6 +476,75 @@ function switchFlow(id, btn) {
     document.getElementById('flow-' + id).classList.add('active');
     btn.classList.add('active');
 }
+// Load public packages for pricing & registration
+async function loadPublicPackages() {
+    try {
+        const pkgs = await fetch('/api/v1/packages/public').then(r => r.json());
+        if (!pkgs || !pkgs.length) return;
+        
+        const plansDiv = document.getElementById('pricingPlans');
+        plansDiv.innerHTML = pkgs.map((p, i) => {
+            const isFeatured = i === 1;
+            const features = (p.features || []).slice(0, 5);
+            const skillCount = (p.skill_category_ids || []).length;
+            const toolCount = (p.tool_category_ids || []).length;
+            return '<div class="plan' + (isFeatured ? ' featured' : '') + '">' +
+                (isFeatured ? '<div class="badge">Most Popular</div>' : '') +
+                (p.trial_days > 0 ? '<div style="text-align:center;margin-bottom:8px"><span style="background:rgba(168,85,247,0.12);color:#a855f7;padding:4px 12px;border-radius:12px;font-size:12px;font-weight:600">' + p.trial_days + ' Days Free Trial</span></div>' : '') +
+                '<h3>' + (p.display_name || p.name) + '</h3>' +
+                '<div class="price">RM' + (p.price_monthly || 0) + ' <span>/month</span></div>' +
+                '<p class="desc">' + (p.description || '') + '</p>' +
+                '<ul>' +
+                    '<li>' + p.bot_limit + ' AI Agent(s) + ' + (p.sub_ejen_limit || 0) + ' Sub Ejen</li>' +
+                    '<li>' + (p.managed_tokens || 0).toLocaleString() + ' tokens/month</li>' +
+                    (skillCount > 0 ? '<li>' + skillCount + ' Skill Categories</li>' : '') +
+                    (toolCount > 0 ? '<li>' + toolCount + ' Tool Categories</li>' : '') +
+                    features.map(f => '<li>' + f + '</li>').join('') +
+                '</ul>' +
+                '<a href="#register" class="btn btn-primary">' + (p.trial_days > 0 ? 'Start Free Trial' : 'Get Started') + '</a>' +
+            '</div>';
+        }).join('');
+        
+        const select = document.getElementById('regPlan');
+        select.innerHTML = pkgs.map(p => 
+            '<option value="' + p.name + '"' + (p.name === 'business' ? ' selected' : '') + '>' +
+            (p.display_name || p.name) + ' \u2014 RM' + (p.price_monthly || 0) + '/month' +
+            (p.trial_days > 0 ? ' (' + p.trial_days + 'd trial)' : '') +
+            '</option>'
+        ).join('');
+        
+        const selPkg = pkgs.find(p => p.name === select.value);
+        if (selPkg && selPkg.trial_days > 0) {
+            document.getElementById('regBtn').textContent = 'Start My ' + selPkg.trial_days + '-Day Free Trial';
+        }
+        
+        const trialPkg = pkgs.find(p => p.trial_days > 0);
+        if (trialPkg) {
+            const faqTrial = document.querySelector('.faq-item:nth-child(3) .faq-a');
+            if (faqTrial) faqTrial.innerHTML = 'Yes! <strong>' + trialPkg.trial_days + '-day free trial</strong> on any plan. No credit card required.';
+        }
+    } catch(e) {
+        console.log('Packages load failed, using static fallback');
+    }
+}
+
+// Update button when plan changes
+document.addEventListener('DOMContentLoaded', function() {
+    document.getElementById('regPlan').addEventListener('change', async function() {
+        try {
+            const pkgs = await fetch('/api/v1/packages/public').then(r => r.json());
+            const pkg = pkgs.find(p => p.name === this.value);
+            if (pkg && pkg.trial_days > 0) {
+                document.getElementById('regBtn').textContent = 'Start My ' + pkg.trial_days + '-Day Free Trial';
+            } else {
+                document.getElementById('regBtn').textContent = 'Start My Free Trial';
+            }
+        } catch(e) {}
+    });
+});
+
+loadPublicPackages();
+
 document.getElementById('registerForm').addEventListener('submit', async function(e) {
     e.preventDefault();
     const btn = document.getElementById('regBtn');

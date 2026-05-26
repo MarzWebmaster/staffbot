@@ -125,6 +125,7 @@ from app.routers import auth, clients, subscriptions, containers, webhooks, noti
 from app.routers.billing import router as billing_router
 from app.routers.llm_providers import router as user_llm_providers_router
 from app.routers.admin import dashboard, packages, users, settings as admin_settings, policy as admin_policy
+from app.routers.admin.packages import public_router as packages_public_router
 from app.routers.admin.llm_providers import router as admin_llm_providers_router
 from app.routers.affiliates import router as user_affiliates_router
 from app.routers.admin.affiliates import router as admin_affiliates_router
@@ -140,6 +141,7 @@ app.include_router(webhooks.router, prefix="/api/v1/webhooks", tags=["Webhooks"]
 app.include_router(notifications.router, prefix="/api/v1/notifications", tags=["Notifications"])
 app.include_router(dashboard.router, prefix="/api/v1/admin", tags=["Admin"])
 app.include_router(packages.router, prefix="/api/v1/admin/packages", tags=["Admin Packages"])
+app.include_router(packages_public_router, prefix="/api/v1/packages", tags=["Public Packages"])
 app.include_router(users.router, prefix="/api/v1/admin/users", tags=["Admin Users"])
 app.include_router(admin_settings.router, prefix="/api/v1/admin/settings", tags=["Admin Settings"])
 app.include_router(admin_llm_providers_router, prefix="/api/v1/admin/providers", tags=["Admin LLM Providers"])
