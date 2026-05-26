@@ -288,7 +288,7 @@
                         ' + (p.description ? '<div style="font-size:12px;color:var(--text-light);margin-bottom:12px;font-style:italic">' + p.description + '</div>' : '') + '\
                         <div style="display:flex;gap:8px;margin-top:auto">\
                             <button class="btn btn-sm btn-ghost" onclick=\'showEditPackage(' + JSON.stringify(p).replace(/\'/g, "&#39;") + ')\'>✏️ Edit</button>\
-                            <button class="btn btn-sm btn-ghost" style="color:#ef4444" onclick="deletePackage(' + p.id + ')">🗑️ Delete</button>\
+                            <button class="btn btn-sm btn-ghost" onclick="togglePackageActive(" + p.id + "," + !p.is_active + ")">" + (p.is_active ? "🚫" : "✅") + "</button> <button class="btn btn-sm btn-ghost" style="color:#ef4444" onclick="deletePackage(' + p.id + ')">🗑️ Delete</button>\
                         </div>\
                     </div>\
                 ').join('') + '</div>';
@@ -298,6 +298,8 @@
     }
 
     async function deletePackage(id) {
+
+    async function togglePackageActive(id, activate) {\n        try {\n            await api("/admin/packages/" + id, { method: "PUT", body: JSON.stringify({ is_active: activate }) });\n            showToast(activate ? "Activated" : "Deactivated", "success");\n            loadPackages();\n        } catch(e) { showToast(e.message || "Failed", "error"); }\n    }
         if (!confirm('Delete this package? This cannot be undone.')) return;
         try {
             await api('/admin/packages/' + id, { method: 'DELETE' });
