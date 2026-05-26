@@ -120,7 +120,7 @@
 
     async function loadPackages() {
         try {
-            const pkgs = await api('/admin/packages');
+            const pkgs = await api('/admin/packages/');
             document.getElementById('packagesList').innerHTML = `<div class="grid-1" style="padding:0 0 16px 0;">${pkgs.map(p => `
                 <div style="border:1px solid var(--border);border-radius:8px;padding:12px;text-align:center">
                     <h3 style="font-size:14px;margin-bottom:4px">${p.display_name}</h3>

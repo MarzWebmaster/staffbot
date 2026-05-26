@@ -242,7 +242,7 @@
                 await api('/admin/packages/' + id, { method: 'PUT', body: JSON.stringify(body) });
                 showToast('Package updated', 'success');
             } else {
-                await api('/admin/packages/create', { method: 'POST', body: JSON.stringify(body) });
+                await api('/admin/packages/', { method: 'POST', body: JSON.stringify(body) });
                 showToast('Package created', 'success');
             }
             closeModal('packageModal');
