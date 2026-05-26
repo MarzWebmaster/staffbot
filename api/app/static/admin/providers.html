@@ -36,7 +36,7 @@
 
             <!-- Package Assignments -->
             <div class="card">
-                <div class="card-header"><h3>Per-Provider Package Assignment</h3></div>
+                <div class="card-header"><h3>Per-Provider Package Assignment</h3><button class="btn btn-primary btn-sm" onclick="openAssignModal()">+ Assign</button></div>
                 <div style="overflow-x:auto">
                     <table class="data-table" id="assignTable">
                         <thead><tr><th>Provider</th><th>Package</th><th>Token Quota</th><th>Available</th><th>Tindakan</th></tr></thead>
@@ -92,11 +92,26 @@
             <div class="modal-header"><h3>Assign Provider ke Package</h3><button class="modal-close" onclick="closeModal('assignModal')">&times;</button></div>
             <form onsubmit="assignProvider(event)">
                 <div class="modal-body">
-                    <div class="form-group"><label>Package ID</label><input type="number" id="assignPkgId" class="form-control" required></div>
-                    <div class="form-group"><label>Provider ID</label><input type="number" id="assignProvId" class="form-control" required></div>
-                    <div class="form-group"><label>Token Quota (0 = guna default pakej)</label><input type="number" id="assignTokens" class="form-control" value="0"></div>
+                    <div class="form-group"><label>Package</label><select id="assignPkgId" class="form-control" required><option value="">— Pilih Package —</option></select></div>
+                    <div class="form-group"><label>Provider</label><select id="assignProvId" class="form-control" required><option value="">— Pilih Provider —</option></select></div>
+                    <div class="form-group"><label>Token Quota (0 = guna default pakej)</label><input type="number" id="assignTokens" class="form-control" value="0" min="0"></div>
                 </div>
                 <div class="modal-footer"><button type="button" class="btn btn-ghost" onclick="closeModal('assignModal')">Batal</button><button type="submit" class="btn btn-primary">Assign</button></div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Edit Assignment Modal -->
+    <div class="modal-overlay" id="editAssignModal">
+        <div class="modal">
+            <div class="modal-header"><h3>Edit Assignment</h3><button class="modal-close" onclick="closeModal('editAssignModal')">&times;</button></div>
+            <form onsubmit="editAssignment(event)">
+                <div class="modal-body">
+                    <input type="hidden" id="editAssignId">
+                    <div class="form-group"><label>Token Quota</label><input type="number" id="editAssignQuota" class="form-control" min="0" step="100000"></div>
+                    <div class="form-group"><label><input type="checkbox" id="editAssignAvailable"> Available</label></div>
+                </div>
+                <div class="modal-footer"><button type="button" class="btn btn-ghost" onclick="closeModal('editAssignModal')">Batal</button><button type="submit" class="btn btn-primary">Kemas Kini</button></div>
             </form>
         </div>
     </div>
@@ -104,10 +119,13 @@
     <div id="toast-container" class="toast-container"></div>
     <script src="/static/js/app.js?v=1779798256"></script>
     <script>
+    let _packages = [];
+    let _providers = [];
+
     async function init() {
         const user = await checkAdminAuth('/admin/login.html');
         if (!user) return;
-                renderSidebar('providers');
+        renderSidebar('providers');
         renderSidebarUser(user);
         await loadProviders();
         await loadAssignments();
@@ -115,13 +133,13 @@
 
     async function loadProviders() {
         try {
-            const providers = await api('/admin/providers/providers');
+            _providers = await api('/admin/providers/providers');
             const tbody = document.getElementById('providersBody');
-            if (!providers.length) {
+            if (!_providers.length) {
                 tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--text-light)">Tiada provider lagi.</td></tr>';
                 return;
             }
-            tbody.innerHTML = providers.map(p => `
+            tbody.innerHTML = _providers.map(p => `
                 <tr>
                     <td><strong>${p.display_name}</strong><br><small style="color:var(--text-light)">${p.name}</small></td>
                     <td style="font-size:13px">${p.base_url}</td>
@@ -141,17 +159,20 @@
         try {
             const assigns = await api('/admin/providers/package-providers');
             const tbody = document.getElementById('assignBody');
-            if (!assigns.length) {
+            if (!assigns || !assigns.length) {
                 tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--text-light)">Tiada assignment.</td></tr>';
                 return;
             }
             tbody.innerHTML = assigns.map(a => `
                 <tr>
                     <td>${a.provider ? a.provider.display_name : 'ID: '+a.provider_id}</td>
-                    <td>Package #${a.package_id}</td>
-                    <td>${a.token_quota > 0 ? a.token_quota.toLocaleString() : 'Default pakej'}</td>
+                    <td>${a.pkg_name || 'Package #'+a.package_id}</td>
+                    <td>${a.token_quota > 0 ? Number(a.token_quota).toLocaleString() : 'Default pakej'}</td>
                     <td>${a.is_available ? '<span class="status-badge status-active">Ya</span>' : '<span class="status-badge status-error">Tidak</span>'}</td>
-                    <td><button class="btn btn-sm btn-ghost" onclick="removeAssignment(${a.id})">🗑️</button></td>
+                    <td>
+                        <button class="btn btn-sm btn-ghost" onclick="openEditAssignment(${a.id},${a.token_quota||0},${a.is_available})">✏️</button>
+                        <button class="btn btn-sm btn-ghost" onclick="removeAssignment(${a.id})">🗑️</button>
+                    </td>
                 </tr>
             `).join('');
         } catch {}
@@ -181,8 +202,6 @@
     }
 
     function openEditProvider(id) {
-        const p = document.querySelector(`#providersBody tr:nth-child(${document.querySelector(`[data-id="${id}"]`) ? '1' : '1'})`);
-        // Find from API
         api('/admin/providers/providers/' + id).then(p => {
             document.getElementById('editProvId').value = p.id;
             document.getElementById('editProvDisplay').value = p.display_name;
@@ -231,11 +250,39 @@
         } catch {}
     }
 
+    // ── Package Assignment CRUD ──────────────────────────
+
+    async function openAssignModal() {
+        // Load packages + providers into dropdowns
+        if (!_packages.length) {
+            try { _packages = await api('/admin/packages/'); } catch { _packages = []; }
+        }
+        if (!_providers.length) {
+            try { _providers = await api('/admin/providers/providers'); } catch { _providers = []; }
+        }
+
+        const pkgSel = document.getElementById('assignPkgId');
+        pkgSel.innerHTML = '<option value="">— Pilih Package —</option>' +
+            _packages.map(p => `<option value="${p.id}">${p.display_name} (${p.name})</option>`).join('');
+
+        const provSel = document.getElementById('assignProvId');
+        provSel.innerHTML = '<option value="">— Pilih Provider —</option>' +
+            _providers.filter(p => p.is_active).map(p => `<option value="${p.id}">${p.display_name}</option>`).join('');
+
+        document.getElementById('assignTokens').value = '0';
+        openModal('assignModal');
+    }
+
     async function assignProvider(e) {
         e.preventDefault();
         const package_id = parseInt(document.getElementById('assignPkgId').value);
         const provider_id = parseInt(document.getElementById('assignProvId').value);
-        const token_quota = parseFloat(document.getElementById('assignTokens').value) || 0;
+        const token_quota = parseInt(document.getElementById('assignTokens').value) || 0;
+
+        if (!package_id || !provider_id) {
+            showToast('Sila pilih Package dan Provider', 'error');
+            return;
+        }
 
         try {
             await api('/admin/providers/package-providers?package_id=' + package_id, {
@@ -244,7 +291,30 @@
             });
             showToast('Provider assigned ke package', 'success');
             closeModal('assignModal');
-            document.getElementById('assignModal').querySelector('form').reset();
+            await loadAssignments();
+        } catch {}
+    }
+
+    function openEditAssignment(id, quota, available) {
+        document.getElementById('editAssignId').value = id;
+        document.getElementById('editAssignQuota').value = quota || 0;
+        document.getElementById('editAssignAvailable').checked = available;
+        openModal('editAssignModal');
+    }
+
+    async function editAssignment(e) {
+        e.preventDefault();
+        const id = document.getElementById('editAssignId').value;
+        const token_quota = parseInt(document.getElementById('editAssignQuota').value) || 0;
+        const is_available = document.getElementById('editAssignAvailable').checked;
+
+        try {
+            await api('/admin/providers/package-providers/' + id, {
+                method: 'PUT',
+                body: JSON.stringify({ token_quota, is_available }),
+            });
+            showToast('Assignment dikemas kini', 'success');
+            closeModal('editAssignModal');
             await loadAssignments();
         } catch {}
     }

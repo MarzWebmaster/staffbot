@@ -217,7 +217,7 @@ async def list_package_providers(
             "id": item.id,
             "package_id": item.package_id,
             "provider_id": item.provider_id,
-            "token_quota": item.token_quota,
+            "token_quota": item.token_quota or 0.0,
             "is_available": item.is_available,
             "provider": {
                 "id": prov.id,
