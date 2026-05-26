@@ -43,11 +43,29 @@ if os.path.exists(static_dir):
     app.mount("/static", StaticFiles(directory=static_dir), name="static")
 
 
+
+@app.get("/sitemap.xml", include_in_schema=False)
+async def sitemap():
+    path = os.path.join(os.path.dirname(__file__), "static", "sitemap.xml")
+    if os.path.exists(path):
+        return FileResponse(path, media_type="application/xml")
+    return {"error": "Not found"}
+
+
+@app.get("/robots.txt", include_in_schema=False)
+async def robots():
+    path = os.path.join(os.path.dirname(__file__), "static", "robots.txt")
+    if os.path.exists(path):
+        return FileResponse(path, media_type="text/plain")
+    return {"error": "Not found"}
+
+
 @app.get("/")
+
 async def root():
     landing = os.path.join(os.path.dirname(__file__), "static", "landing.html")
     if os.path.exists(landing):
-        return FileResponse(landing)
+        return FileResponse(landing, media_type="text/html")
     return RedirectResponse(url="/admin/login.html")
 
 

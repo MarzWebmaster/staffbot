@@ -1,0 +1,7 @@
+User-agent: *
+Allow: /
+Disallow: /customer/
+Disallow: /admin/
+Disallow: /api/
+
+Sitemap: https://staffbot.my/sitemap.xml

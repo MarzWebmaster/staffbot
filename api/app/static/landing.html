@@ -4,6 +4,16 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>StaffBot.my — AI Employee for Your Business</title>
+    <meta name=description content="StaffBot.my - Malaysia's #1 AI Employee Platform. Hire AI staff for customer service, sales, social media & more. 1,000+ skills, 100+ tools. Start from RM49/month.">
+    <meta name=keywords content="AI employee, digital workforce, AI customer service, AI sales agent, Malaysia AI, StaffBot, virtual assistant, AI automation, business automation Malaysia">
+    <meta property=og:title content="StaffBot.my — AI Employee for Your Business">
+    <meta property=og:description content="Replace your team with AI Employees. 1,000+ skills, 100+ tools, 24/7 operation. Start from RM49/month.">
+    <meta property=og:url content="https://staffbot.my/">
+    <meta property=og:type content="website">
+    <meta property=og:image content="https://staffbot.my/og-image.png">
+    <meta name=twitter:card content="summary_large_image">
+    <link rel="canonical" href="https://staffbot.my/">
+
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         html { scroll-behavior: smooth; }
@@ -80,8 +90,81 @@
         .faq-q { cursor: pointer; font-weight: 600; display: flex; justify-content: space-between; }
         .faq-item.open .faq-a { display: block; }
         .faq-a { display: none; margin-top: 8px; font-size: 14px; color: var(--muted); line-height: 1.6; }
+        .flows-tabs { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-bottom: 36px; }
+        .flows-tab { padding: 10px 22px; border-radius: 30px; border: 1.5px solid var(--border); background: white; cursor: pointer; font-size: 14px; font-weight: 500; transition: all 0.2s; }
+        .flows-tab:hover { border-color: var(--gold); }
+        .flows-tab.active { background: var(--gold); color: var(--navy); border-color: var(--gold); font-weight: 700; }
+        .flow-content { display: none; max-width: 800px; margin: 0 auto; }
+        .flow-content.active { display: block; }
+        .flow-card { background: white; border: 1px solid var(--border); border-radius: 16px; padding: 28px; }
+        .flow-card h3 { font-size: 18px; margin-bottom: 16px; }
+        .flow-step { display: flex; gap: 16px; margin-bottom: 16px; align-items: flex-start; }
+        .flow-step-icon { width: 40px; height: 40px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 18px; flex-shrink: 0; }
+        .flow-step-icon.trigger { background: #DBEAFE; }
+        .flow-step-icon.action { background: #D1FAE5; }
+        .flow-step-icon.result { background: #FEF3C7; }
+        .flow-step-text { flex: 1; }
+        .flow-step-text strong { display: block; font-size: 14px; margin-bottom: 2px; }
+        .flow-step-text p { font-size: 13px; color: var(--muted); line-height: 1.5; }
+        .flow-example { margin-top: 16px; padding: 16px; background: #F0FDF4; border-radius: 12px; border: 1px solid #BBF7D0; }
+        .flow-example strong { font-size: 13px; color: #166534; }
+        .flow-example p { font-size: 13px; color: #15803D; margin-top: 4px; line-height: 1.5; }
+        .cats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin-top: 10px; }
+        .cat-chip { padding: 8px 14px; border-radius: 10px; border: 1px solid var(--border); font-size: 13px; text-align: center; background: white; }
+        .cat-chip span { font-size: 18px; display: block; margin-bottom: 2px; }
+        .compare-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; margin-bottom: 32px; }
+        .compare-card { border-radius: 16px; padding: 24px; border: 1px solid var(--border); position: relative; }
+        .compare-card.winner { border: 2px solid var(--gold); background: #FFFBEB; }
+        .compare-card h3 { font-size: 15px; margin-bottom: 12px; text-align: center; }
+        .compare-card .badge { position: absolute; top: -10px; left: 50%; transform: translateX(-50%); background: var(--gold); color: var(--navy); padding: 2px 12px; border-radius: 12px; font-size: 11px; font-weight: 700; white-space: nowrap; }
+        .compare-row { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #f0f0f0; font-size: 13px; }
+        .compare-row:last-child { border-bottom: none; }
+        .compare-label { color: var(--muted); }
+        .compare-value { font-weight: 600; text-align: right; }
+        .compare-value.good { color: #059669; }
+        .compare-value.bad { color: #DC2626; }
+        .compare-value.neutral { color: #1E293B; }
+        .why-table { width: 100%; border-collapse: collapse; margin-bottom: 40px; border-radius: 12px; overflow: hidden; box-shadow: 0 1px 6px rgba(0,0,0,0.04); }
+        .why-table th { padding: 14px 16px; font-size: 14px; font-weight: 700; text-align: left; }
+        .why-table th:first-child { background: var(--navy); color: white; width: 36%; }
+        .why-table th:nth-child(2) { background: #F1F5F9; color: var(--muted); }
+        .why-table th:nth-child(3) { background: #FFFBEB; color: var(--navy); }
+        .why-table th:nth-child(4) { background: #FEF2F2; color: #991B1B; }
+        .why-table td { padding: 12px 16px; font-size: 13px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+        .why-table td:first-child { font-weight: 600; background: #F8FAFC; white-space: nowrap; }
+        .why-table td:nth-child(2) { color: var(--muted); }
+        .why-table td:nth-child(3) { color: #059669; font-weight: 500; }
+        .why-table td:nth-child(4) { color: #991B1B; font-weight: 500; }
+        .why-table tr:last-child td { border-bottom: none; }
+        .savings-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; }
+        .savings-card { background: white; border: 1px solid var(--border); border-radius: 16px; padding: 24px; text-align: center; transition: all 0.2s; }
+        .savings-card:hover { border-color: var(--gold); transform: translateY(-2px); box-shadow: 0 4px 20px rgba(0,0,0,0.06); }
+        .savings-icon { font-size: 32px; margin-bottom: 8px; }
+        .savings-stat { font-size: 28px; font-weight: 800; color: var(--gold); }
+        .savings-desc { font-size: 13px; color: var(--muted); margin-top: 4px; }
+        .table-wrap { overflow-x: auto; margin-bottom: 40px; }
+        .table-wrap table { margin-bottom: 0; min-width: 580px; }
+        .big-nums { display: flex; justify-content: center; gap: 48px; margin-bottom: 36px; text-align: center; flex-wrap: wrap; }
+        .big-num { font-size: 48px; font-weight: 800; color: var(--gold); line-height: 1; }
+        .big-num span { font-size: 14px; font-weight: 400; color: var(--muted); display: block; margin-top: 4px; }
         @media (max-width: 768px) { .nav-links { display: none; } .stats-inner { flex-direction: column; gap: 16px; } .plans { grid-template-columns: 1fr; } .plan.featured { transform: none; } }
     </style>
+        <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "WebApplication",
+      "name": "StaffBot.my",
+      "description": "Digital Employee as a Service - Hire AI employees for your business in Malaysia",
+      "url": "https://staffbot.my/",
+      "applicationCategory": "BusinessApplication",
+      "operatingSystem": "Web",
+      "offers": {
+        "@type": "Offer",
+        "price": "49",
+        "priceCurrency": "MYR"
+      }
+    }
+    </script>
 </head>
 <body>
 <nav>
@@ -111,7 +194,7 @@
 </div>
 <section id="features">
     <div class="container">
-        <h2 class="section-title">Why StaffBot?</h2>
+        <h2 class="section-title">What StaffBot Can Do</h2>
         <p class="section-sub">Not just a chatbot. Full-fledged AI employees.</p>
         <div class="features-grid">
             <div class="feature-card"><div class="feature-icon">🤖</div><h3>Dedicated AI Agents</h3><p>Your own AI employees that learn your SOP, remember your customers, and work exclusively for your business.</p></div>
@@ -131,6 +214,216 @@
             <div class="step"><div class="step-num">2</div><h3>Configure</h3><p>Upload company profile, products, and SOP. AI learns instantly.</p></div>
             <div class="step"><div class="step-num">3</div><h3>Deploy</h3><p>Connect WhatsApp, set tasks. Your AI goes live in minutes.</p></div>
             <div class="step"><div class="step-num">4</div><h3>Scale</h3><p>Add more agents. Your AI grows with your business.</p></div>
+        </div>
+    </div>
+</section>
+<section style="background:var(--light)">
+    <div class="container">
+        <h2 class="section-title">1,000+ Skills & 100+ Tools</h2>
+        <p class="section-sub">Pre-built capabilities ready to deploy. Mix and match for your business.</p>
+        <div class="big-nums">
+            <div><div class="big-num">1,000+<span>Skills</span></div></div>
+            <div><div class="big-num">100+<span>Tools</span></div></div>
+            <div><div class="big-num">10<span>Categories</span></div></div>
+        </div>
+        <div style="margin-bottom:32px">
+            <h3 style="font-size:16px;margin-bottom:12px;text-align:center">🧠 Skill Categories</h3>
+            <div class="cats-grid">
+                <div class="cat-chip"><span>💬</span>Communication</div>
+                <div class="cat-chip"><span>📊</span>Data Analysis</div>
+                <div class="cat-chip"><span>🤖</span>AI & Automation</div>
+                <div class="cat-chip"><span>🌐</span>Web & API</div>
+                <div class="cat-chip"><span>📝</span>Content Writing</div>
+                <div class="cat-chip"><span>🎨</span>Design & Media</div>
+                <div class="cat-chip"><span>📈</span>Marketing & Sales</div>
+                <div class="cat-chip"><span>💰</span>Finance & Accounting</div>
+                <div class="cat-chip"><span>⚖️</span>Legal & Compliance</div>
+                <div class="cat-chip"><span>🔧</span>Technical Support</div>
+            </div>
+        </div>
+        <div>
+            <h3 style="font-size:16px;margin-bottom:12px;text-align:center">🔧 Tool Categories</h3>
+            <div class="cats-grid">
+                <div class="cat-chip"><span>📱</span>WhatsApp</div>
+                <div class="cat-chip"><span>📧</span>Email</div>
+                <div class="cat-chip"><span>📅</span>Calendar</div>
+                <div class="cat-chip"><span>☁️</span>Google Drive</div>
+                <div class="cat-chip"><span>💳</span>Stripe</div>
+                <div class="cat-chip"><span>📊</span>Sheets / Excel</div>
+                <div class="cat-chip"><span>🐦</span>X / Twitter</div>
+                <div class="cat-chip"><span>🔍</span>Web Search</div>
+                <div class="cat-chip"><span>🧩</span>Zapier / API</div>
+                <div class="cat-chip"><span>🏢</span>CRM</div>
+            </div>
+        </div>
+    </div>
+</section>
+<section style="background:var(--light)">
+    <div class="container">
+        <h2 class="section-title">Why StaffBot?</h2>
+        <p class="section-sub">AI Chat vs Human Staff vs StaffBot.my — see the difference.</p>
+        <div class="table-wrap">
+        <table class="why-table">
+            <thead><tr>
+                <th>Feature</th>
+                <th>🤖 AI Chat (ChatGPT etc.)</th>
+                <th>👤 Human Staff</th>
+                <th>⭐ StaffBot.my</th>
+            </tr></thead>
+            <tbody>
+                <tr><td>Knows your business</td><td>❌ General knowledge only</td><td>✅ RM2k-3k/mo (needs training)</td><td>✅ Learns SOPs, products, history</td></tr>
+                <tr><td>Communication</td><td>❌ Website/app only</td><td>✅ 1 person per channel (RM2k/mo)</td><td>✅ WhatsApp + Telegram + Dashboard</td></tr>
+                <tr><td>Auto-reply 24/7</td><td>❌ Cannot auto-reply</td><td>❌ 3 shifts = 3 staff (RM6k-9k/mo)</td><td>✅ Set automation rules & triggers</td></tr>
+                <tr><td>Task execution</td><td>❌ Chat only, no actions</td><td>✅ 2-3 staff for all tasks (RM5k-9k/mo)</td><td>✅ Send email, update Drive, API calls</td></tr>
+                <tr><td>Memory & context</td><td>❌ Forgets between sessions</td><td>❌ Limited, forgets after weeks</td><td>✅ Persistent memory, remembers orders</td></tr>
+                <tr><td>Custom training</td><td>❌ Cannot train on your data</td><td>✅ 1-3 months onboarding (RM3k-6k)</td><td>✅ Train on company docs in 24 hours</td></tr>
+                <tr><td>Integrations</td><td>❌ None</td><td>❌ Manual, multiple tools (RM2k/mo)</td><td>✅ GDrive, Email, API, web crawl</td></tr>
+                <tr><td>Availability</td><td>❌ Must be manually prompted</td><td>❌ 8-10 hrs/day (RM2k-3k/mo each)</td><td>✅ 24/7 always online, never sleeps</td></tr>
+                <tr><td>Data isolation</td><td>❌ Your data trains their models</td><td>✅ But risk of human error</td><td>✅ Isolated per client</td></tr>
+                <tr><td>Turnover risk</td><td>❌ N/A</td><td>❌ RM3k-5k cost each resignation</td><td>✅ Never resigns, knowledge stays</td></tr>
+            </tbody>
+        </table>
+        </div>
+        <h3 style="text-align:center;font-size:18px;margin-bottom:20px">💰 What You Save</h3>
+        <div class="savings-grid">
+            <div class="savings-card">
+                <div class="savings-icon">💰</div>
+                <div class="savings-stat">Up to 97%</div>
+                <div class="savings-desc">Cost savings — RM49 vs 3-4 staff = RM8k-15k/mo</div>
+            </div>
+            <div class="savings-card">
+                <div class="savings-icon">👥</div>
+                <div class="savings-stat">Replaces 3-4</div>
+                <div class="savings-desc">Full-time staff — CS, admin, data entry</div>
+            </div>
+            <div class="savings-card">
+                <div class="savings-icon">⏰</div>
+                <div class="savings-stat">168 hrs/week</div>
+                <div class="savings-desc">Always on — 3x more than human (40 hrs)</div>
+            </div>
+        </div>
+    </div>
+</section>
+<section>
+    <div class="container">
+        <h2 class="section-title">Real Business Flows</h2>
+        <p class="section-sub">See how StaffBot works across different industries — trigger, action, result.</p>
+        <div class="flows-tabs">
+            <div class="flows-tab active" onclick="switchFlow('retail',this)">🏪 Retail & E-commerce</div>
+            <div class="flows-tab" onclick="switchFlow('property',this)">🏠 Property & Real Estate</div>
+            <div class="flows-tab" onclick="switchFlow('healthcare',this)">🏥 Healthcare & Clinic</div>
+            <div class="flows-tab" onclick="switchFlow('fnb',this)">🍽️ F&B / Restaurant</div>
+            <div class="flows-tab" onclick="switchFlow('professional',this)">🏢 Professional Services</div>
+        </div>
+
+        <div id="flow-retail" class="flow-content active">
+            <div class="flow-card">
+                <h3>🏪 Retail & E-commerce</h3>
+                <div class="flow-step">
+                    <div class="flow-step-icon trigger">📩</div>
+                    <div class="flow-step-text"><strong>Trigger</strong><p>Customer sends WhatsApp — "Hi, I want to order [product]. How much?"</p></div>
+                </div>
+                <div class="flow-step">
+                    <div class="flow-step-icon action">⚙️</div>
+                    <div class="flow-step-text"><strong>Action</strong><p>AI reads product catalog, checks price + stock, calculates total with delivery fee, and confirms order.</p></div>
+                </div>
+                <div class="flow-step">
+                    <div class="flow-step-icon result">✅</div>
+                    <div class="flow-step-text"><strong>Result</strong><p>Order confirmed + logged to Google Sheets. Customer receives invoice link. Follow-up reminder sent in 3 days.</p></div>
+                </div>
+                <div class="flow-example">
+                    <strong>💡 Real Example</strong>
+                    <p>"Customer ordered 3 boxes of keropok. AI checked stock (10 available), quoted RM45 + RM5 delivery = RM50, logged order #1023 to Sheets, sent payment link. Done in 45 seconds."</p>
+                </div>
+            </div>
+        </div>
+
+        <div id="flow-property" class="flow-content">
+            <div class="flow-card">
+                <h3>🏠 Property & Real Estate</h3>
+                <div class="flow-step">
+                    <div class="flow-step-icon trigger">📩</div>
+                    <div class="flow-step-text"><strong>Trigger</strong><p>Lead inquires via WhatsApp — "Ada unit bawah RM500k dekat Damansara tak?"</p></div>
+                </div>
+                <div class="flow-step">
+                    <div class="flow-step-icon action">⚙️</div>
+                    <div class="flow-step-text"><strong>Action</strong><p>AI searches property listings by budget + area, filters matching units, and prepares comparison summary.</p></div>
+                </div>
+                <div class="flow-step">
+                    <div class="flow-step-icon result">✅</div>
+                    <div class="flow-step-text"><strong>Result</strong><p>Top 5 matches sent with photos, prices, and viewing schedule link. Lead details saved to CRM. Agent notified.</p></div>
+                </div>
+                <div class="flow-example">
+                    <strong>💡 Real Example</strong>
+                    <p>"Prospect asked for condo under RM350k in Setia Alam. AI pulled 8 listings, narrowed to 3 that matched (freehold, >800sqft), sent with photos and WhatsApp contact for viewing. Saved 20 mins per lead."</p>
+                </div>
+            </div>
+        </div>
+
+        <div id="flow-healthcare" class="flow-content">
+            <div class="flow-card">
+                <h3>🏥 Healthcare & Clinic</h3>
+                <div class="flow-step">
+                    <div class="flow-step-icon trigger">📩</div>
+                    <div class="flow-step-text"><strong>Trigger</strong><p>Patient messages — "Nak buat appointment with Dr. Tan tomorrow. Ada slot tak?"</p></div>
+                </div>
+                <div class="flow-step">
+                    <div class="flow-step-icon action">⚙️</div>
+                    <div class="flow-step-text"><strong>Action</strong><p>AI checks doctor's schedule, finds available slot, books appointment, and sends confirmation + prep instructions.</p></div>
+                </div>
+                <div class="flow-step">
+                    <div class="flow-step-icon result">✅</div>
+                    <div class="flow-step-text"><strong>Result</strong><p>Appointment confirmed at 10:30 AM. Google Calendar invite sent. Auto-reminder 2 hours before. Patient intake form also sent.</p></div>
+                </div>
+                <div class="flow-example">
+                    <strong>💡 Real Example</strong>
+                    <p>"Clinic received 40+ WhatsApp messages daily for appointments. AI handled 90% autonomously — booked slots, cancelled reschedules, sent reminders. Human receptionist only handled complex cases."</p>
+                </div>
+            </div>
+        </div>
+
+        <div id="flow-fnb" class="flow-content">
+            <div class="flow-card">
+                <h3>🍽️ F&B / Restaurant</h3>
+                <div class="flow-step">
+                    <div class="flow-step-icon trigger">📩</div>
+                    <div class="flow-step-text"><strong>Trigger</strong><p>Customer WhatsApp — "Order nasi lemak ayam x2, teh tarik x2. Delivery."</p></div>
+                </div>
+                <div class="flow-step">
+                    <div class="flow-step-icon action">⚙️</div>
+                    <div class="flow-step-text"><strong>Action</strong><p>AI processes order items, checks menu prices, calculates total, confirms delivery address, and relays to kitchen system.</p></div>
+                </div>
+                <div class="flow-step">
+                    <div class="flow-step-icon result">✅</div>
+                    <div class="flow-step-text"><strong>Result</strong><p>Order sent to kitchen printer. Customer receives ETA + payment link. Order history saved for repeat customers.</p></div>
+                </div>
+                <div class="flow-example">
+                    <strong>💡 Real Example</strong>
+                    <p>"During lunch rush (12-2PM), AI handled 60+ WhatsApp orders simultaneously. Average order-to-kitchen time: 30 seconds. No missed orders, no double-handling."</p>
+                </div>
+            </div>
+        </div>
+
+        <div id="flow-professional" class="flow-content">
+            <div class="flow-card">
+                <h3>🏢 Professional Services</h3>
+                <div class="flow-step">
+                    <div class="flow-step-icon trigger">📩</div>
+                    <div class="flow-step-text"><strong>Trigger</strong><p>Client fills website form or WhatsApp — "I need a quotation for [service]"</p></div>
+                </div>
+                <div class="flow-step">
+                    <div class="flow-step-icon action">⚙️</div>
+                    <div class="flow-step-text"><strong>Action</strong><p>AI asks qualifying questions, generates custom quotation from templates, and schedules a consultation call.</p></div>
+                </div>
+                <div class="flow-step">
+                    <div class="flow-step-icon result">✅</div>
+                    <div class="flow-step-text"><strong>Result</strong><p>Quotation PDF sent via WhatsApp + email. Lead moved to CRM pipeline. Consultant notified of qualified lead.</p></div>
+                </div>
+                <div class="flow-example">
+                    <strong>💡 Real Example</strong>
+                    <p>"Digital marketing agency got 15+ leads/day. AI qualified each by asking budget, service type, timeline. Only warm leads (budget >RM3k) forwarded to human. Saved RM12k/month in junior sales staff."</p>
+                </div>
+            </div>
         </div>
     </div>
 </section>
@@ -213,10 +506,16 @@
     </div>
 </section>
 <footer>
-    <div class="f-links"><a href="#features">Features</a><a href="#pricing">Pricing</a><a href="#register">Get Started</a><a href="/customer/login.html">Admin Login</a></div>
-    <div class="copy">2026 StaffBot.my — A Marz Technology & Trading product. All rights reserved.</div>
+    <div class="f-links"><a href="#features">Features</a><a href="#pricing">Pricing</a><a href="#register">Get Started</a></div>
+    <div class="copy">2026 StaffBot.my — A Marz Technology & Trading product. All rights reserved.<br>No. SSM: 202303107389</div>
 </footer>
 <script>
+function switchFlow(id, btn) {
+    document.querySelectorAll('.flow-content').forEach(el => el.classList.remove('active'));
+    document.querySelectorAll('.flows-tab').forEach(el => el.classList.remove('active'));
+    document.getElementById('flow-' + id).classList.add('active');
+    btn.classList.add('active');
+}
 document.getElementById('registerForm').addEventListener('submit', async function(e) {
     e.preventDefault();
     const btn = document.getElementById('regBtn');
