@@ -60,7 +60,7 @@
         try {
             const s = await api('/admin/settings/?prefix=affiliate_');
             s.forEach(setting => {
-                const el = document.getElementById('aff-' + setting.key.replace('affiliate_', ''));
+                const el = document.getElementById('aff-' + setting.key.replace('affiliate_', '').replace(/_/g, '-'));
                 if (el) el.value = setting.value || el.value;
             });
         } catch {}
