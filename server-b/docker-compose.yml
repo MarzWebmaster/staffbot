@@ -38,7 +38,7 @@ services:
     ports:
       - "10.0.0.2:8080:8080"          # 🔒 Localhost only — proxied via WireGuard
     environment:
-      DATABASE_URL: postgresql://staffbot:${MEMORY_DB_PASSWORD:-staffbot}@memory-db:5432/staffbot_memory
+      DATABASE_URL: postgresql://staffbot:staffbot@db:5432/staffbot_db
       AUTH_KEY: ${GATEWAY_AUTH_KEY:?GATEWAY_AUTH_KEY is required — set in .env file}
       ILMUAI_API_KEY: sk-eaff19259c5faa588793591a6db0cee025e823928f344fe7
       GEMINI_API_KEY: AIzaSyBJSEh0XggsXOfbfi6oXoGDw2ADFmk-doA
