@@ -4,6 +4,23 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Policy — StaffBot.my</title>
+    <style>
+        @media (max-width: 768px) {
+            html, body { overflow-x: hidden !important; width: 100% !important; max-width: 100% !important; margin: 0 !important; padding: 0 !important; }
+            .app-layout { display: block !important; width: 100% !important; max-width: 100% !important; margin: 0 !important; }
+            .main-content { margin: 0 !important; margin-left: 0 !important; width: 100vw !important; max-width: 100vw !important; padding: 12px !important; padding-top: 56px !important; box-sizing: border-box !important; flex: none !important; float: none !important; display: block !important; }
+            .sidebar-toggle { display: flex !important; }
+            .sidebar-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 999; }
+            .sidebar-overlay.active { display: block; }
+            .sidebar { transform: translateX(-100%) !important; transition: transform 0.3s ease !important; }
+            .sidebar.open { transform: translateX(0) !important; }
+            .grid-4, .grid-3, .grid-2 { grid-template-columns: 1fr !important; gap: 12px !important; }
+            .card { padding: 14px !important; max-width: 100% !important; overflow-wrap: break-word !important; }
+            .table-container { overflow-x: auto !important; max-width: 100% !important; }
+            .modal { width: 95vw !important; max-width: 95vw !important; }
+            .btn { padding: 12px 20px !important; min-height: 44px !important; }
+        }
+    </style>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="/static/css/app.css?v=1779798256">
 </head>
@@ -11,18 +28,14 @@
     <button class="sidebar-toggle" onclick="toggleSidebar()">☰</button>
     <div class="sidebar-overlay" onclick="toggleSidebar()"></div>
     <div class="app-layout">
-        <!-- Sidebar -->
-                
-                <div class="sidebar" style="background:#111827">
+        <div class="sidebar" style="background:#111827">
             <div class="sidebar-brand"><h2>StaffBot.my</h2><span>Admin Panel</span></div>
             <nav class="sidebar-nav" id="sidebar-nav"></nav>
             <div id="sidebar-user" style="padding:16px 20px;border-top:1px solid rgba(255,255,255,0.1);margin-top:auto"></div>
         </div>
-        <!-- Main -->
         <div class="main-content">
             <div class="topbar"><h1>🛡️ Governance Policy</h1></div>
 
-            <!-- Tabs -->
             <div style="display:flex;gap:0;margin-bottom:24px;border-bottom:2px solid var(--border)">
                 <button class="tab-btn active" data-tab="skills" onclick="switchTab('skills')" style="padding:12px 24px;border:none;background:none;cursor:pointer;font-size:14px;font-weight:600;color:var(--text-light);border-bottom:2px solid transparent;margin-bottom:-2px">
                     🧠 Skills <span id="skills-count" style="font-size:12px;background:var(--primary);color:white;padding:2px 8px;border-radius:10px;margin-left:6px">0</span>
@@ -37,43 +50,81 @@
 
             <!-- Tab: Skills -->
             <div id="tab-skills" class="tab-content">
-                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
-                    <p style="font-size:13px;color:var(--text-light)">Toggle skills that will be installed in Hermes Agent containers. Only enabled skills are loaded at runtime.</p>
-                    <button class="btn btn-sm" onclick="saveSkills()" style="background:var(--success);color:white;border:none;padding:8px 20px;border-radius:6px;cursor:pointer;font-weight:600">💾 Save Skills</button>
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:8px">
+                    <p style="font-size:13px;color:var(--text-light);margin:0">Toggle skills. Only enabled skills are loaded at runtime.</p>
+                    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+                        <input type="text" id="skills-search" placeholder="🔍 Search skills..." oninput="onSkillSearch()" style="width:200px;padding:8px 12px;border:1px solid var(--border);border-radius:8px;font-size:13px;background:#1e293b;color:#e2e8f0">
+                        <button class="btn btn-sm" onclick="saveSkills()" style="background:var(--success);color:white;border:none;padding:8px 20px;border-radius:6px;cursor:pointer;font-weight:600">💾 Save Skills</button>
+                    </div>
                 </div>
 
-                <!-- Category filter -->
-                <div style="margin-bottom:16px;display:flex;flex-wrap:wrap;gap:8px" id="skill-categories">
+                <div style="margin-bottom:12px;display:flex;flex-wrap:wrap;gap:4px;max-height:80px;overflow-y:auto" id="skill-categories">
                     <button class="cat-filter active" data-cat="all" onclick="filterSkills('all')" style="padding:4px 14px;border-radius:14px;border:1px solid var(--border);background:var(--primary);color:white;cursor:pointer;font-size:12px">All</button>
                 </div>
 
-                <div id="skills-grid" class="grid-fill" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:12px">
-                    <p style="color:var(--text-light)">Loading skills...</p>
+                <!-- Add Skill form -->
+                <div style="margin-bottom:12px;background:rgba(255,255,255,0.03);padding:10px 14px;border-radius:8px;border:1px solid var(--border)">
+                    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:8px">
+                        <input type="text" id="new-skill-name" placeholder="Skill Name" style="flex:1;min-width:120px;padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:12px;background:#1e293b;color:#e2e8f0">
+                        <input type="text" id="new-skill-id" placeholder="ID (e.g. my-skill)" style="flex:1;min-width:120px;padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:12px;background:#1e293b;color:#e2e8f0">
+                        <input type="text" id="new-skill-desc" placeholder="Description" style="flex:2;min-width:160px;padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:12px;background:#1e293b;color:#e2e8f0">
+                        <input type="text" id="new-skill-cat" placeholder="Category" style="flex:0.5;min-width:80px;padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:12px;background:#1e293b;color:#e2e8f0">
+                    </div>
+                    <div style="display:flex;gap:8px;margin-bottom:6px;flex-wrap:wrap;align-items:center">
+                        <select id="gen-provider" onchange="loadProviderModels()" style="flex:1;min-width:100px;padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:11px;background:#1e293b;color:#e2e8f0">
+                            <option value="">Auto (first active provider)</option>
+                        </select>
+                        <select id="gen-model" style="flex:1;min-width:100px;padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:11px;background:#1e293b;color:#e2e8f0">
+                            <option value="">Default model</option>
+                        </select>
+                        <span style="font-size:10px;color:var(--text-light)">Generate using:</span>
+                    </div>
+                    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:stretch">
+                        <textarea id="new-skill-content" placeholder="SKILL.md content. Click Generate to auto-create, or type manually." style="flex:3;min-height:60px;padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:12px;font-family:monospace;resize:vertical;background:#1e293b;color:#e2e8f0"></textarea>
+                        <div style="display:flex;flex-direction:column;gap:4px;justify-content:flex-end">
+                            <button onclick="generateSkillContent()" style="background:#7C3AED;color:white;border:none;padding:6px 14px;border-radius:6px;cursor:pointer;font-size:11px;font-weight:600">🤖 Generate</button>
+                            <button onclick="addSkill()" style="background:var(--primary);color:white;border:none;padding:6px 14px;border-radius:6px;cursor:pointer;font-size:11px;font-weight:600">+ Add Skill</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="skills-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:12px">
+                    <p style="color:var(--text-light);grid-column:1/-1">Loading skills...</p>
+                </div>
+                <div id="skills-more" style="text-align:center;margin-top:16px;display:none">
+                    <button class="btn btn-sm" onclick="renderMoreSkills()" style="padding:10px 32px" id="btn-more-skills">📥 Load More Skills</button>
                 </div>
             </div>
 
             <!-- Tab: Tools -->
             <div id="tab-tools" class="tab-content" style="display:none">
                 <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
-                    <p style="font-size:13px;color:var(--text-light)">Toggle Hermes Agent toolsets that clients can use. High-risk tools require additional approval.</p>
+                    <p style="font-size:13px;color:var(--text-light)">Toggle toolsets. High-risk tools require additional approval.</p>
                     <button class="btn btn-sm" onclick="saveTools()" style="background:var(--success);color:white;border:none;padding:8px 20px;border-radius:6px;cursor:pointer;font-weight:600">💾 Save Tools</button>
                 </div>
-
-                <div id="tools-grid" class="grid-fill" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:12px">
-                    <p style="color:var(--text-light)">Loading tools...</p>
+                <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;align-items:center;background:rgba(255,255,255,0.03);padding:10px 14px;border-radius:8px;border:1px solid var(--border)">
+                    <input type="text" id="new-tool-name" placeholder="Name" style="flex:1;min-width:100px;padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:12px;background:#1e293b;color:#e2e8f0">
+                    <input type="text" id="new-tool-id" placeholder="ID" style="flex:0.7;min-width:80px;padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:12px;background:#1e293b;color:#e2e8f0">
+                    <input type="text" id="new-tool-desc" placeholder="Description" style="flex:2;min-width:140px;padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:12px;background:#1e293b;color:#e2e8f0">
+                    <select id="new-tool-risk" style="padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:12px;background:#1e293b;color:#e2e8f0">
+                        <option value="low">Low Risk</option>
+                        <option value="medium">Medium Risk</option>
+                        <option value="high" selected>High Risk</option>
+                    </select>
+                    <button onclick="addTool()" style="background:var(--primary);color:white;border:none;padding:6px 16px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600">+ Add Tool</button>
+                </div>
+                <div id="tools-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:12px">
+                    <p style="color:var(--text-light);grid-column:1/-1">Loading tools...</p>
                 </div>
             </div>
 
             <!-- Tab: Policy -->
             <div id="tab-policy" class="tab-content" style="display:none">
                 <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
-                    <p style="font-size:13px;color:var(--text-light)">Governance policy based on Microsoft Responsible AI standards. Controls what the AI agent is allowed to do.</p>
+                    <p style="font-size:13px;color:var(--text-light)">Governance policy based on Microsoft Responsible AI standards.</p>
                     <button class="btn btn-sm" onclick="savePolicy()" style="background:var(--success);color:white;border:none;padding:8px 20px;border-radius:6px;cursor:pointer;font-weight:600">💾 Save Policy</button>
                 </div>
-
-                <div id="policy-container">
-                    <p style="color:var(--text-light)">Loading policy...</p>
-                </div>
+                <div id="policy-container"><p style="color:var(--text-light)">Loading policy...</p></div>
             </div>
         </div>
     </div>
@@ -81,89 +132,119 @@
     <div id="toast-container" class="toast-container"></div>
     <script src="/static/js/app.js?v=1779798256"></script>
     <script>
-    // ── State ──────────────────────────────────────────────────
+    const PAGE_SIZE = 50;
     let skillsData = [];
     let toolsData = [];
     let policyData = null;
-    let activeTab = 'skills';
+    let filteredSkills = [];
+    let renderedCount = 0;
+    let activeCategory = 'all';
+    let searchQuery = '';
 
-    // ── Init ────────────────────────────────────────────────────
     async function init() {
         const user = await checkAdminAuth('/admin/login.html');
         if (!user) return;
-                renderSidebar('policy');
+        renderSidebar('policy');
         renderSidebarUser(user);
-        await loadAll();
+        await loadSkills();
+        Promise.all([loadTools(), loadPolicy()]);
+        setTimeout(loadGenerateProviders, 500);
     }
 
-    async function loadAll() {
-        await Promise.all([loadSkills(), loadTools(), loadPolicy()]);
-    }
-
-    // ── Tab Switching ──────────────────────────────────────────
     function switchTab(tab) {
-        activeTab = tab;
         document.querySelectorAll('.tab-btn').forEach(b => {
             b.style.color = b.dataset.tab === tab ? 'var(--primary)' : 'var(--text-light)';
             b.style.borderBottomColor = b.dataset.tab === tab ? 'var(--primary)' : 'transparent';
         });
         document.querySelectorAll('.tab-content').forEach(c => c.style.display = 'none');
-        document.getElementById(`tab-${tab}`).style.display = 'block';
+        document.getElementById('tab-' + tab).style.display = 'block';
     }
 
-    // ── Load Skills ────────────────────────────────────────────
+    // ── Skills ─────────────────────────────────────────────────
     async function loadSkills() {
         try {
             const data = await api('/admin/policy/skills');
             skillsData = data.skills;
             document.getElementById('skills-count').textContent = data.enabled;
-
-            // Build category filters
-            const cats = [...new Set(skillsData.map(s => s.category))].sort();
+            const catCounts = {};
+            skillsData.forEach(s => { catCounts[s.category] = (catCounts[s.category] || 0) + 1; });
+            const sortedCats = Object.entries(catCounts).sort((a, b) => b[1] - a[1]);
             const catContainer = document.getElementById('skill-categories');
-            catContainer.innerHTML = `<button class="cat-filter active" data-cat="all" onclick="filterSkills('all')" style="padding:4px 14px;border-radius:14px;border:1px solid var(--border);background:var(--primary);color:white;cursor:pointer;font-size:12px">All</button>`;
-            cats.forEach(cat => {
+            catContainer.innerHTML = '<button class="cat-filter active" data-cat="all" onclick="filterSkills(\'all\')" style="padding:4px 14px;border-radius:14px;border:1px solid var(--border);background:var(--primary);color:white;cursor:pointer;font-size:12px">All</button>';
+            sortedCats.forEach(([cat, count]) => {
                 const btn = document.createElement('button');
                 btn.className = 'cat-filter';
                 btn.dataset.cat = cat;
                 btn.onclick = () => filterSkills(cat);
-                btn.textContent = cat.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
-                btn.style.cssText = 'padding:4px 14px;border-radius:14px;border:1px solid var(--border);background:white;color:var(--text);cursor:pointer;font-size:12px';
+                btn.textContent = cat.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase()) + ' (' + count + ')';
+                btn.style.cssText = 'padding:4px 14px;border-radius:14px;border:1px solid var(--border);cursor:pointer;font-size:12px;margin:2px';
                 catContainer.appendChild(btn);
             });
-
-            renderSkills('all');
+            resetAndRender();
         } catch (e) {
-            document.getElementById('skills-grid').innerHTML = `<p style="color:var(--danger)">Error loading skills: ${e.message}</p>`;
+            document.getElementById('skills-grid').innerHTML = '<p style="color:var(--danger);grid-column:1/-1">Error: ' + e.message + '</p>';
         }
     }
 
-    function filterSkills(category) {
-        document.querySelectorAll('.cat-filter').forEach(b => {
-            b.style.background = b.dataset.cat === category ? 'var(--primary)' : 'white';
-            b.style.color = b.dataset.cat === category ? 'white' : 'var(--text)';
-        });
-        renderSkills(category);
+    function resetAndRender() {
+        renderedCount = 0;
+        applyFilters();
+        renderMoreSkills();
     }
 
-    function renderSkills(category) {
+    function applyFilters() {
+        filteredSkills = skillsData;
+        if (activeCategory !== 'all') filteredSkills = skillsData.filter(s => s.category === activeCategory);
+        if (searchQuery) {
+            const q = searchQuery.toLowerCase();
+            filteredSkills = filteredSkills.filter(s => s.name.toLowerCase().includes(q) || s.desc.toLowerCase().includes(q) || s.category.toLowerCase().includes(q));
+        }
+    }
+
+    function renderMoreSkills() {
         const grid = document.getElementById('skills-grid');
-        const filtered = category === 'all' ? skillsData : skillsData.filter(s => s.category === category);
-        grid.innerHTML = filtered.map(s => `
-            <div style="border:1px solid var(--border);border-radius:8px;padding:14px;background:white;display:flex;justify-content:space-between;align-items:flex-start">
-                <div style="flex:1">
-                    <div style="font-weight:600;font-size:13px;margin-bottom:4px">${s.name}</div>
-                    <div style="font-size:11px;color:var(--text-light);margin-bottom:4px">${s.desc}</div>
-                    <div style="font-size:10px;color:var(--text-light);background:var(--bg);display:inline-block;padding:2px 8px;border-radius:4px">${s.category}</div>
-                    <span style="font-size:10px;color:${s.enabled ? 'var(--success)' : 'var(--text-light)'};margin-left:6px">${s.enabled ? 'Enabled' : 'Disabled'}</span>
-                </div>
-                <label style="position:relative;display:inline-block;width:42px;height:22px;flex-shrink:0;margin-left:12px">
-                    <input type="checkbox" ${s.enabled ? 'checked' : ''} data-id="${s.id}" onchange="toggleSkill(this)" style="opacity:0;width:0;height:0">
-                    <span class="toggle-slider" style="position:absolute;cursor:pointer;top:0;left:0;right:0;bottom:0;border-radius:22px;background:${s.enabled ? 'var(--success)' : '#CBD5E1'};transition:0.3s"></span>
-                    <span class="toggle-knob" style="position:absolute;content:'';height:18px;width:18px;border-radius:50%;background:white;top:2px;left:${s.enabled ? '22px' : '2px'};transition:0.3s;box-shadow:0 1px 3px rgba(0,0,0,0.2)"></span>
-                </label>
-            </div>
-        `).join('');
+        const moreBtn = document.getElementById('btn-more-skills');
+        const container = document.getElementById('skills-more');
+        if (renderedCount === 0) grid.innerHTML = '';
+        const batch = filteredSkills.slice(renderedCount, renderedCount + PAGE_SIZE);
+        if (batch.length === 0) { container.style.display = 'none'; return; }
+        const tmp = document.createElement('div');
+        tmp.innerHTML = batch.map(s =>
+            '<div style="border:1px solid var(--border);border-radius:8px;padding:14px;background:#1e293b;display:flex;justify-content:space-between;align-items:flex-start">' +
+                '<div style="flex:1">' +
+                    '<div style="font-weight:600;font-size:13px;margin-bottom:4px;color:#e2e8f0">' + esc(s.name) + '</div>' +
+                    '<div style="font-size:11px;color:var(--text-light);margin-bottom:4px">' + esc(s.desc) + '</div>' +
+                    '<div style="font-size:10px;background:rgba(255,255,255,0.05);display:inline-block;padding:2px 8px;border-radius:4px;color:var(--text-light)">' + esc(s.category) + '</div>' +
+                    '<span style="font-size:10px;color:' + (s.enabled ? 'var(--success)' : 'var(--text-light)') + ';margin-left:6px">' + (s.enabled ? 'Enabled' : 'Disabled') + '</span>' +
+                    (s.src === 'custom' ? ' <button onclick="removeSkill(\'' + s.id + '\')" style="background:none;border:none;color:#ef4444;cursor:pointer;font-size:14px;margin-left:8px" title="Remove custom skill">🗑️</button>' : '') +
+                '</div>' +
+                '<label style="position:relative;display:inline-block;width:42px;height:22px;flex-shrink:0;margin-left:12px">' +
+                    '<input type="checkbox"' + (s.enabled ? ' checked' : '') + ' data-id="' + s.id + '" onchange="toggleSkill(this)" style="opacity:0;width:0;height:0">' +
+                    '<span class="toggle-slider" style="position:absolute;cursor:pointer;top:0;left:0;right:0;bottom:0;border-radius:22px;transition:0.3s;background:' + (s.enabled ? 'var(--success)' : '#CBD5E1') + '"></span>' +
+                    '<span class="toggle-knob" style="position:absolute;height:18px;width:18px;border-radius:50%;background:white;top:2px;transition:0.3s;box-shadow:0 1px 3px rgba(0,0,0,0.2);left:' + (s.enabled ? '22px' : '2px') + '"></span>' +
+                '</label>' +
+            '</div>'
+        ).join('');
+        while (tmp.firstChild) grid.appendChild(tmp.firstChild);
+        renderedCount += batch.length;
+        const remaining = filteredSkills.length - renderedCount;
+        if (remaining > 0) {
+            moreBtn.textContent = '📥 Load More (' + remaining + ' remaining)';
+            container.style.display = 'block';
+        } else { container.style.display = 'none'; }
+    }
+
+    function esc(s) { return (s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+
+    function onSkillSearch() { searchQuery = document.getElementById('skills-search').value; resetAndRender(); }
+
+    function filterSkills(cat) {
+        activeCategory = cat;
+        document.querySelectorAll('#skill-categories .cat-filter').forEach(b => {
+            b.style.background = b.dataset.cat === cat ? 'var(--primary)' : '';
+            b.style.color = b.dataset.cat === cat ? 'white' : '';
+        });
+        resetAndRender();
     }
 
     function toggleSkill(el) {
@@ -171,64 +252,110 @@
         const skill = skillsData.find(s => s.id === id);
         if (skill) skill.enabled = el.checked;
         document.getElementById('skills-count').textContent = skillsData.filter(s => s.enabled).length;
-        // Visual update
-        const card = el.closest('div').closest('div');
-        const status = card.querySelector('span:last-child');
-        if (status) {
-            status.textContent = el.checked ? 'Enabled' : 'Disabled';
-            status.style.color = el.checked ? 'var(--success)' : 'var(--text-light)';
-        }
-        // Update slider colors
+        const card = el.closest('div').parentElement;
+        const status = card.querySelector('span:nth-last-child(2)');
+        if (status) { status.textContent = el.checked ? 'Enabled' : 'Disabled'; status.style.color = el.checked ? 'var(--success)' : 'var(--text-light)'; }
         const slider = el.nextElementSibling;
         slider.style.background = el.checked ? 'var(--success)' : '#CBD5E1';
-        const knob = slider.nextElementSibling;
-        knob.style.left = el.checked ? '22px' : '2px';
+        slider.nextElementSibling.style.left = el.checked ? '22px' : '2px';
     }
 
     async function saveSkills() {
         const enabled = skillsData.filter(s => s.enabled).map(s => s.id);
         try {
-            await api('/admin/policy/skills', {
-                method: 'PUT',
-                body: JSON.stringify({ enabled_skills: enabled })
-            });
-            showToast(`✅ ${enabled.length} skills saved!`, 'success');
-        } catch (e) {
-            showToast(`❌ ${e.message}`, 'error');
-        }
+            await api('/admin/policy/skills', { method: 'PUT', body: JSON.stringify({ enabled_skills: enabled }) });
+            showToast('✅ ' + enabled.length + ' skills saved!', 'success');
+        } catch (e) { showToast('❌ ' + e.message, 'error'); }
     }
 
-    // ── Load Tools ─────────────────────────────────────────────
+    function removeSkill(id) {
+        skillsData = skillsData.filter(s => s.id !== id);
+        document.getElementById('skills-count').textContent = skillsData.filter(s => s.enabled).length;
+        resetAndRender();
+    }
+
+    function addSkill() {
+        const name = document.getElementById('new-skill-name').value.trim();
+        const id = document.getElementById('new-skill-id').value.trim();
+        const desc = document.getElementById('new-skill-desc').value.trim();
+        const cat = document.getElementById('new-skill-cat').value.trim().toLowerCase().replace(/\s+/g, '-') || 'custom';
+        const contentMD = document.getElementById('new-skill-content').value.trim();
+        if (!name || !id) { showToast('❌ Name and ID required', 'error'); return; }
+        if (skillsData.find(s => s.id === id)) { showToast('❌ Skill ID already exists', 'error'); return; }
+        skillsData.unshift({ id, name, desc, category: cat, content: contentMD, enabled: true, src: 'custom' });
+        ['new-skill-name', 'new-skill-id', 'new-skill-desc', 'new-skill-cat', 'new-skill-content'].forEach(f => { document.getElementById(f).value = ''; });
+        document.getElementById('skills-count').textContent = skillsData.filter(s => s.enabled).length;
+        resetAndRender();
+        showToast('✅ Skill added — click 💾 Save Skills to persist', 'success');
+    }
+
+    async function loadProviderModels() {
+        const provSelect = document.getElementById('gen-provider');
+        const modelSelect = document.getElementById('gen-model');
+        const selectedProv = provSelect.value;
+        modelSelect.innerHTML = '<option value="">Default model</option>';
+        if (!selectedProv) return;
+        try {
+            const providers = await api('/admin/providers/providers');
+            const prov = providers.find(p => p.name === selectedProv);
+            if (prov && prov.models) { prov.models.forEach(m => { const opt = document.createElement('option'); opt.value = m; opt.textContent = m; modelSelect.appendChild(opt); }); }
+        } catch {}
+    }
+
+    async function loadGenerateProviders() {
+        try {
+            const providers = await api('/admin/providers/providers');
+            const select = document.getElementById('gen-provider');
+            providers.filter(p => p.is_active).forEach(p => { const opt = document.createElement('option'); opt.value = p.name; opt.textContent = p.display_name; select.appendChild(opt); });
+        } catch {}
+    }
+
+    async function generateSkillContent() {
+        const name = document.getElementById('new-skill-name').value.trim();
+        const desc = document.getElementById('new-skill-desc').value.trim();
+        const cat = document.getElementById('new-skill-cat').value.trim().toLowerCase().replace(/\s+/g, '-') || 'custom';
+        if (!name) { showToast('❌ Name required first', 'error'); return; }
+        const btn = event.target;
+        btn.textContent = '⏳ Generating...'; btn.disabled = true;
+        try {
+            const providerName = document.getElementById('gen-provider').value || null;
+            const model = document.getElementById('gen-model').value || null;
+            const res = await api('/admin/policy/skills/generate', { method: 'POST', body: JSON.stringify({ name, description: desc, category: cat, provider_name: providerName, model }) });
+            if (res.content) { document.getElementById('new-skill-content').value = res.content; showToast('✅ Content generated!', 'success'); }
+            else { showToast('❌ No content returned', 'error'); }
+        } catch (e) { showToast('❌ ' + e.message, 'error'); }
+        finally { btn.textContent = '🤖 Generate'; btn.disabled = false; }
+    }
+
+    // ── Tools ──────────────────────────────────────────────────
     async function loadTools() {
         try {
             const data = await api('/admin/policy/tools');
             toolsData = data.toolsets;
             document.getElementById('tools-count').textContent = data.enabled;
             renderTools();
-        } catch (e) {
-            document.getElementById('tools-grid').innerHTML = `<p style="color:var(--danger)">Error: ${e.message}</p>`;
-        }
+        } catch (e) { document.getElementById('tools-grid').innerHTML = '<p style="color:var(--danger);grid-column:1/-1">Error: ' + e.message + '</p>'; }
     }
 
     function renderTools() {
         const grid = document.getElementById('tools-grid');
-        grid.innerHTML = toolsData.map(t => `
-            <div style="border:1px solid var(--border);border-radius:8px;padding:14px;background:white;display:flex;justify-content:space-between;align-items:flex-start">
-                <div style="flex:1">
-                    <div style="font-weight:600;font-size:13px;margin-bottom:4px">${t.name}</div>
-                    <div style="font-size:11px;color:var(--text-light);margin-bottom:4px">${t.desc}</div>
-                    <div style="display:flex;gap:6px;align-items:center">
-                        <span style="font-size:10px;background:${t.risk === 'high' ? '#FEE2E2' : t.risk === 'medium' ? '#FEF3C7' : '#D1FAE5'};color:${t.risk === 'high' ? '#DC2626' : t.risk === 'medium' ? '#D97706' : '#059669'};padding:2px 8px;border-radius:4px;border:1px solid ${t.risk === 'high' ? '#FCA5A5' : t.risk === 'medium' ? '#FCD34D' : '#6EE7B7'}">${t.risk.toUpperCase()} RISK</span>
-                        <span style="font-size:10px;color:${t.enabled ? 'var(--success)' : 'var(--text-light)'}">${t.enabled ? 'Active' : 'Inactive'}</span>
-                    </div>
-                </div>
-                <label style="position:relative;display:inline-block;width:42px;height:22px;flex-shrink:0;margin-left:12px">
-                    <input type="checkbox" ${t.enabled ? 'checked' : ''} data-id="${t.id}" onchange="toggleTool(this)" style="opacity:0;width:0;height:0">
-                    <span class="toggle-slider" style="position:absolute;cursor:pointer;top:0;left:0;right:0;bottom:0;border-radius:22px;background:${t.enabled ? 'var(--success)' : '#CBD5E1'};transition:0.3s"></span>
-                    <span class="toggle-knob" style="position:absolute;content:'';height:18px;width:18px;border-radius:50%;background:white;top:2px;left:${t.enabled ? '22px' : '2px'};transition:0.3s;box-shadow:0 1px 3px rgba(0,0,0,0.2)"></span>
-                </label>
-            </div>
-        `).join('');
+        grid.innerHTML = toolsData.map(t =>
+            '<div style="border:1px solid var(--border);border-radius:8px;padding:14px;background:#1e293b;display:flex;justify-content:space-between;align-items:flex-start">' +
+                '<div style="flex:1">' +
+                    '<div style="font-weight:600;font-size:13px;margin-bottom:4px;color:#e2e8f0">' + esc(t.name) + '</div>' +
+                    '<div style="font-size:11px;color:var(--text-light);margin-bottom:4px">' + esc(t.desc) + '</div>' +
+                    '<div style="display:flex;gap:6px;align-items:center">' +
+                        '<span style="font-size:10px;padding:2px 8px;border-radius:4px;border:1px solid ' + (t.risk === 'high' ? '#FCA5A5' : t.risk === 'medium' ? '#FCD34D' : '#6EE7B7') + ';background:' + (t.risk === 'high' ? '#FEE2E2' : t.risk === 'medium' ? '#FEF3C7' : '#D1FAE5') + ';color:' + (t.risk === 'high' ? '#DC2626' : t.risk === 'medium' ? '#D97706' : '#059669') + '">' + t.risk.toUpperCase() + ' RISK</span>' +
+                        '<span style="font-size:10px;color:' + (t.enabled ? 'var(--success)' : 'var(--text-light)') + '">' + (t.enabled ? 'Active' : 'Inactive') + '</span>' +
+                    '</div>' +
+                '</div>' +
+                '<label style="position:relative;display:inline-block;width:42px;height:22px;flex-shrink:0;margin-left:12px">' +
+                    '<input type="checkbox"' + (t.enabled ? ' checked' : '') + ' data-id="' + t.id + '" onchange="toggleTool(this)" style="opacity:0;width:0;height:0">' +
+                    '<span class="toggle-slider" style="position:absolute;cursor:pointer;top:0;left:0;right:0;bottom:0;border-radius:22px;transition:0.3s;background:' + (t.enabled ? 'var(--success)' : '#CBD5E1') + '"></span>' +
+                    '<span class="toggle-knob" style="position:absolute;height:18px;width:18px;border-radius:50%;background:white;top:2px;transition:0.3s;box-shadow:0 1px 3px rgba(0,0,0,0.2);left:' + (t.enabled ? '22px' : '2px') + '"></span>' +
+                '</label>' +
+            '</div>'
+        ).join('');
     }
 
     function toggleTool(el) {
@@ -236,227 +363,86 @@
         const tool = toolsData.find(t => t.id === id);
         if (tool) tool.enabled = el.checked;
         document.getElementById('tools-count').textContent = toolsData.filter(t => t.enabled).length;
-        // Update visual
-        const card = el.closest('div').closest('div');
+        const card = el.closest('div').parentElement;
         const status = card.querySelector('span:last-child');
-        if (status) {
-            status.textContent = el.checked ? 'Active' : 'Inactive';
-            status.style.color = el.checked ? 'var(--success)' : 'var(--text-light)';
-        }
+        if (status) { status.textContent = el.checked ? 'Active' : 'Inactive'; status.style.color = el.checked ? 'var(--success)' : 'var(--text-light)'; }
         const slider = el.nextElementSibling;
         slider.style.background = el.checked ? 'var(--success)' : '#CBD5E1';
-        const knob = slider.nextElementSibling;
-        knob.style.left = el.checked ? '22px' : '2px';
+        slider.nextElementSibling.style.left = el.checked ? '22px' : '2px';
     }
 
     async function saveTools() {
         const enabled = toolsData.filter(t => t.enabled).map(t => t.id);
         try {
-            await api('/admin/policy/tools', {
-                method: 'PUT',
-                body: JSON.stringify({ enabled_tools: enabled })
-            });
-            showToast(`✅ ${enabled.length} tools saved!`, 'success');
-        } catch (e) {
-            showToast(`❌ ${e.message}`, 'error');
-        }
+            await api('/admin/policy/tools', { method: 'PUT', body: JSON.stringify({ enabled_tools: enabled }) });
+            showToast('✅ ' + enabled.length + ' tools saved!', 'success');
+        } catch (e) { showToast('❌ ' + e.message, 'error'); }
     }
 
-    // ── Load Policy ────────────────────────────────────────────
+    function addTool() {
+        const name = document.getElementById('new-tool-name').value.trim();
+        const id = document.getElementById('new-tool-id').value.trim();
+        const desc = document.getElementById('new-tool-desc').value.trim();
+        const risk = document.getElementById('new-tool-risk').value;
+        if (!name || !id) { showToast('❌ Name and ID required', 'error'); return; }
+        if (toolsData.find(t => t.id === id)) { showToast('❌ Tool ID already exists', 'error'); return; }
+        toolsData.unshift({ id, name, desc, risk, enabled: true, src: 'custom' });
+        ['new-tool-name', 'new-tool-id', 'new-tool-desc'].forEach(f => { document.getElementById(f).value = ''; });
+        document.getElementById('tools-count').textContent = toolsData.filter(t => t.enabled).length;
+        renderTools();
+        showToast('✅ Tool added — click 💾 Save Tools to persist', 'success');
+    }
+
+    // ── Policy ─────────────────────────────────────────────────
     async function loadPolicy() {
-        try {
-            policyData = await api('/admin/policy/policy');
-            renderPolicy();
-        } catch (e) {
-            document.getElementById('policy-container').innerHTML = `<p style="color:var(--danger)">Error: ${e.message}</p>`;
-        }
+        try { policyData = await api('/admin/policy/policy'); renderPolicy(); }
+        catch (e) { document.getElementById('policy-container').innerHTML = '<p style="color:var(--danger)">Error: ' + e.message + '</p>'; }
     }
 
     function renderPolicy() {
-        const p = policyData;
-        if (!p) return;
-
-        const container = document.getElementById('policy-container');
-        container.innerHTML = `
-            <div style="display:grid;gap:16px">
-                <!-- General Restrictions -->
-                <div class="card">
-                    <div class="card-header"><h3>🚫 General Restrictions</h3></div>
-                    <div style="padding:16px">
-                        <p style="font-size:13px;color:var(--text-light);margin-bottom:12px">Rules that the AI agent MUST always follow. Based on Microsoft Responsible AI standards.</p>
-                        <div id="restrictions-list">
-                            ${p.general_restrictions.map((r, i) => `
-                                <div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border)">
-                                    <span style="color:var(--danger);font-size:16px">⛔</span>
-                                    <span style="font-size:13px;flex:1">${r}</span>
-                                    <button onclick="removeRestriction(${i})" style="background:none;border:none;color:var(--danger);cursor:pointer;font-size:16px">✕</button>
-                                </div>
-                            `).join('')}
-                        </div>
-                        <div style="display:flex;gap:8px;margin-top:12px">
-                            <input type="text" id="new-restriction" placeholder="Add new restriction..." style="flex:1;padding:8px 12px;border:1px solid var(--border);border-radius:6px;font-size:13px">
-                            <button onclick="addRestriction()" style="background:var(--primary);color:white;border:none;padding:8px 16px;border-radius:6px;cursor:pointer;font-size:13px">+ Add</button>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Content Filtering -->
-                <div class="card">
-                    <div class="card-header"><h3>🔍 Content Filtering</h3></div>
-                    <div style="padding:16px">
-                        <p style="font-size:13px;color:var(--text-light);margin-bottom:12px">Azure AI Content Safety-style filtering for AI outputs.</p>
-                        <div class="inline-grid-2" style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
-                            <div><label style="font-size:12px;font-weight:600">Filter Strength</label>
-                                <select id="policy-filter-strength" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:6px;margin-top:4px">
-                                    <option value="low" ${p.content_filtering.filter_strength === 'low' ? 'selected' : ''}>Low (minimal filtering)</option>
-                                    <option value="medium" ${p.content_filtering.filter_strength === 'medium' ? 'selected' : ''}>Medium (recommended)</option>
-                                    <option value="high" ${p.content_filtering.filter_strength === 'high' ? 'selected' : ''}>High (strict)</option>
-                                </select>
-                            </div>
-                            <div><label style="font-size:12px;font-weight:600">Prompt Injection Protection</label>
-                                <div style="margin-top:8px">
-                                    <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer">
-                                        <input type="checkbox" ${p.content_filtering.prompt_injection_protection ? 'checked' : ''} id="policy-prompt-injection"> Enable protection
-                                    </label>
-                                    <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;margin-top:4px">
-                                        <input type="checkbox" ${p.content_filtering.jailbreak_detection ? 'checked' : ''} id="policy-jailbreak"> Jailbreak detection
-                                    </label>
-                                </div>
-                            </div>
-                        </div>
-                        <div style="margin-top:12px">
-                            <label style="font-size:12px;font-weight:600;display:block;margin-bottom:6px">Blocked Categories</label>
-                            <div style="display:flex;flex-wrap:wrap;gap:6px">
-                                ${['hate_speech','violence','sexual_content','self_harm','harassment','illegal_activities'].map(cat => `
-                                    <label style="display:flex;align-items:center;gap:4px;font-size:12px;padding:4px 10px;border:1px solid var(--border);border-radius:4px;cursor:pointer">
-                                        <input type="checkbox" ${p.content_filtering.blocked_categories.includes(cat) ? 'checked' : ''} class="policy-blocked-cat" value="${cat}"> ${cat.replace(/_/g, ' ')}
-                                    </label>
-                                `).join('')}
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Action Restrictions -->
-                <div class="card">
-                    <div class="card-header"><h3>⚡ Action Restrictions</h3></div>
-                    <div style="padding:16px">
-                        <p style="font-size:13px;color:var(--text-light);margin-bottom:12px">Categorise actions by permission level.</p>
-                        <div class="inline-grid-3" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px">
-                            <div style="border:1px solid #D1FAE5;border-radius:8px;padding:12px;background:#F0FDF4">
-                                <h4 style="font-size:12px;color:#059669;margin-bottom:8px">✅ Allowed (${p.action_restrictions.allowed_actions.length})</h4>
-                                <div id="allowed-actions">
-                                    ${p.action_restrictions.allowed_actions.map(a => `<div style="font-size:11px;padding:2px 0;display:flex;justify-content:space-between"><span>${a.replace(/_/g, ' ')}</span><span onclick="moveAction('${a}','allowed','blocked')" style="cursor:pointer;color:var(--danger);font-weight:bold">→</span></div>`).join('')}
-                                </div>
-                            </div>
-                            <div style="border:1px solid #FEF3C7;border-radius:8px;padding:12px;background:#FFFBEB">
-                                <h4 style="font-size:12px;color:#D97706;margin-bottom:8px">⚠️ Approval Required (${p.action_restrictions.approval_required.length})</h4>
-                                <div id="approval-actions">
-                                    ${p.action_restrictions.approval_required.map(a => `<div style="font-size:11px;padding:2px 0;display:flex;justify-content:space-between"><span onclick="moveAction('${a}','approval','allowed')" style="cursor:pointer;color:var(--success);font-weight:bold;margin-right:4px">←</span><span>${a.replace(/_/g, ' ')}</span><span onclick="moveAction('${a}','approval','blocked')" style="cursor:pointer;color:var(--danger);font-weight:bold;margin-left:4px">→</span></div>`).join('')}
-                                </div>
-                            </div>
-                            <div style="border:1px solid #FEE2E2;border-radius:8px;padding:12px;background:#FEF2F2">
-                                <h4 style="font-size:12px;color:#DC2626;margin-bottom:8px">❌ Blocked (${p.action_restrictions.blocked_actions.length})</h4>
-                                <div id="blocked-actions">
-                                    ${p.action_restrictions.blocked_actions.map(a => `<div style="font-size:11px;padding:2px 0;display:flex;justify-content:space-between"><span onclick="moveAction('${a}','blocked','approval')" style="cursor:pointer;color:#D97706;font-weight:bold;margin-right:4px">←</span><span>${a.replace(/_/g, ' ')}</span></div>`).join('')}
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Data Governance -->
-                <div class="card">
-                    <div class="card-header"><h3>💾 Data Governance</h3></div>
-                    <div style="padding:16px">
-                        <div class="inline-grid-3" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px">
-                            <div><label style="font-size:12px;font-weight:600">Data Retention (days)</label>
-                                <input type="number" id="policy-retention" value="${p.data_governance.retention_days}" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:6px;margin-top:4px">
-                            </div>
-                            <div><label style="font-size:12px;font-weight:600">Audit Retention (days)</label>
-                                <input type="number" id="policy-audit-retention" value="${p.data_governance.audit_retention_days}" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:6px;margin-top:4px">
-                            </div>
-                            <div><label style="font-size:12px;font-weight:600">Auto Purge</label>
-                                <div style="margin-top:8px">
-                                    <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer">
-                                        <input type="checkbox" ${p.data_governance.auto_purge_after_expiry ? 'checked' : ''} id="policy-auto-purge"> Enable auto-purge
-                                    </label>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Rate Limits -->
-                <div class="card">
-                    <div class="card-header"><h3>⏱️ Rate Limits</h3></div>
-                    <div style="padding:16px">
-                        <div class="inline-grid-4" style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:12px">
-                            <div><label style="font-size:12px;font-weight:600">Max Requests/min</label>
-                                <input type="number" id="policy-rate-max-req" value="${p.rate_limits.max_requests_per_minute}" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:6px;margin-top:4px">
-                            </div>
-                            <div><label style="font-size:12px;font-weight:600">Max Tokens/hour</label>
-                                <input type="number" id="policy-rate-tokens" value="${p.rate_limits.max_tokens_per_hour}" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:6px;margin-top:4px">
-                            </div>
-                            <div><label style="font-size:12px;font-weight:600">Max Concurrent</label>
-                                <input type="number" id="policy-rate-concurrent" value="${p.rate_limits.max_concurrent_tasks}" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:6px;margin-top:4px">
-                            </div>
-                            <div><label style="font-size:12px;font-weight:600">Cooldown (sec)</label>
-                                <input type="number" id="policy-cooldown" value="${p.rate_limits.cooldown_after_violation_seconds}" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:6px;margin-top:4px">
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Monitoring -->
-                <div class="card">
-                    <div class="card-header"><h3>📊 Monitoring</h3></div>
-                    <div style="padding:16px">
-                        <div class="inline-grid-2" style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
-                            <div>
-                                <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;margin-bottom:8px">
-                                    <input type="checkbox" ${p.monitoring.log_all_actions ? 'checked' : ''} id="policy-log-all"> Log all AI actions
-                                </label>
-                                <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;margin-bottom:8px">
-                                    <input type="checkbox" ${p.monitoring.log_approval_requests ? 'checked' : ''} id="policy-log-approval"> Log approval requests
-                                </label>
-                                <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer">
-                                    <input type="checkbox" ${p.monitoring.alert_on_violation ? 'checked' : ''} id="policy-alert-violation"> Alert on violation
-                                </label>
-                            </div>
-                            <div><label style="font-size:12px;font-weight:600">Suspension Threshold (violations)</label>
-                                <input type="number" id="policy-suspension-threshold" value="${p.monitoring.violation_threshold_before_suspension}" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:6px;margin-top:4px">
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        `;
+        const p = policyData; if (!p) return;
+        const c = document.getElementById('policy-container');
+        c.innerHTML =
+            '<div style="display:grid;gap:16px">' +
+                '<div class="card"><div class="card-header"><h3>🚫 General Restrictions</h3></div><div style="padding:16px">' +
+                    '<p style="font-size:13px;color:var(--text-light);margin-bottom:12px">Rules the AI agent MUST always follow.</p>' +
+                    '<div id="restrictions-list">' + p.general_restrictions.map((r, i) => '<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border)"><span style="color:var(--danger);font-size:16px">⛔</span><span style="font-size:13px;flex:1;color:#e2e8f0">' + esc(r) + '</span><button onclick="removeRestriction(' + i + ')" style="background:none;border:none;color:var(--danger);cursor:pointer;font-size:16px">✕</button></div>').join('') + '</div>' +
+                    '<div style="display:flex;gap:8px;margin-top:12px"><input type="text" id="new-restriction" placeholder="Add new restriction..." style="flex:1;padding:8px 12px;border:1px solid var(--border);border-radius:6px;font-size:13px;background:#1e293b;color:#e2e8f0"><button onclick="addRestriction()" style="background:var(--primary);color:white;border:none;padding:8px 16px;border-radius:6px;cursor:pointer;font-size:13px">+ Add</button></div>' +
+                '</div></div>' +
+                '<div class="card"><div class="card-header"><h3>🔍 Content Filtering</h3></div><div style="padding:16px">' +
+                    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">' +
+                        '<div><label style="font-size:12px;font-weight:600">Filter Strength</label><select id="policy-filter-strength" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:6px;margin-top:4px;background:#1e293b;color:#e2e8f0"><option value="low"' + (p.content_filtering.filter_strength === 'low' ? ' selected' : '') + '>Low</option><option value="medium"' + (p.content_filtering.filter_strength === 'medium' ? ' selected' : '') + '>Medium (recommended)</option><option value="high"' + (p.content_filtering.filter_strength === 'high' ? ' selected' : '') + '>High (strict)</option></select></div>' +
+                        '<div><label style="font-size:12px;font-weight:600">Protection</label><div style="margin-top:8px"><label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer"><input type="checkbox"' + (p.content_filtering.prompt_injection_protection ? ' checked' : '') + ' id="policy-prompt-injection"> Prompt injection</label><label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;margin-top:4px"><input type="checkbox"' + (p.content_filtering.jailbreak_detection ? ' checked' : '') + ' id="policy-jailbreak"> Jailbreak detection</label></div></div>' +
+                    '</div>' +
+                    '<div style="margin-top:12px"><label style="font-size:12px;font-weight:600;display:block;margin-bottom:6px">Blocked Categories</label><div style="display:flex;flex-wrap:wrap;gap:6px">' + ['hate_speech', 'violence', 'sexual_content', 'self_harm', 'harassment', 'illegal_activities'].map(cat => '<label style="display:flex;align-items:center;gap:4px;font-size:12px;padding:4px 10px;border:1px solid var(--border);border-radius:4px;cursor:pointer"><input type="checkbox"' + (p.content_filtering.blocked_categories.includes(cat) ? ' checked' : '') + ' class="policy-blocked-cat" value="' + cat + '"> ' + cat.replace(/_/g, ' ') + '</label>').join('') + '</div></div>' +
+                '</div></div>' +
+                '<div class="card"><div class="card-header"><h3>⚡ Action Restrictions</h3></div><div style="padding:16px">' +
+                    '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px">' +
+                        '<div style="border:1px solid #D1FAE5;border-radius:8px;padding:12px;background:#F0FDF4"><h4 style="font-size:12px;color:#059669;margin-bottom:8px">✅ Allowed (' + p.action_restrictions.allowed_actions.length + ')</h4>' + p.action_restrictions.allowed_actions.map(a => '<div style="font-size:11px;padding:2px 0;display:flex;justify-content:space-between"><span>' + esc(a.replace(/_/g, ' ')) + '</span><span onclick="moveAction(\'' + a + '\',\'allowed\',\'blocked\')" style="cursor:pointer;color:var(--danger);font-weight:bold">→</span></div>').join('') + '</div>' +
+                        '<div style="border:1px solid #FEF3C7;border-radius:8px;padding:12px;background:#FFFBEB"><h4 style="font-size:12px;color:#D97706;margin-bottom:8px">⚠️ Approval (' + p.action_restrictions.approval_required.length + ')</h4>' + p.action_restrictions.approval_required.map(a => '<div style="font-size:11px;padding:2px 0;display:flex;justify-content:space-between"><span onclick="moveAction(\'' + a + '\',\'approval\',\'allowed\')" style="cursor:pointer;color:var(--success);font-weight:bold;margin-right:4px">←</span><span>' + esc(a.replace(/_/g, ' ')) + '</span><span onclick="moveAction(\'' + a + '\',\'approval\',\'blocked\')" style="cursor:pointer;color:var(--danger);font-weight:bold;margin-left:4px">→</span></div>').join('') + '</div>' +
+                        '<div style="border:1px solid #FEE2E2;border-radius:8px;padding:12px;background:#FEF2F2"><h4 style="font-size:12px;color:#DC2626;margin-bottom:8px">❌ Blocked (' + p.action_restrictions.blocked_actions.length + ')</h4>' + p.action_restrictions.blocked_actions.map(a => '<div style="font-size:11px;padding:2px 0;display:flex;justify-content:space-between"><span onclick="moveAction(\'' + a + '\',\'blocked\',\'approval\')" style="cursor:pointer;color:#D97706;font-weight:bold;margin-right:4px">←</span><span>' + esc(a.replace(/_/g, ' ')) + '</span></div>').join('') + '</div>' +
+                    '</div></div></div>' +
+                '<div class="card"><div class="card-header"><h3>💾 Data Governance</h3></div><div style="padding:16px"><div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px">' +
+                    '<div><label style="font-size:12px;font-weight:600">Retention (days)</label><input type="number" id="policy-retention" value="' + p.data_governance.retention_days + '" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:6px;margin-top:4px;background:#1e293b;color:#e2e8f0"></div>' +
+                    '<div><label style="font-size:12px;font-weight:600">Audit (days)</label><input type="number" id="policy-audit-retention" value="' + p.data_governance.audit_retention_days + '" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:6px;margin-top:4px;background:#1e293b;color:#e2e8f0"></div>' +
+                    '<div><label style="font-size:12px;font-weight:600">Auto Purge</label><div style="margin-top:8px"><label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer"><input type="checkbox"' + (p.data_governance.auto_purge_after_expiry ? ' checked' : '') + ' id="policy-auto-purge"> Enable</label></div></div>' +
+                '</div></div></div>' +
+                '<div class="card"><div class="card-header"><h3>⏱️ Rate Limits</h3></div><div style="padding:16px"><div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:12px">' +
+                    '<div><label style="font-size:12px;font-weight:600">Req/min</label><input type="number" id="policy-rate-max-req" value="' + p.rate_limits.max_requests_per_minute + '" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:6px;margin-top:4px;background:#1e293b;color:#e2e8f0"></div>' +
+                    '<div><label style="font-size:12px;font-weight:600">Tokens/hr</label><input type="number" id="policy-rate-tokens" value="' + p.rate_limits.max_tokens_per_hour + '" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:6px;margin-top:4px;background:#1e293b;color:#e2e8f0"></div>' +
+                    '<div><label style="font-size:12px;font-weight:600">Concurrent</label><input type="number" id="policy-rate-concurrent" value="' + p.rate_limits.max_concurrent_tasks + '" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:6px;margin-top:4px;background:#1e293b;color:#e2e8f0"></div>' +
+                    '<div><label style="font-size:12px;font-weight:600">Cooldown (s)</label><input type="number" id="policy-cooldown" value="' + p.rate_limits.cooldown_after_violation_seconds + '" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:6px;margin-top:4px;background:#1e293b;color:#e2e8f0"></div>' +
+                '</div></div></div>' +
+                '<div class="card"><div class="card-header"><h3>📊 Monitoring</h3></div><div style="padding:16px"><div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">' +
+                    '<div><label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;margin-bottom:8px"><input type="checkbox"' + (p.monitoring.log_all_actions ? ' checked' : '') + ' id="policy-log-all"> Log all actions</label><label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;margin-bottom:8px"><input type="checkbox"' + (p.monitoring.log_approval_requests ? ' checked' : '') + ' id="policy-log-approval"> Log approvals</label><label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer"><input type="checkbox"' + (p.monitoring.alert_on_violation ? ' checked' : '') + ' id="policy-alert-violation"> Alert on violation</label></div>' +
+                    '<div><label style="font-size:12px;font-weight:600">Suspension Threshold</label><input type="number" id="policy-suspension-threshold" value="' + p.monitoring.violation_threshold_before_suspension + '" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:6px;margin-top:4px;background:#1e293b;color:#e2e8f0"></div>' +
+                '</div></div></div>' +
+            '</div>';
     }
 
-    // ── Policy Actions ─────────────────────────────────────────
-    function addRestriction() {
-        const input = document.getElementById('new-restriction');
-        if (!input.value.trim()) return;
-        policyData.general_restrictions.push(input.value.trim());
-        input.value = '';
-        renderPolicy();
-    }
-
-    function removeRestriction(index) {
-        policyData.general_restrictions.splice(index, 1);
-        renderPolicy();
-    }
-
-    function moveAction(action, from, to) {
-        const p = policyData.action_restrictions;
-        const fromList = from === 'allowed' ? p.allowed_actions : from === 'blocked' ? p.blocked_actions : p.approval_required;
-        const toList = to === 'allowed' ? p.allowed_actions : to === 'blocked' ? p.blocked_actions : p.approval_required;
-        const idx = fromList.indexOf(action);
-        if (idx > -1) { fromList.splice(idx, 1); toList.push(action); }
-        renderPolicy();
-    }
-
+    function addRestriction() { const input = document.getElementById('new-restriction'); if (!input.value.trim()) return; policyData.general_restrictions.push(input.value.trim()); input.value = ''; renderPolicy(); }
+    function removeRestriction(index) { policyData.general_restrictions.splice(index, 1); renderPolicy(); }
+    function moveAction(action, from, to) { const p = policyData.action_restrictions; const lists = { allowed: p.allowed_actions, blocked: p.blocked_actions, approval: p.approval_required }; const idx = lists[from].indexOf(action); if (idx > -1) { lists[from].splice(idx, 1); lists[to].push(action); } renderPolicy(); }
     function collectPolicy() {
         const p = policyData;
         p.content_filtering.filter_strength = document.getElementById('policy-filter-strength').value;
@@ -476,19 +462,12 @@
         p.monitoring.violation_threshold_before_suspension = parseInt(document.getElementById('policy-suspension-threshold').value) || 5;
         return p;
     }
-
     async function savePolicy() {
-        const updated = collectPolicy();
-        try {
-            await api('/admin/policy/policy', {
-                method: 'PUT',
-                body: JSON.stringify(updated)
-            });
-            showToast('✅ Governance policy saved!', 'success');
-        } catch (e) {
-            showToast(`❌ ${e.message}`, 'error');
-        }
+        try { await api('/admin/policy/policy', { method: 'PUT', body: JSON.stringify(collectPolicy()) }); showToast('✅ Policy saved!', 'success'); }
+        catch (e) { showToast('❌ ' + e.message, 'error'); }
     }
+
+    init();
     </script>
 </body>
 </html>

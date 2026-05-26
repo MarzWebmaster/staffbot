@@ -1163,8 +1163,17 @@ async def update_skills(
         policy = dict(DEFAULT_GOVERNANCE_POLICY)
 
     policy["enabled_skills"] = data.get("enabled_skills", [])
-    setting.value = json.dumps(policy, indent=2)
-    db.add(setting)
+    
+    if setting:
+        setting.value = json.dumps(policy, indent=2)
+    else:
+        setting = Setting(
+            key="governance_policy",
+            value=json.dumps(policy, indent=2),
+            encrypted=False,
+        )
+        db.add(setting)
+
     await db.commit()
 
     return {"message": f"Skills updated ({len(data.get('enabled_skills', []))} enabled)"}
@@ -1190,8 +1199,17 @@ async def update_tools(
         policy = dict(DEFAULT_GOVERNANCE_POLICY)
 
     policy["enabled_tools"] = data.get("enabled_tools", [])
-    setting.value = json.dumps(policy, indent=2)
-    db.add(setting)
+    
+    if setting:
+        setting.value = json.dumps(policy, indent=2)
+    else:
+        setting = Setting(
+            key="governance_policy",
+            value=json.dumps(policy, indent=2),
+            encrypted=False,
+        )
+        db.add(setting)
+
     await db.commit()
 
     return {"message": f"Tools updated ({len(data.get('enabled_tools', []))} enabled)"}
