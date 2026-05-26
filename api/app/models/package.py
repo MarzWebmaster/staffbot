@@ -1,5 +1,5 @@
 from datetime import datetime, timezone
-from sqlalchemy import Column, Integer, String, DateTime, Boolean, Float, Text, JSON
+from sqlalchemy import Column, Integer, String, DateTime, Boolean, Float, Text, JSON, ARRAY
 from app.database import Base
 
 
@@ -23,8 +23,8 @@ class Package(Base):
     cpu_limit = Column(Float, default=1.0)
     memory_limit_mb = Column(Integer, default=512)
     storage_limit_gb = Column(Integer, default=10)
-    skill_category_ids = Column(JSON, default=list)
-    tool_category_ids = Column(JSON, default=list)
+    skill_category_ids = Column(ARRAY(Integer), default=[])
+    tool_category_ids = Column(ARRAY(Integer), default=[])
     sort_order = Column(Integer, default=0)
     trial_days = Column(Integer, default=0)
     is_public = Column(Boolean, default=True)
