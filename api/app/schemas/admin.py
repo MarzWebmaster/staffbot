@@ -38,6 +38,8 @@ class PackageCreate(BaseModel):
     storage_limit_gb: int = 10
     skill_category_ids: list = []
     tool_category_ids: list = []
+    allowed_skill_categories: list = []
+    allowed_tool_categories: list = []
     sort_order: int = 0
     trial_days: int = 0
     is_public: bool = True
@@ -58,6 +60,8 @@ class PackageUpdate(BaseModel):
     storage_limit_gb: Optional[int] = None
     skill_category_ids: Optional[list] = None
     tool_category_ids: Optional[list] = None
+    allowed_skill_categories: Optional[list] = None
+    allowed_tool_categories: Optional[list] = None
     sort_order: Optional[int] = None
     is_active: Optional[bool] = None
     trial_days: Optional[int] = None

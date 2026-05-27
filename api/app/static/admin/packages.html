@@ -151,20 +151,20 @@
 
     function renderCategoryCheckboxes() {
         document.getElementById('skillsCheckboxes').innerHTML = skillCategories.map(c => {
-            const checked = selectedSkills.includes(c.id);
-            return '<label class="cat-checkbox' + (checked ? ' checked' : '') + '" onclick="toggleSkill(' + c.id + ', this)">' +
-                '<input type="checkbox" value="' + c.id + '"' + (checked ? ' checked' : '') + '>' +
-                c.display_name || c.name +
-                '<span class="cat-id-badge">#' + c.id + '</span>' +
+            const checked = selectedSkills.includes(c.name);
+            return '<label class="cat-checkbox' + (checked ? ' checked' : '') + '" onclick="toggleSkill('' + c.name + '', this)">' +
+                '<input type="checkbox" value="' + c.name + '"' + (checked ? ' checked' : '') + '>' +
+                c.display_name +
+                '<span class="cat-id-badge">(\' + c.count + ' skills)</span>' +
             '</label>';
         }).join('');
 
         document.getElementById('toolsCheckboxes').innerHTML = toolCategories.map(c => {
-            const checked = selectedTools.includes(c.id);
-            return '<label class="cat-checkbox' + (checked ? ' checked' : '') + '" onclick="toggleTool(' + c.id + ', this)">' +
-                '<input type="checkbox" value="' + c.id + '"' + (checked ? ' checked' : '') + '>' +
-                c.display_name || c.name +
-                '<span class="cat-id-badge">#' + c.id + '</span>' +
+            const checked = selectedTools.includes(c.name);
+            return '<label class="cat-checkbox' + (checked ? ' checked' : '') + '" onclick="toggleTool('' + c.name + '', this)">' +
+                '<input type="checkbox" value="' + c.name + '"' + (checked ? ' checked' : '') + '>' +
+                c.display_name +
+                '<span class="cat-id-badge">(\' + c.count + ' tools)</span>' +
             '</label>';
         }).join('');
     }
@@ -224,8 +224,8 @@
         document.getElementById('pkgDesc').value = pkg.description || '';
         document.getElementById('pkgFeatures').value = (pkg.features || []).join('\n');
         document.getElementById('pkgSort').value = pkg.sort_order || 0;
-        selectedSkills = pkg.skill_category_ids || [];
-        selectedTools = pkg.tool_category_ids || [];
+        selectedSkills = pkg.allowed_skill_categories || pkg.skill_category_ids || [];
+        selectedTools = pkg.allowed_tool_categories || pkg.tool_category_ids || [];
         renderCategoryCheckboxes();
         document.getElementById('savePkgBtn').textContent = 'Save Changes';
         openModal('packageModal');
@@ -249,6 +249,8 @@
             badge: document.getElementById('pkgBadge').value || null,
             description: document.getElementById('pkgDesc').value,
             features: document.getElementById('pkgFeatures').value.split('\n').filter(f => f.trim()),
+            allowed_skill_categories: selectedSkills,
+            allowed_tool_categories: selectedTools,
             skill_category_ids: selectedSkills,
             tool_category_ids: selectedTools,
             sort_order: parseInt(document.getElementById('pkgSort').value) || 0,
@@ -307,8 +309,8 @@
                                 '<span style="display:inline-block;background:#FEF3C7;color:#92400E;padding:2px 8px;border-radius:4px;margin:2px">💾 ' + (p.memory_limit_mb || 512) + 'MB</span>' +
                                 '<span style="display:inline-block;background:#D1FAE5;color:#065F46;padding:2px 8px;border-radius:4px;margin:2px">📦 ' + (p.storage_limit_gb || 10) + 'GB</span>' +
                             '</div>' +
-                            ((p.skill_category_ids || []).length > 0 ? '<div style="font-size:11px;color:rgba(255,255,255,0.4);margin-top:4px">🧠 ' + (p.skill_category_ids || []).length + ' skill categories</div>' : '') +
-                            ((p.tool_category_ids || []).length > 0 ? '<div style="font-size:11px;color:rgba(255,255,255,0.4)">🔧 ' + (p.tool_category_ids || []).length + ' tool categories</div>' : '') +
+                            ((p.allowed_skill_categories || p.skill_category_ids || []).length > 0 ? '<div style="font-size:11px;color:rgba(255,255,255,0.4);margin-top:4px">🧠 ' + (p.allowed_skill_categories || p.skill_category_ids || []).length + ' skill categories</div>' : '') +
+                            ((p.allowed_tool_categories || p.tool_category_ids || []).length > 0 ? '<div style="font-size:11px;color:rgba(255,255,255,0.4)">🔧 ' + (p.allowed_tool_categories || p.tool_category_ids || []).length + ' tool categories</div>' : '') +
                         '</div>' +
                         (p.description ? '<div style="font-size:12px;color:var(--text-light);margin-bottom:12px;font-style:italic">' + p.description + '</div>' : '') +
                         '<div style="display:flex;gap:8px;margin-top:auto">' +
