@@ -67,6 +67,7 @@ async def create_topup_checkout(
     cancel = cancel_url or f"{settings.LANDING_PAGE_URL}/billing"
 
     # Create Stripe checkout session
+    await StripeService.configure_from_db(db)
     session = await StripeService.create_topup_session(
         client_id=current_user.id,
         name=current_user.name,

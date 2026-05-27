@@ -37,6 +37,7 @@ async def stripe_webhook(
     payload = await request.body()
     sig_header = request.headers.get("stripe-signature", "")
 
+    await StripeService.configure_from_db(db)
     event = await StripeService.verify_webhook(payload, sig_header)
 
     if event["type"] == "checkout.session.completed":

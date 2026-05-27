@@ -46,6 +46,7 @@ async def create_checkout(
     success = success_url or f"{settings.LANDING_PAGE_URL}/payment/success"
     cancel = cancel_url or f"{settings.LANDING_PAGE_URL}/pricing"
 
+    await StripeService.configure_from_db(db)
     session = await StripeService.create_checkout_session(
         name=current_user.name,
         email=current_user.email,

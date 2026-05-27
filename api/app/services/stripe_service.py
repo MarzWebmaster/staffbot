@@ -1,18 +1,60 @@
 """Stripe payment integration service — with top-up support."""
+
 import stripe
+from typing import Optional
 from fastapi import HTTPException, status
-from app.config import get_settings
 
-settings = get_settings()
-
-if settings.STRIPE_SECRET_KEY:
-    stripe.api_key = settings.STRIPE_SECRET_KEY
+# Module-level state — configured dynamically from DB at runtime
+_stripe_secret_key: str = ""
+_stripe_webhook_secret: str = ""
 
 
 class StripeService:
+    """Stripe payment integration.
+
+    Keys are loaded dynamically from DB settings by each caller router.
+    After calling configure(), all subsequent Stripe calls use those keys.
+    """
+
+    @staticmethod
+    def configure(secret_key: str, webhook_secret: str = "") -> None:
+        """Configure Stripe with keys loaded from DB settings."""
+        global _stripe_secret_key, _stripe_webhook_secret
+        _stripe_secret_key = secret_key
+        _stripe_webhook_secret = webhook_secret
+        if secret_key:
+            stripe.api_key = secret_key
+
     @staticmethod
     def is_configured() -> bool:
-        return bool(settings.STRIPE_SECRET_KEY)
+        return bool(_stripe_secret_key)
+
+    @staticmethod
+    async def configure_from_db(db) -> None:
+        """Load Stripe keys from DB settings table and configure Stripe."""
+        from sqlalchemy import select
+        from app.models.setting import Setting
+        from app.utils.encryption import decrypt_value
+        try:
+            result = await db.execute(
+                select(Setting).where(
+                    Setting.key.in_(["stripe_secret_key", "stripe_webhook_secret"])
+                )
+            )
+            settings_map = {}
+            for s in result.scalars().all():
+                val = decrypt_value(s.value) if s.encrypted else s.value
+                if s.key == "stripe_secret_key":
+                    settings_map["secret_key"] = val
+                elif s.key == "stripe_webhook_secret":
+                    settings_map["webhook_secret"] = val
+            StripeService.configure(
+                secret_key=settings_map.get("secret_key", ""),
+                webhook_secret=settings_map.get("webhook_secret", ""),
+            )
+        except Exception:
+            # Don't crash if settings table doesn't exist yet
+            pass
 
     @staticmethod
     async def create_checkout_session(
@@ -23,11 +65,14 @@ class StripeService:
         success_url: str,
         cancel_url: str,
     ) -> dict:
-        """Create a Stripe Checkout Session for subscription."""
+        """Create a Stripe Checkout Session for subscription.
+
+        If Stripe is not configured, returns a simulated checkout URL.
+        """
         if not StripeService.is_configured():
             return {
                 "id": f"cs_test_{package}_{email}",
-                "url": f"{settings.LANDING_PAGE_URL}/checkout/simulate?package={package}&email={email}",
+                "url": f"https://staffbot.my/payment/simulate",
                 "test_mode": True,
             }
 
@@ -76,11 +121,14 @@ class StripeService:
         success_url: str,
         cancel_url: str,
     ) -> dict:
-        """Create a Stripe Checkout Session for token top-up."""
+        """Create a Stripe Checkout Session for token top-up.
+
+        If Stripe is not configured, returns a simulated checkout URL.
+        """
         if not StripeService.is_configured():
             return {
                 "id": f"cs_topup_{client_id}_{package_id}",
-                "url": f"{settings.LANDING_PAGE_URL}/billing/topup-simulate?client_id={client_id}&tokens={tokens}",
+                "url": f"https://staffbot.my/billing/topup-simulate",
                 "test_mode": True,
             }
 
@@ -121,16 +169,75 @@ class StripeService:
             )
 
     @staticmethod
+    async def get_account_info() -> dict:
+        """Get Stripe account information.
+
+        Returns connected status, account name, and mode (live/test).
+        If not configured, returns {"connected": False}.
+        """
+        if not StripeService.is_configured():
+            return {
+                "connected": False,
+                "detail": "Stripe not configured. Enter your keys in Payment Gateway page.",
+            }
+        try:
+            account = stripe.Account.retrieve()
+            return {
+                "connected": True,
+                "account_name": account.get("business_profile", {}).get("name", account.get("settings", {}).get("dashboard", {}).get("display_name", "Stripe Account")),
+                "livemode": account.get("livemode", False),
+                "country": account.get("country", ""),
+                "email": account.get("email", ""),
+            }
+        except Exception as e:
+            return {
+                "connected": False,
+                "detail": f"Stripe API error: {str(e)}",
+            }
+
+    @staticmethod
+    async def get_recent_transactions(limit: int = 10) -> list:
+        """Get recent Stripe payment transactions."""
+        if not StripeService.is_configured():
+            return []
+        try:
+            charges = stripe.Charge.list(limit=limit)
+            transactions = []
+            for charge in charges:
+                metadata = charge.get("metadata", {})
+                transactions.append({
+                    "id": charge.get("id"),
+                    "amount": charge.get("amount", 0) / 100.0,
+                    "currency": charge.get("currency", "myr").upper(),
+                    "status": charge.get("status", "unknown"),
+                    "customer_email": charge.get("billing_details", {}).get("email", charge.get("receipt_email", "")),
+                    "description": charge.get("description", ""),
+                    "metadata": {
+                        "type": metadata.get("type", ""),
+                        "package": metadata.get("package", ""),
+                        "customer_name": metadata.get("customer_name", ""),
+                    },
+                    "created_at": charge.get("created"),
+                    "receipt_url": charge.get("receipt_url", ""),
+                })
+            return transactions
+        except Exception:
+            return []
+
+    @staticmethod
     async def verify_webhook(payload: bytes, sig_header: str) -> dict:
-        """Verify and parse Stripe webhook event."""
-        if not settings.STRIPE_WEBHOOK_SECRET:
+        """Verify and parse Stripe webhook event.
+
+        Uses the webhook secret configured via configure().
+        """
+        if not _stripe_webhook_secret:
             raise HTTPException(
                 status_code=status.HTTP_501_NOT_IMPLEMENTED,
                 detail="Stripe webhook not configured",
             )
         try:
             event = stripe.Webhook.construct_event(
-                payload, sig_header, settings.STRIPE_WEBHOOK_SECRET
+                payload, sig_header, _stripe_webhook_secret
             )
             return event
         except stripe.error.SignatureVerificationError:
