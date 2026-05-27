@@ -17,6 +17,7 @@ import json
 import socket
 import re
 import httpx
+import asyncpg
 import docker
 from fastapi import FastAPI, HTTPException, Depends, Header
 from fastapi.middleware.cors import CORSMiddleware
@@ -27,6 +28,7 @@ AUTH_KEY = os.environ.get("AUTH_KEY", "staffbot-secret-key")
 DATABASE_URL = os.environ.get("DATABASE_URL", "postgresql://staffbot:***@localhost:5432/staffbot_memory")
 CONTAINER_DIR = "/root/staffbot/containers"
 STAFFBOT_CORE_IMAGE = "staffbot-core:latest"
+HYBRID_BRAIN_URL = os.environ.get("HYBRID_BRAIN_URL", "http://hybrid-brain:8085")
 BAILEYS_MANAGER_URL = os.environ.get("BAILEYS_MANAGER_URL", "http://baileys-manager:8653")
 TELEGRAM_MANAGER_URL = os.environ.get("TELEGRAM_MANAGER_URL", "http://telegram-manager:8654")
 
@@ -353,28 +355,63 @@ async def incoming_telegram(client_id: int, data: dict):
         return {"success": False, "error": str(e)}
 
 
+@app.post("/api/hybrid/init/{client_id}")
+async def hybrid_brain_init(client_id: int, auth=Depends(verify_auth)):
+    """Initialize Hybrid Brain memory bank for a new client."""
+    async with httpx.AsyncClient() as client:
+        try:
+            resp = await client.post(
+                f"{HYBRID_BRAIN_URL}/api/client/{client_id}/init",
+                headers={"X-API-Key": AUTH_KEY},
+                timeout=15.0,
+            )
+            return resp.json()
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+
 @app.post("/api/memory/search")
 async def search_memory(query: MemoryQuery, auth=Depends(verify_auth)):
-    import asyncpg
-    try:
-        conn = await asyncpg.connect(DATABASE_URL)
-        rows = await conn.fetch("SELECT content, metadata, created_at FROM client_memory WHERE client_id=$1 ORDER BY created_at DESC LIMIT $2", query.client_id, query.limit)
-        await conn.close()
-        return [dict(r) for r in rows]
-    except Exception as e:
-        return {"error": str(e), "results": []}
+    """Redirect to Hybrid Brain — combines Central Brain + Hindsight + token tracking."""
+    async with httpx.AsyncClient() as client:
+        try:
+            resp = await client.post(
+                f"{HYBRID_BRAIN_URL}/api/search",
+                json={"client_id": query.client_id, "query": query.query, "limit": query.limit},
+                timeout=30.0,
+            )
+            return resp.json()
+        except Exception as e:
+            # Fallback: direct pgvector if hybrid brain is down
+            try:
+                conn = await asyncpg.connect(DATABASE_URL)
+                rows = await conn.fetch("SELECT content, metadata, created_at FROM client_memory WHERE client_id=$1 ORDER BY created_at DESC LIMIT $2", query.client_id, query.limit)
+                await conn.close()
+                return {"success": True, "results": [dict(r) for r in rows], "sources": {"fallback": True}}
+            except Exception as e2:
+                return {"success": False, "error": f"Hybrid Brain: {str(e)}, Fallback: {str(e2)}"}
 
 
 @app.post("/api/memory/save")
 async def save_memory(data: MemorySave, auth=Depends(verify_auth)):
-    import asyncpg
-    try:
-        conn = await asyncpg.connect(DATABASE_URL)
-        await conn.execute("INSERT INTO client_memory (client_id, content, metadata) VALUES ($1, $2, $3)", data.client_id, data.content, json.dumps(data.metadata))
-        await conn.close()
-        return {"success": True}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    """Redirect to Hybrid Brain — saves to BOTH Central Brain + Hindsight + deduct token."""
+    async with httpx.AsyncClient() as client:
+        try:
+            resp = await client.post(
+                f"{HYBRID_BRAIN_URL}/api/save",
+                json={"client_id": data.client_id, "content": data.content, "metadata": data.metadata},
+                timeout=30.0,
+            )
+            return resp.json()
+        except Exception as e:
+            # Fallback: direct pgvector
+            try:
+                conn = await asyncpg.connect(DATABASE_URL)
+                await conn.execute("INSERT INTO client_memory (client_id, content, metadata) VALUES ($1, $2, $3)", data.client_id, data.content, json.dumps(data.metadata))
+                await conn.close()
+                return {"success": True, "sources": {"fallback": True}}
+            except Exception as e2:
+                raise HTTPException(status_code=500, detail=f"Hybrid Brain: {str(e)}, Fallback: {str(e2)}")
 
 
 def _docker_ok():

@@ -31,20 +31,20 @@ services:
       - SETUID
       - SETGID
 
-  api-gateway:
-    build: ./gateway
-    container_name: staffbot-gateway
+  hindsight:
+    image: ghcr.io/vectorize-io/hindsight:latest
+    container_name: staffbot-hindsight
     restart: unless-stopped
     ports:
-      - "10.0.0.2:8080:8080"          # 🔒 Localhost only — proxied via WireGuard
+      - "127.0.0.1:8888:8888"          # API
+      - "127.0.0.1:9999:9999"          # UI (admin only)
     environment:
-      DATABASE_URL: postgresql://staffbot:staffbot@db:5432/staffbot_db
-      AUTH_KEY: ${GATEWAY_AUTH_KEY:?GATEWAY_AUTH_KEY is required — set in .env file}
-      ILMUAI_API_KEY: sk-eaff19259c5faa588793591a6db0cee025e823928f344fe7
-      GEMINI_API_KEY: AIzaSyBJSEh0XggsXOfbfi6oXoGDw2ADFmk-doA
+      HINDSIGHT_API_DATABASE_URL: postgresql://staffbot:***@memory-db:5432/staffbot_memory
+      HINDSIGHT_API_LLM_PROVIDER: ${HINDSIGHT_LLM_PROVIDER:-openai}
+      HINDSIGHT_API_LLM_MODEL: ${HINDSIGHT_LLM_MODEL:-gpt-4o-mini}
+      HINDSIGHT_API_LLM_API_KEY: ${HINDSIGHT_LLM_API_KEY:?HINDSIGHT_LLM_API_KEY required}
     volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
-      - /root/staffbot/containers:/root/staffbot/containers
+      - hindsight_data:/home/hindsight/.pg0
     depends_on:
       memory-db:
         condition: service_healthy
@@ -54,15 +54,96 @@ services:
       - no-new-privileges:true
     cap_drop:
       - ALL
+
+  hybrid-brain:
+    build: ./hybrid-brain
+    container_name: staffbot-hybrid-brain
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8085:8085"
+    environment:
+      DATABASE_URL: postgresql://staffbot:***@memory-db:5432/staffbot_memory
+      HINDSIGHT_URL: http://hindsight:8888
+      HYBRID_PORT: 8085
+    depends_on:
+      memory-db:
+        condition: service_healthy
+      hindsight:
+        condition: service_started
+    networks:
+      - staffbot-b
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+
+  api-gateway:
+    build: ./gateway
+    container_name: staffbot-gateway
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8080:8080"          # 🔒 Localhost only
+    environment:
+      DATABASE_URL: postgresql://staffbot:***@memory-db:5432/staffbot_memory
+      AUTH_KEY: ${GATEWAY_AUTH_KEY:?GATEWAY_AUTH_KEY is required}
+      HYBRID_BRAIN_URL: http://hybrid-brain:8085
+      BAILEYS_MANAGER_URL: http://baileys-manager:8653
+      TELEGRAM_MANAGER_URL: http://telegram-manager:8654
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /root/staffbot/containers:/root/staffbot/containers
+      - /root/staffbot/auth:/root/staffbot/auth
+    depends_on:
+      memory-db:
+        condition: service_healthy
+      hybrid-brain:
+        condition: service_started
+    networks:
+      - staffbot-b
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
     cap_add:
-      - SYS_PTRACE                   # Required for Docker SDK
+      - SYS_PTRACE
+
+  baileys-manager:
+    build: ./baileys-manager
+    container_name: staffbot-baileys
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8653:8653"
+    environment:
+      GATEWAY_URL: http://api-gateway:8080
+      GATEWAY_AUTH_KEY: ${GATEWAY_AUTH_KEY}
+      HTTP_PORT: 8653
+      AUTH_BASE: /root/staffbot/auth/whatsapp
+    volumes:
+      - /root/staffbot/auth:/root/staffbot/auth
+    networks:
+      - staffbot-b
+
+  telegram-manager:
+    build: ./telegram-manager
+    container_name: staffbot-telegram
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8654:8654"
+    environment:
+      GATEWAY_URL: http://api-gateway:8080
+      GATEWAY_AUTH_KEY: ${GATEWAY_AUTH_KEY}
+      HTTP_PORT: 8654
+      PUBLIC_URL: https://staffbot.my
+    networks:
+      - staffbot-b
 
 volumes:
   memory_pgdata:
+  hindsight_data:
 
 networks:
   staffbot-b:
     driver: bridge
     ipam:
       config:
-        - subnet: "10.100.0.0/24"    # 🔒 Explicit subnet, not default
+        - subnet: "10.100.0.0/24"
