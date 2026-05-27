@@ -5,7 +5,8 @@ from app.database import Base
 
 
 def utcnow():
-    return datetime.now(timezone.utc)
+    """Return timezone-naive UTC now, matching TIMESTAMP WITHOUT TIME ZONE columns."""
+    return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
 class Client(Base):
