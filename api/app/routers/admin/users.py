@@ -1,15 +1,18 @@
 """
 Admin users router — user management.
 """
+from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
 from app.database import get_db
 from app.models.client import Client
+from app.models.subscription import Subscription
 from app.schemas.client import ClientResponse, ClientListResponse
-from app.schemas.admin import UserUpdateAdmin
+from app.schemas.admin import UserUpdateAdmin, UserCreateAdmin
 from app.middleware.auth import get_current_admin
+from app.utils.security import hash_password
 
 router = APIRouter()
 
@@ -52,6 +55,48 @@ async def list_users(
     return ClientListResponse(items=clients, total=total)
 
 
+@router.post("/", response_model=ClientResponse, status_code=status.HTTP_201_CREATED)
+async def create_user(
+    data: UserCreateAdmin,
+    admin: Client = Depends(get_current_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Admin: Create a new user manually."""
+    # Check if email already exists
+    result = await db.execute(select(Client).where(Client.email == data.email))
+    if result.scalar_one_or_none():
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Email already registered",
+        )
+
+    client = Client(
+        name=data.name,
+        email=data.email,
+        password_hash=hash_password(data.password),
+        company=data.company,
+        phone=data.phone,
+        package=data.package,
+        status=data.status,
+    )
+    db.add(client)
+    await db.flush()
+
+    # Create subscription
+    sub = Subscription(
+        client_id=client.id,
+        package=data.package,
+        status="active" if data.status == "active" else "pending",
+        managed_token_quota=5000000 if data.status == "active" else 0,
+        start_date=datetime.now(timezone.utc),
+    )
+    db.add(sub)
+    await db.commit()
+    await db.refresh(client)
+
+    return client
+
+
 @router.get("/{user_id}", response_model=ClientResponse)
 async def get_user(
     user_id: int,
@@ -86,3 +131,33 @@ async def update_user(
     await db.commit()
     await db.refresh(user)
     return user
+
+
+@router.delete("/{user_id}")
+async def delete_user(
+    user_id: int,
+    admin: Client = Depends(get_current_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Admin: Hard-delete a user."""
+    result = await db.execute(select(Client).where(Client.id == user_id))
+    user = result.scalar_one_or_none()
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+
+    # Delete FK children first (Subscription, API keys)
+    from app.models.api_key import ApiKey
+    await db.execute(select(ApiKey).where(ApiKey.client_id == user_id))
+    api_keys = (await db.execute(select(ApiKey).where(ApiKey.client_id == user_id))).scalars().all()
+    for ak in api_keys:
+        await db.delete(ak)
+
+    sub_result = await db.execute(select(Subscription).where(Subscription.client_id == user_id))
+    sub = sub_result.scalar_one_or_none()
+    if sub:
+        await db.delete(sub)
+
+    await db.delete(user)
+    await db.commit()
+
+    return {"message": f"User {user_id} deleted successfully"}

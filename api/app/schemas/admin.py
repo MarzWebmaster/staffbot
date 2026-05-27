@@ -75,6 +75,17 @@ class SettingUpdate(BaseModel):
     encrypted: bool = False
 
 
+class UserCreateAdmin(BaseModel):
+    """Admin-created user — no password complexity requirement."""
+    name: str
+    email: EmailStr
+    password: str = Field(..., min_length=6)
+    company: Optional[str] = None
+    phone: Optional[str] = None
+    package: str = "basic"
+    status: str = "active"
+
+
 class UserUpdateAdmin(BaseModel):
     name: Optional[str] = None
     email: Optional[EmailStr] = None
