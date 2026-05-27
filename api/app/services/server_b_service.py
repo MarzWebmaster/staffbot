@@ -227,23 +227,3 @@ class ServerBService:
                 raise HTTPException(status_code=504, detail="Telegram Manager timeout")
             except httpx.HTTPStatusError as e:
                 raise HTTPException(status_code=502, detail=f"Telegram Manager error: {e.response.text}")
-
-    @staticmethod
-    async def hybrid_brain_init(client_id: int) -> dict:
-        """Initialize Hybrid Brain memory bank for a new client."""
-        if not ServerBService.is_configured():
-            return {"success": True, "test_mode": True}
-
-        async with httpx.AsyncClient() as client:
-            try:
-                resp = await client.post(
-                    f"{settings.SERVER_B_API_URL}/api/hybrid/init/{client_id}",
-                    headers=ServerBService._headers(),
-                    timeout=15.0,
-                )
-                resp.raise_for_status()
-                return resp.json()
-            except httpx.TimeoutException:
-                return {"success": False, "error": "Hybrid Brain init timeout"}
-            except Exception as e:
-                return {"success": False, "error": str(e)}

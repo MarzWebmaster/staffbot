@@ -10,7 +10,7 @@ services:
       POSTGRES_PASSWORD: ${MEMORY_DB_PASSWORD:-staffbot}
       POSTGRES_DB: staffbot_memory
     ports:
-      - "127.0.0.1:5434:5432"          # 🔒 Localhost only
+      - "127.0.0.1:5434:5432"
     volumes:
       - memory_pgdata:/var/lib/postgresql/data
       - ./init-memory.sql:/docker-entrypoint-initdb.d/init-memory.sql
@@ -31,62 +31,15 @@ services:
       - SETUID
       - SETGID
 
-  hindsight:
-    image: ghcr.io/vectorize-io/hindsight:latest
-    container_name: staffbot-hindsight
-    restart: unless-stopped
-    ports:
-      - "127.0.0.1:8888:8888"          # API
-      - "127.0.0.1:9999:9999"          # UI (admin only)
-    environment:
-      HINDSIGHT_API_DATABASE_URL: postgresql://staffbot:***@memory-db:5432/staffbot_memory
-      HINDSIGHT_API_LLM_PROVIDER: ${HINDSIGHT_LLM_PROVIDER:-openai}
-      HINDSIGHT_API_LLM_MODEL: ${HINDSIGHT_LLM_MODEL:-gpt-4o-mini}
-      HINDSIGHT_API_LLM_API_KEY: ${HINDSIGHT_LLM_API_KEY:?HINDSIGHT_LLM_API_KEY required}
-    volumes:
-      - hindsight_data:/home/hindsight/.pg0
-    depends_on:
-      memory-db:
-        condition: service_healthy
-    networks:
-      - staffbot-b
-    security_opt:
-      - no-new-privileges:true
-    cap_drop:
-      - ALL
-
-  hybrid-brain:
-    build: ./hybrid-brain
-    container_name: staffbot-hybrid-brain
-    restart: unless-stopped
-    ports:
-      - "127.0.0.1:8085:8085"
-    environment:
-      DATABASE_URL: postgresql://staffbot:***@memory-db:5432/staffbot_memory
-      HINDSIGHT_URL: http://hindsight:8888
-      HYBRID_PORT: 8085
-    depends_on:
-      memory-db:
-        condition: service_healthy
-      hindsight:
-        condition: service_started
-    networks:
-      - staffbot-b
-    security_opt:
-      - no-new-privileges:true
-    cap_drop:
-      - ALL
-
   api-gateway:
     build: ./gateway
     container_name: staffbot-gateway
     restart: unless-stopped
     ports:
-      - "127.0.0.1:8080:8080"          # 🔒 Localhost only
+      - "127.0.0.1:8080:8080"
     environment:
       DATABASE_URL: postgresql://staffbot:***@memory-db:5432/staffbot_memory
       AUTH_KEY: ${GATEWAY_AUTH_KEY:?GATEWAY_AUTH_KEY is required}
-      HYBRID_BRAIN_URL: http://hybrid-brain:8085
       BAILEYS_MANAGER_URL: http://baileys-manager:8653
       TELEGRAM_MANAGER_URL: http://telegram-manager:8654
     volumes:
@@ -96,8 +49,6 @@ services:
     depends_on:
       memory-db:
         condition: service_healthy
-      hybrid-brain:
-        condition: service_started
     networks:
       - staffbot-b
     security_opt:
@@ -139,7 +90,6 @@ services:
 
 volumes:
   memory_pgdata:
-  hindsight_data:
 
 networks:
   staffbot-b:

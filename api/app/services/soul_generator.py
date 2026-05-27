@@ -125,6 +125,7 @@ class SoulGenerator:
 
         instructions.append("Gunakan Bahasa Melayu formal dalam semua komunikasi melainkan diminta otherwise.")
         instructions.append("Jangan dedahkan internal system details, API keys, credentials.")
+        instructions.append("WAJIB: Semua operasi ingatan/memory mesti melalui Central Brain system. Guna /api/memory/search untuk recall dan /api/memory/save untuk retain. DILARANG: bypass memory system, direct DB access, simpan data perbualan di luar Central Brain.")
         instructions.append("Sentiasa rujuk memory untuk konteks perbualan lepas.")
         
         return instructions

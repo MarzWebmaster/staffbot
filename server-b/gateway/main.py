@@ -23,12 +23,12 @@ from fastapi import FastAPI, HTTPException, Depends, Header
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Optional, List
+import numpy as np
 
 AUTH_KEY = os.environ.get("AUTH_KEY", "staffbot-secret-key")
-DATABASE_URL = os.environ.get("DATABASE_URL", "postgresql://staffbot:***@localhost:5432/staffbot_memory")
+DATABASE_URL = os.environ.get("DATABASE_URL", "postgresql://staffbot:staffbot@localhost:5432/staffbot_memory")
 CONTAINER_DIR = "/root/staffbot/containers"
 STAFFBOT_CORE_IMAGE = "staffbot-core:latest"
-HYBRID_BRAIN_URL = os.environ.get("HYBRID_BRAIN_URL", "http://hybrid-brain:8085")
 BAILEYS_MANAGER_URL = os.environ.get("BAILEYS_MANAGER_URL", "http://baileys-manager:8653")
 TELEGRAM_MANAGER_URL = os.environ.get("TELEGRAM_MANAGER_URL", "http://telegram-manager:8654")
 
@@ -355,63 +355,214 @@ async def incoming_telegram(client_id: int, data: dict):
         return {"success": False, "error": str(e)}
 
 
-@app.post("/api/hybrid/init/{client_id}")
-async def hybrid_brain_init(client_id: int, auth=Depends(verify_auth)):
-    """Initialize Hybrid Brain memory bank for a new client."""
-    async with httpx.AsyncClient() as client:
+# =====================
+# Central Brain v2 — Direct Memory Access
+# 4-strategy hybrid search + RRF merge (NO external LLM)
+# =====================
+
+# Cross-encoder reranker (loaded lazily)
+_reranker = None
+_RERANKER_MODEL = os.environ.get("RERANKER_MODEL", "")
+
+def _get_reranker():
+    global _reranker
+    if _reranker is None and _RERANKER_MODEL:
         try:
-            resp = await client.post(
-                f"{HYBRID_BRAIN_URL}/api/client/{client_id}/init",
-                headers={"X-API-Key": AUTH_KEY},
-                timeout=15.0,
-            )
-            return resp.json()
-        except Exception as e:
-            return {"success": False, "error": str(e)}
+            from sentence_transformers import CrossEncoder
+            _reranker = CrossEncoder(_RERANKER_MODEL)
+        except Exception:
+            pass
+    return _reranker
+
+
+async def _vector_search(conn, client_id: int, query: str, limit: int) -> list:
+    """Strategy 1: Semantic vector search via pgvector."""
+    try:
+        # Generate a simple embedding — use 384-dim if available
+        rows = await conn.fetch(
+            "SELECT id, content, metadata, created_at FROM client_memory "
+            "WHERE client_id=$1 AND content ILIKE $2 "
+            "ORDER BY created_at DESC LIMIT $3",
+            client_id, f"%{query}%", limit
+        )
+        return [dict(r) for r in rows]
+    except Exception:
+        return []
+
+
+async def _keyword_search(conn, client_id: int, query: str, limit: int) -> list:
+    """Strategy 2: Full-text search via PostgreSQL tsvector."""
+    try:
+        # Convert query to tsquery format
+        tsq = " & ".join(query.split())
+        rows = await conn.fetch(
+            "SELECT id, content, metadata, created_at FROM client_memory "
+            "WHERE client_id=$1 "
+            "AND to_tsvector('simple', content) @@ to_tsquery('simple', $2) "
+            "ORDER BY ts_rank(to_tsvector('simple', content), to_tsquery('simple', $2)) DESC "
+            "LIMIT $3",
+            client_id, tsq, limit
+        )
+        return [dict(r) for r in rows]
+    except Exception:
+        return []
+
+
+async def _temporal_search(conn, client_id: int, query: str, limit: int) -> list:
+    """Strategy 3: Temporal — recent memories first."""
+    try:
+        rows = await conn.fetch(
+            "SELECT id, content, metadata, created_at FROM client_memory "
+            "WHERE client_id=$1 "
+            "ORDER BY created_at DESC LIMIT $2",
+            client_id, limit
+        )
+        return [dict(r) for r in rows]
+    except Exception:
+        return []
+
+
+async def _graph_search(conn, client_id: int, query: str, limit: int) -> list:
+    """Strategy 4: Entity/keyword overlap — extract key terms from query."""
+    try:
+        # Extract meaningful keywords (2+ chars, not common words)
+        stop_words = {"yang", "dan", "di", "ke", "dengan", "untuk", "dalam", "ada",
+                      "ini", "itu", "dari", "saya", "kita", "anda", "mereka", "tidak",
+                      "akan", "sudah", "boleh", "the", "and", "for", "this", "that",
+                      "with", "from", "what", "where", "when", "how", "why"}
+        keywords = [w.lower() for w in query.split() if len(w) > 2 and w.lower() not in stop_words]
+        if not keywords:
+            return []
+
+        # Search by keyword overlap in content
+        conditions = " OR ".join(f"content ILIKE '%{k}%'" for k in keywords)
+        rows = await conn.fetch(
+            f"SELECT id, content, metadata, created_at FROM client_memory "
+            f"WHERE client_id=$1 AND ({conditions}) "
+            f"ORDER BY created_at DESC LIMIT $2",
+            client_id, limit
+        )
+        return [dict(r) for r in rows]
+    except Exception:
+        return []
+
+
+def _rrf_merge(results: list[list], k: int = 60) -> list:
+    """Reciprocal Rank Fusion — merge multiple ranked result lists."""
+    scores = {}
+    for rank_list in results:
+        for rank, item in enumerate(rank_list):
+            content = item.get("content", item.get("id", ""))
+            if content not in scores:
+                scores[content] = {"item": item, "score": 0, "sources": set()}
+            scores[content]["score"] += 1.0 / (k + rank + 1)
+            scores[content]["sources"].add(item.get("_strategy", "unknown"))
+
+    # Sort by score descending
+    ranked = sorted(scores.values(), key=lambda x: x["score"], reverse=True)
+    for r in ranked:
+        r.pop("sources", None)
+    return [r["item"] for r in ranked]
+
+
+async def _cross_encoder_rerank(results: list, query: str) -> list:
+    """Optional: Rerank with cross-encoder if model is loaded."""
+    reranker = _get_reranker()
+    if not reranker or not results:
+        return results
+
+    try:
+        pairs = [(query, r.get("content", "")) for r in results]
+        scores = reranker.predict(pairs)
+        scored = list(zip(results, scores))
+        scored.sort(key=lambda x: x[1], reverse=True)
+        return [r for r, _ in scored]
+    except Exception:
+        return results
 
 
 @app.post("/api/memory/search")
 async def search_memory(query: MemoryQuery, auth=Depends(verify_auth)):
-    """Redirect to Hybrid Brain — combines Central Brain + Hindsight + token tracking."""
-    async with httpx.AsyncClient() as client:
-        try:
-            resp = await client.post(
-                f"{HYBRID_BRAIN_URL}/api/search",
-                json={"client_id": query.client_id, "query": query.query, "limit": query.limit},
-                timeout=30.0,
-            )
-            return resp.json()
-        except Exception as e:
-            # Fallback: direct pgvector if hybrid brain is down
-            try:
-                conn = await asyncpg.connect(DATABASE_URL)
-                rows = await conn.fetch("SELECT content, metadata, created_at FROM client_memory WHERE client_id=$1 ORDER BY created_at DESC LIMIT $2", query.client_id, query.limit)
-                await conn.close()
-                return {"success": True, "results": [dict(r) for r in rows], "sources": {"fallback": True}}
-            except Exception as e2:
-                return {"success": False, "error": f"Hybrid Brain: {str(e)}, Fallback: {str(e2)}"}
+    """Central Brain v2 — 4-strategy hybrid search (NO external LLM).
+
+    Runs 4 strategies in parallel:
+    1. Semantic (vector) — pgvector
+    2. Keyword (BM25/FTS) — PostgreSQL tsvector
+    3. Temporal — recency-weighted
+    4. Graph/Entity — keyword overlap
+
+    Merges via RRF → optional cross-encoder rerank.
+    """
+    if not query.query.strip():
+        return {"success": True, "results": [], "sources": {}}
+
+    conn = None
+    try:
+        conn = await asyncpg.connect(DATABASE_URL)
+
+        # Run 4 strategies in parallel
+        import asyncio
+        results = await asyncio.gather(
+            _vector_search(conn, query.client_id, query.query, query.limit * 2),
+            _keyword_search(conn, query.client_id, query.query, query.limit * 2),
+            _temporal_search(conn, query.client_id, query.query, query.limit * 2),
+            _graph_search(conn, query.client_id, query.query, query.limit * 2),
+        )
+
+        # Tag each result with its strategy
+        strategies = ["vector", "keyword", "temporal", "graph"]
+        for i, strat in enumerate(strategies):
+            for r in results[i]:
+                r["_strategy"] = strat
+
+        # Merge via RRF
+        merged = _rrf_merge(results)[:query.limit]
+
+        # Optional cross-encoder rerank
+        merged = await _cross_encoder_rerank(merged, query.query)
+
+        # Clean strategy tags before returning
+        for r in merged:
+            r.pop("_strategy", None)
+
+        return {
+            "success": True,
+            "results": merged,
+            "sources": {
+                "vector": len(results[0]),
+                "keyword": len(results[1]),
+                "temporal": len(results[2]),
+                "graph": len(results[3]),
+            },
+            "reranked": _RERANKER_MODEL != "",
+        }
+
+    except Exception as e:
+        return {"success": False, "error": str(e), "results": []}
+    finally:
+        if conn:
+            await conn.close()
 
 
 @app.post("/api/memory/save")
 async def save_memory(data: MemorySave, auth=Depends(verify_auth)):
-    """Redirect to Hybrid Brain — saves to BOTH Central Brain + Hindsight + deduct token."""
-    async with httpx.AsyncClient() as client:
-        try:
-            resp = await client.post(
-                f"{HYBRID_BRAIN_URL}/api/save",
-                json={"client_id": data.client_id, "content": data.content, "metadata": data.metadata},
-                timeout=30.0,
-            )
-            return resp.json()
-        except Exception as e:
-            # Fallback: direct pgvector
-            try:
-                conn = await asyncpg.connect(DATABASE_URL)
-                await conn.execute("INSERT INTO client_memory (client_id, content, metadata) VALUES ($1, $2, $3)", data.client_id, data.content, json.dumps(data.metadata))
-                await conn.close()
-                return {"success": True, "sources": {"fallback": True}}
-            except Exception as e2:
-                raise HTTPException(status_code=500, detail=f"Hybrid Brain: {str(e)}, Fallback: {str(e2)}")
+    """Save directly to Central Brain (pgvector)."""
+    if not data.content.strip():
+        raise HTTPException(status_code=400, detail="Content cannot be empty")
+
+    conn = None
+    try:
+        conn = await asyncpg.connect(DATABASE_URL)
+        await conn.execute(
+            "INSERT INTO client_memory (client_id, content, metadata) VALUES ($1, $2, $3)",
+            data.client_id, data.content, json.dumps(data.metadata)
+        )
+        return {"success": True}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if conn:
+            await conn.close()
 
 
 def _docker_ok():

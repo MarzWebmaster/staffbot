@@ -94,12 +94,6 @@ class DeploymentService:
         container_port = container_result.get("port", 8000 + client_id)
         container_id = container_result.get("container_id", f"container_{client_id}")
 
-        # 4. Initialize Hybrid Brain memory bank for this client
-        try:
-            await ServerBService.hybrid_brain_init(client_id=client_id)
-        except Exception:
-            pass  # Non-critical — will init on first use
-
         return {
             "subdomain": f"{subdomain}.{settings.DOMAIN}",
             "subdomain_raw": subdomain,
