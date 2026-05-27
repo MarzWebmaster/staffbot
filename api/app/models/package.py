@@ -1,0 +1,27 @@
+from datetime import datetime, timezone
+from sqlalchemy import Column, Integer, String, DateTime, Boolean, Float, Text, JSON
+from app.database import Base
+
+
+def utcnow():
+    return datetime.now(timezone.utc)
+
+
+class Package(Base):
+    __tablename__ = "packages"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    name = Column(String(50), unique=True, nullable=False)
+    display_name = Column(String(100))
+    price_monthly = Column(Float)
+    price_yearly = Column(Float, nullable=True)
+    description = Column(Text)
+    features = Column(JSON)
+    bot_limit = Column(Integer, default=1)
+    managed_tokens = Column(Float, default=0.0)
+    cpu_limit = Column(Float, default=1.0)
+    memory_limit_mb = Column(Integer, default=512)
+    storage_limit_gb = Column(Integer, default=10)
+    sort_order = Column(Integer, default=0)
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=datetime.now)

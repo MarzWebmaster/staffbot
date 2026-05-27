@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="ms">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LLM Providers — StaffBot.my</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="/static/css/app.css">
+</head>
+<body>
+    <div class="app-layout">
+        <div class="sidebar">
+            <div class="sidebar-brand"><h2>StaffBot.my</h2><span>Customer Dashboard</span></div>
+            <nav class="sidebar-nav">
+                <a href="dashboard.html"><span>📊</span><span>Dashboard</span></a>
+                <a href="bots.html"><span>🤖</span><span>Staff AI Saya</span></a>
+                <a href="chat.html"><span>💬</span><span>Chat</span></a>
+                <a href="providers.html" class="active"><span>🔌</span><span>LLM Providers</span></a>
+                <a href="affiliates.html"><span>🤝</span><span>Affiliates</span></a>
+                <a href="settings.html"><span>⚙️</span><span>Tetapan</span></a>
+                <a href="billing.html"><span>💰</span><span>Billing</span></a>
+                <a href="usage.html"><span>📈</span><span>Penggunaan</span></a>
+                <a href="#" onclick="logout()" style="margin-top:20px;border-top:1px solid rgba(255,255,255,0.1);padding-top:20px"><span>🚪</span><span>Log Keluar</span></a>
+            </nav>
+            <div id="sidebar-user" style="padding:16px 20px;border-top:1px solid rgba(255,255,255,0.1);margin-top:auto"></div>
+        </div>
+        <div class="main-content">
+            <div class="topbar"><h1>🔌 LLM Providers</h1></div>
+
+            <!-- Token Usage Summary -->
+            <div class="grid-3" id="usageStats">
+                <div class="card stat-card"><div class="stat-label">Jumlah Token</div><div class="stat-value" id="totalQuota">-</div></div>
+                <div class="card stat-card"><div class="stat-label">Digunakan</div><div class="stat-value" id="totalUsed">-</div></div>
+                <div class="card stat-card"><div class="stat-label">Baki</div><div class="stat-value" id="totalRemaining">-</div></div>
+            </div>
+
+            <!-- Provider Cards -->
+            <div class="card">
+                <div class="card-header"><h3>Managed Providers (dalam pakej anda)</h3></div>
+                <div id="providerList"><p style="color:var(--text-light)">Loading...</p></div>
+            </div>
+
+            <!-- FAQ / Info -->
+            <div class="card">
+                <div class="card-header"><h3>❓ Apa Itu Managed LLM Providers?</h3></div>
+                <div style="padding:16px;line-height:1.7">
+                    <p><strong>Managed providers</strong> — kami sediakan API key untuk anda. Anda tak perlu guna OpenRouter atau API key sendiri.</p>
+                    <ul style="margin-top:12px;padding-left:20px">
+                        <li><strong>OpenRouter</strong> — akses pelbagai model AI antarabangsa (OpenAI, Anthropic, Google, Meta).</li>
+                        <li><strong>Ilmu AI</strong> — model AI tempatan Malaysia yang dioptimumkan untuk Bahasa Malaysia.</li>
+                    </ul>
+                    <p style="margin-top:12px;color:var(--text-light);font-size:14px">
+                        Token dikira berdasarkan penggunaan. Setiap pakej ada had token bulanan yang berbeza.
+                        Nak lebih? Tambah API key sendiri atau upgrade pakej.
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div id="toast-container" class="toast-container"></div>
+    <script src="/static/js/app.js"></script>
+    <script>
+    async function init() {
+        const user = await checkAuth();
+        if (!user) return;
+        renderSidebarUser(user);
+        await loadUsage();
+        await loadProviders();
+    }
+
+    async function loadUsage() {
+        try {
+            const usage = await api('/providers/usage');
+            document.getElementById('totalQuota').textContent = usage.total_quota.toLocaleString();
+            document.getElementById('totalUsed').textContent = usage.total_used.toLocaleString();
+            document.getElementById('totalRemaining').textContent = Math.max(0, usage.total_quota - usage.total_used).toLocaleString();
+        } catch {}
+    }
+
+    async function loadProviders() {
+        try {
+            const providers = await api('/providers/available');
+            const container = document.getElementById('providerList');
+
+            if (!providers.length) {
+                container.innerHTML = '<div class="empty-state"><p>Tiada managed providers dalam pakej anda. Upgrade pakej untuk akses.</p></div>';
+                return;
+            }
+
+            container.innerHTML = providers.map(p => `
+                <div style="display:flex;align-items:center;gap:16px;padding:20px;border:1px solid var(--border);border-radius:12px;margin-bottom:12px">
+                    <div style="width:48px;height:48px;border-radius:12px;background:var(--card-bg);display:flex;align-items:center;justify-content:center;font-size:24px;flex-shrink:0">
+                        ${p.logo_url ? `<img src="${p.logo_url}" style="width:32px;height:32px;object-fit:contain">` : '🧠'}
+                    </div>
+                    <div style="flex:1">
+                        <div style="font-weight:600;font-size:16px">${p.display_name}</div>
+                        <div style="font-size:13px;color:var(--text-light);margin-top:4px">${p.description||''}</div>
+                        <div style="font-size:13px;margin-top:8px">
+                            <span class="status-badge status-active">
+                                ${p.models.length} model tersedia
+                            </span>
+                            <span style="margin-left:8px;color:var(--text-light)">
+                                Default: <strong>${p.default_model||'-'}</strong>
+                            </span>
+                        </div>
+                    </div>
+                    <div style="text-align:right;flex-shrink:0">
+                        <div style="font-size:13px;color:var(--text-light)">Token Digunakan</div>
+                        <div style="font-weight:700;font-size:18px">${p.token_used.toLocaleString()}</div>
+                        <div style="font-size:12px;color:var(--text-light)">/ ${p.token_quota.toLocaleString()}</div>
+                        <div style="margin-top:6px;background:var(--border);height:6px;border-radius:4px;width:120px;overflow:hidden">
+                            <div style="background:var(--primary);height:100%;width:${Math.min(100, (p.token_used/p.token_quota)*100)}%;border-radius:4px;transition:width 0.3s"></div>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+        } catch {
+            document.getElementById('providerList').innerHTML = '<p style="color:var(--error)">Gagal muat turun data provider</p>';
+        }
+    }
+
+    init();
+    </script>
+</body>
+</html>

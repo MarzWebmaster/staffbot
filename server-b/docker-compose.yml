@@ -1,0 +1,66 @@
+version: "3.8"
+
+services:
+  memory-db:
+    image: pgvector/pgvector:pg16
+    container_name: staffbot-memory-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: staffbot
+      POSTGRES_PASSWORD: ${MEMORY_DB_PASSWORD:-staffbot}
+      POSTGRES_DB: staffbot_memory
+    ports:
+      - "127.0.0.1:5434:5432"          # 🔒 Localhost only
+    volumes:
+      - memory_pgdata:/var/lib/postgresql/data
+      - ./init-memory.sql:/docker-entrypoint-initdb.d/init-memory.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U staffbot -d staffbot_memory"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - staffbot-b
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - DAC_OVERRIDE
+      - SETUID
+      - SETGID
+
+  api-gateway:
+    build: ./gateway
+    container_name: staffbot-gateway
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8080:8080"          # 🔒 Localhost only — proxied via WireGuard
+    environment:
+      DATABASE_URL: postgresql://staffbot:${MEMORY_DB_PASSWORD:-staffbot}@memory-db:5432/staffbot_memory
+      AUTH_KEY: ${GATEWAY_AUTH_KEY:?GATEWAY_AUTH_KEY is required — set in .env file}
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /root/staffbot/containers:/root/staffbot/containers
+    depends_on:
+      memory-db:
+        condition: service_healthy
+    networks:
+      - staffbot-b
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - SYS_PTRACE                   # Required for Docker SDK
+
+volumes:
+  memory_pgdata:
+
+networks:
+  staffbot-b:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: "10.100.0.0/24"    # 🔒 Explicit subnet, not default

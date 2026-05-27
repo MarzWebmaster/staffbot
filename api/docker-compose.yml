@@ -1,0 +1,70 @@
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: staffbot-db
+    restart: unless-stopped
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_USER=staffbot
+      - POSTGRES_PASSWORD=staffbot123
+      - POSTGRES_DB=staffbot_db
+    ports:
+      - "5433:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U staffbot -d staffbot_db"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    networks:
+      - staffbot-network
+
+  api:
+    build: .
+    container_name: staffbot-api
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      - STAFFBOT_DATABASE_URL=postgresql://staffbot:staffbot123@db:5432/staffbot_db
+      - STAFFBOT_CORS_ORIGINS=["*"]
+      - STAFFBOT_DOMAIN=staffbot.my
+      - STAFFBOT_LANDING_PAGE_URL=https://staffbot.my
+      - STAFFBOT_ADMIN_EMAIL=admin@staffbot.my
+      - STAFFBOT_CORE_IMAGE=staffbot-core:latest
+      - STAFFBOT_SERVER_B_API_URL=http://staffbot-gateway:8080
+      - STAFFBOT_SERVER_B_API_KEY=gw-staffbot-secret-2026
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /root/staffbot/containers:/root/staffbot/containers
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - staffbot-network
+
+  gateway:
+    image: staffbot-gateway:latest
+    container_name: staffbot-gateway
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8080:8080"
+    environment:
+      - AUTH_KEY=gw-staffbot-secret-2026
+      - STAFFBOT_OPENROUTER_API_KEY=${STAFFBOT_OPENROUTER_API_KEY}
+      - DATABASE_URL=postgresql://staffbot:staffbot123@db:5432/staffbot_db
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /root/staffbot/containers:/root/staffbot/containers
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - staffbot-network
+
+volumes:
+  postgres_data:
+
+networks:
+  staffbot-network:
+    driver: bridge

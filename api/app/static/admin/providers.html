@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="ms">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LLM Providers — StaffBot.my</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="/static/css/app.css">
+</head>
+<body>
+    <button class="sidebar-toggle" onclick="toggleSidebar()">☰</button>
+    <div class="sidebar-overlay" onclick="toggleSidebar()"></div>
+    <div class="app-layout">
+                
+                <div class="sidebar" style="background:#111827">
+            <div class="sidebar-brand"><h2>StaffBot.my</h2><span>Admin Panel</span></div>
+            <nav class="sidebar-nav" id="sidebar-nav"></nav>
+            <div id="sidebar-user" style="padding:16px 20px;border-top:1px solid rgba(255,255,255,0.1);margin-top:auto"></div>
+        </div>
+        <div class="main-content">
+            <div class="topbar">
+                <h1>🔌 LLM Providers</h1>
+                <button class="btn btn-primary" onclick="openModal('addProviderModal')">+ Tambah Provider</button>
+            </div>
+
+            <!-- Provider List -->
+            <div class="card">
+                <div class="card-header"><h3>Senarai Provider</h3></div>
+                <div style="overflow-x:auto">
+                    <table class="data-table" id="providersTable">
+                        <thead><tr><th>Nama</th><th>Base URL</th><th>Models</th><th>API Key</th><th>Status</th><th>Tindakan</th></tr></thead>
+                        <tbody id="providersBody"><tr><td colspan="6" style="text-align:center;color:var(--text-light)">Loading...</td></tr></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Package Assignments -->
+            <div class="card">
+                <div class="card-header"><h3>Per-Provider Package Assignment</h3></div>
+                <div style="overflow-x:auto">
+                    <table class="data-table" id="assignTable">
+                        <thead><tr><th>Provider</th><th>Package</th><th>Token Quota</th><th>Available</th><th>Tindakan</th></tr></thead>
+                        <tbody id="assignBody"><tr><td colspan="5" style="text-align:center;color:var(--text-light)">Loading...</td></tr></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add Provider Modal -->
+    <div class="modal-overlay" id="addProviderModal">
+        <div class="modal">
+            <div class="modal-header"><h3>Tambah Provider</h3><button class="modal-close" onclick="closeModal('addProviderModal')">&times;</button></div>
+            <form onsubmit="addProvider(event)">
+                <div class="modal-body">
+                    <div class="form-group"><label>Nama (slug)</label><input type="text" id="provName" class="form-control" placeholder="openrouter" required></div>
+                    <div class="form-group"><label>Display Name</label><input type="text" id="provDisplay" class="form-control" placeholder="OpenRouter" required></div>
+                    <div class="form-group"><label>Base URL</label><input type="url" id="provUrl" class="form-control" placeholder="https://openrouter.ai/api/v1" required></div>
+                    <div class="form-group"><label>API Key (managed)</label><input type="password" id="provKey" class="form-control" placeholder="sk-..."></div>
+                    <div class="form-group"><label>Models (JSON array)</label><textarea id="provModels" class="form-control" rows="3" placeholder='["gpt-4o", "claude-sonnet-4"]'></textarea></div>
+                    <div class="form-group"><label>Default Model</label><input type="text" id="provDefault" class="form-control" placeholder="gpt-4o-mini"></div>
+                    <div class="form-group"><label>Description</label><textarea id="provDesc" class="form-control" rows="2" placeholder="Penerangan provider"></textarea></div>
+                </div>
+                <div class="modal-footer"><button type="button" class="btn btn-ghost" onclick="closeModal('addProviderModal')">Batal</button><button type="submit" class="btn btn-primary">Simpan</button></div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Edit Provider Modal -->
+    <div class="modal-overlay" id="editProviderModal">
+        <div class="modal">
+            <div class="modal-header"><h3>Edit Provider</h3><button class="modal-close" onclick="closeModal('editProviderModal')">&times;</button></div>
+            <form onsubmit="editProvider(event)">
+                <div class="modal-body">
+                    <input type="hidden" id="editProvId">
+                    <div class="form-group"><label>Display Name</label><input type="text" id="editProvDisplay" class="form-control" required></div>
+                    <div class="form-group"><label>Base URL</label><input type="url" id="editProvUrl" class="form-control" required></div>
+                    <div class="form-group"><label>API Key (kosongkan jika tak nak ubah)</label><input type="password" id="editProvKey" class="form-control" placeholder="sk-..."></div>
+                    <div class="form-group"><label>Models (JSON array)</label><textarea id="editProvModels" class="form-control" rows="3"></textarea></div>
+                    <div class="form-group"><label>Default Model</label><input type="text" id="editProvDefault" class="form-control"></div>
+                    <div class="form-group"><label>Description</label><textarea id="editProvDesc" class="form-control" rows="2"></textarea></div>
+                    <div class="form-group"><label><input type="checkbox" id="editProvActive"> Active</label></div>
+                </div>
+                <div class="modal-footer"><button type="button" class="btn btn-ghost" onclick="closeModal('editProviderModal')">Batal</button><button type="submit" class="btn btn-primary">Kemas Kini</button></div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Assign Provider to Package Modal -->
+    <div class="modal-overlay" id="assignModal">
+        <div class="modal">
+            <div class="modal-header"><h3>Assign Provider ke Package</h3><button class="modal-close" onclick="closeModal('assignModal')">&times;</button></div>
+            <form onsubmit="assignProvider(event)">
+                <div class="modal-body">
+                    <div class="form-group"><label>Package ID</label><input type="number" id="assignPkgId" class="form-control" required></div>
+                    <div class="form-group"><label>Provider ID</label><input type="number" id="assignProvId" class="form-control" required></div>
+                    <div class="form-group"><label>Token Quota (0 = guna default pakej)</label><input type="number" id="assignTokens" class="form-control" value="0"></div>
+                </div>
+                <div class="modal-footer"><button type="button" class="btn btn-ghost" onclick="closeModal('assignModal')">Batal</button><button type="submit" class="btn btn-primary">Assign</button></div>
+            </form>
+        </div>
+    </div>
+
+    <div id="toast-container" class="toast-container"></div>
+    <script src="/static/js/app.js"></script>
+    <script>
+    async function init() {
+        const user = await checkAdminAuth('/admin/login.html');
+        if (!user) return;
+                renderSidebar('providers');
+        renderSidebarUser(user);
+        await loadProviders();
+        await loadAssignments();
+    }
+
+    async function loadProviders() {
+        try {
+            const providers = await api('/admin/providers/providers');
+            const tbody = document.getElementById('providersBody');
+            if (!providers.length) {
+                tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--text-light)">Tiada provider lagi.</td></tr>';
+                return;
+            }
+            tbody.innerHTML = providers.map(p => `
+                <tr>
+                    <td><strong>${p.display_name}</strong><br><small style="color:var(--text-light)">${p.name}</small></td>
+                    <td style="font-size:13px">${p.base_url}</td>
+                    <td style="font-size:13px">${(p.models||[]).length} models<br><small style="color:var(--text-light)">Default: ${p.default_model||'-'}</small></td>
+                    <td>${p.api_key_configured ? '<span class="status-badge status-active">✓ Configured</span>' : '<span class="status-badge status-error">✗ Not Set</span>'}</td>
+                    <td>${p.is_active ? '<span class="status-badge status-active">Active</span>' : '<span class="status-badge status-error">Inactive</span>'}</td>
+                    <td>
+                        <button class="btn btn-sm btn-ghost" onclick="openEditProvider(${p.id})">✏️</button>
+                        <button class="btn btn-sm btn-ghost" onclick="toggleProvider(${p.id},${!p.is_active})">${p.is_active ? '🚫' : '✅'}</button>
+                    </td>
+                </tr>
+            `).join('');
+        } catch {}
+    }
+
+    async function loadAssignments() {
+        try {
+            const assigns = await api('/admin/providers/package-providers');
+            const tbody = document.getElementById('assignBody');
+            if (!assigns.length) {
+                tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--text-light)">Tiada assignment.</td></tr>';
+                return;
+            }
+            tbody.innerHTML = assigns.map(a => `
+                <tr>
+                    <td>${a.provider ? a.provider.display_name : 'ID: '+a.provider_id}</td>
+                    <td>Package #${a.package_id}</td>
+                    <td>${a.token_quota > 0 ? a.token_quota.toLocaleString() : 'Default pakej'}</td>
+                    <td>${a.is_available ? '<span class="status-badge status-active">Ya</span>' : '<span class="status-badge status-error">Tidak</span>'}</td>
+                    <td><button class="btn btn-sm btn-ghost" onclick="removeAssignment(${a.id})">🗑️</button></td>
+                </tr>
+            `).join('');
+        } catch {}
+    }
+
+    async function addProvider(e) {
+        e.preventDefault();
+        const name = document.getElementById('provName').value.trim();
+        const display_name = document.getElementById('provDisplay').value.trim();
+        const base_url = document.getElementById('provUrl').value.trim();
+        const api_key = document.getElementById('provKey').value.trim() || undefined;
+        let models = [];
+        try { models = JSON.parse(document.getElementById('provModels').value || '[]'); } catch {}
+        const default_model = document.getElementById('provDefault').value.trim() || undefined;
+        const description = document.getElementById('provDesc').value.trim() || undefined;
+
+        try {
+            await api('/admin/providers/providers', {
+                method: 'POST',
+                body: JSON.stringify({ name, display_name, base_url, api_key, models, default_model, description }),
+            });
+            showToast('Provider berjaya ditambah', 'success');
+            closeModal('addProviderModal');
+            document.getElementById('addProviderModal').querySelector('form').reset();
+            await loadProviders();
+        } catch {}
+    }
+
+    function openEditProvider(id) {
+        const p = document.querySelector(`#providersBody tr:nth-child(${document.querySelector(`[data-id="${id}"]`) ? '1' : '1'})`);
+        // Find from API
+        api('/admin/providers/providers/' + id).then(p => {
+            document.getElementById('editProvId').value = p.id;
+            document.getElementById('editProvDisplay').value = p.display_name;
+            document.getElementById('editProvUrl').value = p.base_url;
+            document.getElementById('editProvModels').value = JSON.stringify(p.models||[], null, 2);
+            document.getElementById('editProvDefault').value = p.default_model||'';
+            document.getElementById('editProvDesc').value = p.description||'';
+            document.getElementById('editProvActive').checked = p.is_active;
+            document.getElementById('editProvKey').value = '';
+            openModal('editProviderModal');
+        }).catch(() => showToast('Gagal dapatkan data provider', 'error'));
+    }
+
+    async function editProvider(e) {
+        e.preventDefault();
+        const id = document.getElementById('editProvId').value;
+        const display_name = document.getElementById('editProvDisplay').value.trim();
+        const base_url = document.getElementById('editProvUrl').value.trim();
+        const api_key = document.getElementById('editProvKey').value.trim() || undefined;
+        let models;
+        try { models = JSON.parse(document.getElementById('editProvModels').value || '[]'); } catch { models = undefined; }
+        const default_model = document.getElementById('editProvDefault').value.trim() || undefined;
+        const description = document.getElementById('editProvDesc').value.trim() || undefined;
+        const is_active = document.getElementById('editProvActive').checked;
+
+        try {
+            const body = { display_name, base_url, models, default_model, description, is_active };
+            if (api_key) body.api_key = api_key;
+            await api('/admin/providers/providers/' + id, { method: 'PUT', body: JSON.stringify(body) });
+            showToast('Provider dikemas kini', 'success');
+            closeModal('editProviderModal');
+            await loadProviders();
+        } catch {}
+    }
+
+    async function toggleProvider(id, active) {
+        if (!confirm(`Pastikan ${active ? 'aktifkan' : 'nyahaktifkan'} provider ini?`)) return;
+        try {
+            if (active) {
+                await api('/admin/providers/providers/' + id, { method: 'PUT', body: JSON.stringify({ is_active: true }) });
+            } else {
+                await api('/admin/providers/providers/' + id, { method: 'DELETE' });
+            }
+            showToast('Status provider diubah', 'success');
+            await loadProviders();
+        } catch {}
+    }
+
+    async function assignProvider(e) {
+        e.preventDefault();
+        const package_id = parseInt(document.getElementById('assignPkgId').value);
+        const provider_id = parseInt(document.getElementById('assignProvId').value);
+        const token_quota = parseFloat(document.getElementById('assignTokens').value) || 0;
+
+        try {
+            await api('/admin/providers/package-providers?package_id=' + package_id, {
+                method: 'POST',
+                body: JSON.stringify({ provider_id, token_quota, is_available: true }),
+            });
+            showToast('Provider assigned ke package', 'success');
+            closeModal('assignModal');
+            document.getElementById('assignModal').querySelector('form').reset();
+            await loadAssignments();
+        } catch {}
+    }
+
+    async function removeAssignment(id) {
+        if (!confirm('Buang provider dari package ini?')) return;
+        try {
+            await api('/admin/providers/package-providers/' + id, { method: 'DELETE' });
+            showToast('Assignment dibuang', 'success');
+            await loadAssignments();
+        } catch {}
+    }
+
+    init();
+    </script>
+</body>
+</html>

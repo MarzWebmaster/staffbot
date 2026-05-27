@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="ms">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Billing — StaffBot.my</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="/static/css/app.css">
+</head>
+<body>
+    <div class="app-layout">
+        <div class="sidebar">
+            <div class="sidebar-brand"><h2>StaffBot.my</h2><span>Customer Dashboard</span></div>
+            <nav class="sidebar-nav">
+                <a href="dashboard.html"><span>📊</span><span>Dashboard</span></a>
+                <a href="bots.html"><span>🤖</span><span>Staff AI Saya</span></a>
+                <a href="chat.html"><span>💬</span><span>Chat</span></a>
+                <a href="settings.html"><span>⚙️</span><span>Tetapan</span></a>
+                <a href="billing.html" class="active"><span>💰</span><span>Billing</span></a>
+                <a href="usage.html"><span>📈</span><span>Penggunaan</span></a>
+                <a href="#" onclick="logout()" style="margin-top:20px;border-top:1px solid rgba(255,255,255,0.1);padding-top:20px"><span>🚪</span><span>Log Keluar</span></a>
+            </nav>
+            <div id="sidebar-user" style="padding:16px 20px;border-top:1px solid rgba(255,255,255,0.1);margin-top:auto"></div>
+        </div>
+        <div class="main-content">
+            <div class="topbar"><h1>Billing & Subscription</h1></div>
+
+            <div class="grid-2">
+                <div class="card">
+                    <div class="card-header"><h3>Pakej Semasa</h3></div>
+                    <div id="currentPackage"><p style="color:var(--text-light)">Loading...</p></div>
+                </div>
+                <div class="card">
+                    <div class="card-header"><h3>Tukar Pakej</h3></div>
+                    <div id="packagesList"><p style="color:var(--text-light)">Loading...</p></div>
+                </div>
+            </div>
+
+            <!-- Invoice History -->
+            <div class="card">
+                <div class="card-header"><h3>Sejarah Invois</h3></div>
+                <div id="invoiceList"><p style="color:var(--text-light)">Tiada rekod invois.</p></div>
+            </div>
+        </div>
+    </div>
+    <div id="toast-container" class="toast-container"></div>
+    <script src="/static/js/app.js"></script>
+    <script>
+    async function init() {
+        const user = await checkAuth();
+        if (!user) return;
+        renderSidebarUser(user);
+        loadSubscription(user);
+        loadPackages();
+    }
+
+    async function loadSubscription(user) {
+        try {
+            const sub = await api(`/subscriptions/${user.id}`);
+            document.getElementById('currentPackage').innerHTML = `
+                <div style="text-align:center;padding:20px">
+                    <div style="font-size:48px;margin-bottom:12px">${user.package === 'enterprise' ? '🏢' : user.package === 'pro' ? '⭐' : '🔵'}</div>
+                    <h2 style="font-size:24px;margin-bottom:8px;text-transform:capitalize">${user.package}</h2>
+                    <div>${statusBadge(sub.status)}</div>
+                    <div style="margin-top:16px;font-size:13px;color:var(--text-light)">
+                        <div>Mula: ${formatDate(sub.start_date)}</div>
+                        ${sub.end_date ? `<div>Tamat: ${formatDate(sub.end_date)}</div>` : ''}
+                        <div>Token: ${sub.managed_token_used.toFixed(0)} / ${sub.managed_token_quota.toFixed(0)}</div>
+                    </div>
+                </div>
+            `;
+        } catch { document.getElementById('currentPackage').innerHTML = '<p style="color:var(--text-light)">Gagal load subscription</p>'; }
+    }
+
+    async function loadPackages() {
+        try {
+            const pkgs = await api('/admin/packages');
+            document.getElementById('packagesList').innerHTML = `<div class="grid-2">${pkgs.map(p => `
+                <div style="border:1px solid var(--border);border-radius:12px;padding:20px;text-align:center">
+                    <h3 style="font-size:18px;margin-bottom:8px">${p.display_name}</h3>
+                    <div style="font-size:28px;font-weight:700;margin-bottom:8px">${formatCurrency(p.price_monthly)}<span style="font-size:14px;font-weight:400;color:var(--text-light)">/bulan</span></div>
+                    <div style="font-size:13px;color:var(--text-light);margin-bottom:12px">${p.bot_limit} bot, ${p.managed_tokens} token</div>
+                    <button class="btn btn-primary btn-sm" onclick="upgrade('${p.name}')">Upgrade</button>
+                </div>
+            `).join('')}</div>`;
+        } catch {}
+    }
+
+    async function upgrade(pkg) {
+        try {
+            const result = await api('/subscriptions/create-checkout', { method: 'POST', body: JSON.stringify({ package: pkg }) });
+            if (result.checkout_url) window.open(result.checkout_url, '_blank');
+            showToast(`Redirect ke payment untuk ${pkg}`, 'info');
+        } catch {}
+    }
+
+    init();
+    </script>
+</body>
+</html>

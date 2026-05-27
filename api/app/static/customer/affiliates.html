@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="ms">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Affiliates — StaffBot.my</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="/static/css/app.css">
+</head>
+<body>
+    <div class="app-layout">
+        <div class="sidebar">
+            <div class="sidebar-brand"><h2>StaffBot.my</h2><span>Customer Dashboard</span></div>
+            <nav class="sidebar-nav">
+                <a href="dashboard.html"><span>📊</span><span>Dashboard</span></a>
+                <a href="bots.html"><span>🤖</span><span>Staff AI Saya</span></a>
+                <a href="chat.html"><span>💬</span><span>Chat</span></a>
+                <a href="providers.html"><span>🔌</span><span>LLM Providers</span></a>
+                <a href="affiliates.html" class="active"><span>🤝</span><span>Affiliates</span></a>
+                <a href="settings.html"><span>⚙️</span><span>Tetapan</span></a>
+                <a href="billing.html"><span>💰</span><span>Billing</span></a>
+                <a href="usage.html"><span>📈</span><span>Penggunaan</span></a>
+                <a href="#" onclick="logout()" style="margin-top:20px;border-top:1px solid rgba(255,255,255,0.1);padding-top:20px"><span>🚪</span><span>Log Keluar</span></a>
+            </nav>
+            <div id="sidebar-user" style="padding:16px 20px;border-top:1px solid rgba(255,255,255,0.1);margin-top:auto"></div>
+        </div>
+        <div class="main-content">
+            <div class="topbar"><h1>🤝 Affiliate Program</h1></div>
+
+            <!-- Register CTA or Dashboard -->
+            <div id="affiliateContent"></div>
+        </div>
+    </div>
+    <div id="toast-container" class="toast-container"></div>
+    <script src="/static/js/app.js"></script>
+    <script>
+    async function init() {
+        const user = await checkAuth();
+        if (!user) return;
+        renderSidebarUser(user);
+        await loadAffiliateDashboard();
+        await loadLeaderboard();
+    }
+
+    async function loadAffiliateDashboard() {
+        const container = document.getElementById('affiliateContent');
+        try {
+            const dash = await api('/affiliates/dashboard');
+            if (!dash.profile) {
+                // Not registered - show CTA
+                container.innerHTML = `
+                    <div class="card" style="text-align:center;padding:48px 24px">
+                        <div style="font-size:64px;margin-bottom:16px">🤝</div>
+                        <h2 style="margin-bottom:8px">StaffBot.my Affiliate Program</h2>
+                        <p style="color:var(--text-light);margin-bottom:24px;max-width:500px;margin-left:auto;margin-right:auto">
+                            Dapatkan <strong>10% komisen</strong> untuk setiap pengguna baru yang daftar melalui link rujukan anda.
+                            Tiada had pendapatan — promote StaffBot.my dan dapatkan ganjaran!
+                        </p>
+                        <button class="btn btn-primary btn-lg" onclick="registerAffiliate()">🚀 Daftar Sekarang</button>
+                        <div style="margin-top:24px;display:flex;gap:16px;justify-content:center;flex-wrap:wrap">
+                            <div class="card" style="padding:20px;text-align:center;min-width:150px"><div class="stat-value" style="font-size:24px">10%</div><div class="stat-label">Komisen</div></div>
+                            <div class="card" style="padding:20px;text-align:center;min-width:150px"><div class="stat-value" style="font-size:24px">RM50</div><div class="stat-label">Min Withdraw</div></div>
+                            <div class="card" style="padding:20px;text-align:center;min-width:150px"><div class="stat-value" style="font-size:24px">Auto</div><div class="stat-label">Payout</div></div>
+                        </div>
+                    </div>
+                    <div id="leaderboardSection"></div>
+                `;
+                return;
+            }
+
+            // Show dashboard
+            const p = dash.profile;
+            const referralLink = p.referral_link || 'https://staffbot.my/ref/' + p.referral_code;
+            const convRate = dash.conversion_rate || 0;
+
+            container.innerHTML = `
+                <!-- Stats -->
+                <div class="grid-4">
+                    <div class="card stat-card"><div class="stat-label">Total Earnings</div><div class="stat-value" style="font-size:18px">RM${(p.total_earnings||0).toFixed(2)}</div></div>
+                    <div class="card stat-card"><div class="stat-label">Pending</div><div class="stat-value" style="font-size:18px">RM${(p.pending_earnings||0).toFixed(2)}</div></div>
+                    <div class="card stat-card"><div class="stat-label">This Month</div><div class="stat-value" style="font-size:18px">RM${(dash.earnings_this_month||0).toFixed(2)}</div></div>
+                    <div class="card stat-card"><div class="stat-label">Rank</div><div class="stat-value" style="font-size:18px">#${dash.leaderboard_rank||'-'}</div></div>
+                </div>
+
+                <!-- Referral Link -->
+                <div class="card">
+                    <div class="card-header"><h3>🔗 Referral Link</h3></div>
+                    <div style="padding:16px;display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+                        <input type="text" id="refLink" class="form-control" value="${referralLink}" readonly style="flex:1;min-width:250px;font-size:14px">
+                        <button class="btn btn-primary" onclick="copyRefLink()">📋 Salin</button>
+                        <button class="btn btn-ghost" onclick="shareWhatsApp()">📱 Kongsi WhatsApp</button>
+                    </div>
+                </div>
+
+                <!-- AI Copywriting Generator -->
+                <div class="card">
+                    <div class="card-header"><h3>✍️ AI Copywriting Generator</h3></div>
+                    <div style="padding:16px">
+                        <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:12px">
+                            <select id="copyPlatform" class="form-control" style="width:auto"><option value="whatsapp">WhatsApp</option><option value="telegram">Telegram</option><option value="email">Email</option><option value="social">Social Media</option></select>
+                            <select id="copyTone" class="form-control" style="width:auto"><option value="professional">Professional</option><option value="friendly">Mesra</option><option value="urgent">Urgent</option></select>
+                            <button class="btn btn-primary" onclick="generateCopy()">⚡ Generate Copy</button>
+                        </div>
+                        <div id="copyResult" style="display:none">
+                            <div id="copySubject" style="font-weight:600;margin-bottom:8px"></div>
+                            <textarea id="copyBody" class="form-control" rows="6" readonly></textarea>
+                            <button class="btn btn-sm btn-ghost" onclick="copyToClipboard('copyBody')" style="margin-top:8px">📋 Salin</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Recent Referrals -->
+                <div class="card">
+                    <div class="card-header"><h3>📋 Referrals Terkini (${p.total_referrals||0})</h3></div>
+                    <div id="referralsList"></div>
+                </div>
+
+                <!-- Recent Commissions -->
+                <div class="card">
+                    <div class="card-header"><h3>💰 Komisen Terkini</h3></div>
+                    <div id="commissionsList"></div>
+                </div>
+
+                <!-- Leaderboard -->
+                <div id="leaderboardSection"></div>
+            `;
+
+            renderReferrals(dash.recent_referrals||[]);
+            renderCommissions(dash.recent_commissions||[]);
+        } catch {
+            container.innerHTML = '<div class="card"><p style="color:var(--error)">Gagal load affiliate data</p></div>';
+        }
+    }
+
+    async function registerAffiliate() {
+        try {
+            const result = await api('/affiliates/register', { method: 'POST' });
+            showToast('✅ Anda kini affiliate StaffBot.my!', 'success');
+            await loadAffiliateDashboard();
+        } catch {}
+    }
+
+    function renderReferrals(refs) {
+        const el = document.getElementById('referralsList');
+        if (!el) return;
+        if (!refs.length) {
+            el.innerHTML = '<div style="padding:16px;color:var(--text-light)">Belum ada referral. Kongsi link anda sekarang!</div>';
+            return;
+        }
+        el.innerHTML = '<div style="overflow-x:auto"><table class="data-table"><thead><tr><th>Email</th><th>Status</th><th>Komisen</th><th>Tarikh</th></tr></thead><tbody>' +
+            refs.map(r => `<tr><td>${r.referred_email||'-'}</td><td>${statusBadge(r.status)}</td><td>RM${(r.commission_earned||0).toFixed(2)}</td><td>${formatDate(r.created_at)}</td></tr>`).join('') +
+            '</tbody></table></div>';
+    }
+
+    function renderCommissions(comms) {
+        const el = document.getElementById('commissionsList');
+        if (!el) return;
+        if (!comms.length) {
+            el.innerHTML = '<div style="padding:16px;color:var(--text-light)">Belum ada komisen.</div>';
+            return;
+        }
+        el.innerHTML = '<div style="overflow-x:auto"><table class="data-table"><thead><tr><th>Amount</th><th>Description</th><th>Status</th><th>Tarikh</th></tr></thead><tbody>' +
+            comms.map(c => `<tr><td><strong>RM${(c.amount||0).toFixed(2)}</strong></td><td>${c.description||'-'}</td><td>${statusBadge(c.status)}</td><td>${formatDate(c.created_at)}</td></tr>`).join('') +
+            '</tbody></table></div>';
+    }
+
+    async function loadLeaderboard() {
+        const el = document.getElementById('leaderboardSection');
+        if (!el) return;
+        try {
+            const lb = await api('/affiliates/leaderboard?limit=10');
+            el.innerHTML = `
+                <div class="card">
+                    <div class="card-header"><h3>🏆 Leaderboard (Top Affiliates)</h3></div>
+                    <div style="overflow-x:auto">
+                        <table class="data-table">
+                            <thead><tr><th>#</th><th>Affiliate</th><th>Earnings</th><th>Referrals</th></tr></thead>
+                            <tbody>
+                                ${lb.entries.map(e => `
+                                    <tr>
+                                        <td><strong>#${e.rank}</strong></td>
+                                        <td>${e.name_masked}</td>
+                                        <td><strong>RM${(e.total_earnings||0).toFixed(2)}</strong></td>
+                                        <td>${e.total_referrals||0}</td>
+                                    </tr>
+                                `).join('')}
+                                ${!lb.entries.length ? '<tr><td colspan="4" style="color:var(--text-light);text-align:center">Belum ada data</td></tr>' : ''}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            `;
+        } catch {}
+    }
+
+    function copyRefLink() {
+        const input = document.getElementById('refLink');
+        input.select();
+        navigator.clipboard.writeText(input.value);
+        showToast('Link disalin!', 'success');
+    }
+
+    function shareWhatsApp() {
+        const link = document.getElementById('refLink').value;
+        const msg = encodeURIComponent(`Cuba StaffBot.my — Digital Employee untuk SME Malaysia. Percuma 7 hari! 🚀\n\n${link}`);
+        window.open(`https://wa.me/?text=${msg}`, '_blank');
+    }
+
+    async function generateCopy() {
+        const platform = document.getElementById('copyPlatform').value;
+        const tone = document.getElementById('copyTone').value;
+        try {
+            const result = await api('/affiliates/copywriting', {
+                method: 'POST',
+                body: JSON.stringify({ platform, tone, target_audience: 'SME' }),
+            });
+            const el = document.getElementById('copyResult');
+            el.style.display = 'block';
+            if (result.subject) {
+                document.getElementById('copySubject').textContent = 'Subject: ' + result.subject;
+            }
+            document.getElementById('copyBody').value = result.body;
+        } catch {}
+    }
+
+    function copyToClipboard(id) {
+        const el = document.getElementById(id);
+        el.select();
+        navigator.clipboard.writeText(el.value);
+        showToast('Disalin!', 'success');
+    }
+
+    init();
+    </script>
+</body>
+</html>

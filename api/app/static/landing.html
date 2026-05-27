@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>StaffBot.my — AI Employee for Your Business</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        html { scroll-behavior: smooth; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; color: #1E293B; background: #fff; }
+        :root { --navy: #1E3A5F; --gold: #F59E0B; --light: #F8FAFC; --border: #E2E8F0; --text: #1E293B; --muted: #64748B; }
+
+        /* Nav */
+        nav { position: fixed; top: 0; width: 100%; z-index: 100; background: rgba(30,58,95,0.95); backdrop-filter: blur(10px); padding: 14px 24px; display: flex; align-items: center; justify-content: space-between; }
+        nav .logo { font-size: 20px; font-weight: 800; color: white; text-decoration: none; }
+        nav .logo span { color: var(--gold); }
+        nav a { color: rgba(255,255,255,0.8); text-decoration: none; margin-left: 24px; font-size: 14px; }
+        nav a:hover { color: var(--gold); }
+        .nav-cta { background: var(--gold); color: var(--navy) !important; padding: 8px 20px; border-radius: 8px; font-weight: 600; margin-left: 24px; }
+
+        /* Hero */
+        .hero { background: linear-gradient(135deg, #1E3A5F 0%, #2c5282 50%, #1a365d 100%); color: white; padding: 140px 24px 80px; text-align: center; position: relative; overflow: hidden; }
+        .hero::before { content: ''; position: absolute; top: -50%; left: -50%; width: 200%; height: 200%; background: radial-gradient(circle at 30% 50%, rgba(245,158,11,0.08) 0%, transparent 50%); }
+        .hero h1 { font-size: clamp(1.8em,5vw,3.2em); font-weight: 800; line-height: 1.15; margin-bottom: 16px; position: relative; }
+        .hero h1 span { color: var(--gold); }
+        .hero p { font-size: clamp(1em,2vw,1.2em); max-width: 600px; margin: 0 auto 24px; opacity: 0.9; line-height: 1.6; position: relative; }
+        .hero-tagline { font-size: 1.05em; font-style: italic; opacity: 0.75; margin-bottom: 32px; position: relative; }
+        .hero-btns { display: flex; gap: 16px; justify-content: center; flex-wrap: wrap; position: relative; }
+        .btn { display: inline-block; padding: 14px 36px; border-radius: 10px; font-weight: 700; font-size: 15px; text-decoration: none; cursor: pointer; border: none; transition: all 0.2s; }
+        .btn:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(0,0,0,0.15); }
+        .btn-primary { background: var(--gold); color: var(--navy); }
+        .btn-outline { background: transparent; color: white; border: 2px solid rgba(255,255,255,0.3); }
+        .btn-outline:hover { border-color: var(--gold); color: var(--gold); }
+
+        /* Stats */
+        .stats { background: white; padding: 40px 24px; border-bottom: 1px solid var(--border); }
+        .stats-inner { max-width: 1000px; margin: 0 auto; display: grid; grid-template-columns: repeat(3,1fr); gap: 24px; text-align: center; }
+        .stat-num { font-size: 2em; font-weight: 800; color: var(--navy); }
+        .stat-label { font-size: 13px; color: var(--muted); margin-top: 4px; }
+
+        /* Sections */
+        section { padding: 80px 24px; }
+        .section-title { text-align: center; font-size: clamp(1.5em,3vw,2em); font-weight: 800; color: var(--navy); margin-bottom: 12px; }
+        .section-sub { text-align: center; color: var(--muted); max-width: 600px; margin: 0 auto 48px; font-size: 15px; line-height: 1.6; }
+        .container { max-width: 1100px; margin: 0 auto; }
+
+        /* Features */
+        .features-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 24px; }
+        .feature-card { background: var(--light); padding: 32px; border-radius: 14px; border: 1px solid var(--border); transition: all 0.2s; }
+        .feature-card:hover { border-color: var(--gold); box-shadow: 0 4px 20px rgba(245,158,11,0.1); }
+        .feature-icon { font-size: 2em; margin-bottom: 12px; }
+        .feature-card h3 { font-size: 16px; margin-bottom: 8px; color: var(--navy); }
+        .feature-card p { font-size: 14px; color: var(--muted); line-height: 1.6; }
+
+        /* How It Works */
+        .steps { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px,1fr)); gap: 32px; counter-reset: step; }
+        .step { text-align: center; padding: 32px; position: relative; }
+        .step-num { width: 48px; height: 48px; border-radius: 50%; background: var(--navy); color: white; display: flex; align-items: center; justify-content: center; font-size: 20px; font-weight: 800; margin: 0 auto 16px; }
+        .step h3 { font-size: 16px; color: var(--navy); margin-bottom: 8px; }
+        .step p { font-size: 14px; color: var(--muted); line-height: 1.5; }
+
+        /* Pricing */
+        .pricing { background: var(--light); }
+        .plans { display: flex; justify-content: center; gap: 20px; flex-wrap: wrap; align-items: start; }
+        .plan { background: white; border-radius: 16px; padding: 36px; width: 300px; border: 1px solid var(--border); position: relative; transition: all 0.2s; }
+        .plan:hover { transform: translateY(-4px); box-shadow: 0 8px 30px rgba(0,0,0,0.08); }
+        .plan.featured { border-color: var(--gold); box-shadow: 0 4px 24px rgba(245,158,11,0.12); }
+        .plan .badge { position: absolute; top: -12px; left: 50%; transform: translateX(-50%); background: var(--gold); color: var(--navy); padding: 4px 16px; border-radius: 20px; font-size: 12px; font-weight: 700; }
+        .plan h3 { font-size: 18px; color: var(--navy); }
+        .plan .price { font-size: 2.2em; font-weight: 800; color: var(--navy); margin: 12px 0 4px; }
+        .plan .price span { font-size: 14px; font-weight: 400; color: var(--muted); }
+        .plan .desc { font-size: 13px; color: var(--muted); margin-bottom: 20px; }
+        .plan ul { list-style: none; text-align: left; margin: 20px 0; }
+        .plan li { padding: 8px 0; font-size: 14px; color: #475569; display: flex; align-items: center; gap: 8px; }
+        .plan li::before { content: '✓'; color: #10B981; font-weight: 700; }
+        .plan .btn { width: 100%; text-align: center; }
+
+        /* Registration Form */
+        .form-section { background: white; }
+        .register-form { max-width: 520px; margin: 0 auto; background: var(--light); padding: 40px; border-radius: 16px; border: 1px solid var(--border); }
+        .register-form h3 { text-align: center; color: var(--navy); font-size: 20px; margin-bottom: 24px; }
+        .form-group { margin-bottom: 16px; }
+        .form-group label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 6px; color: var(--text); }
+        .form-group input, .form-group select { width: 100%; padding: 12px 14px; border: 1px solid var(--border); border-radius: 8px; font-size: 14px; transition: border-color 0.2s; }
+        .form-group input:focus, .form-group select:focus { outline: none; border-color: var(--gold); box-shadow: 0 0 0 3px rgba(245,158,11,0.1); }
+        .form-group .hint { font-size: 12px; color: var(--muted); margin-top: 4px; }
+        .form-msg { padding: 12px; border-radius: 8px; font-size: 14px; margin-bottom: 16px; display: none; }
+        .form-msg.success { display: block; background: #D1FAE5; color: #065F46; }
+        .form-msg.error { display: block; background: #FEE2E2; color: #991B1B; }
+        .btn-submit { width: 100%; padding: 14px; background: var(--navy); color: white; font-size: 16px; font-weight: 700; border: none; border-radius: 10px; cursor: pointer; transition: all 0.2s; }
+        .btn-submit:hover { background: #2c5282; }
+        .btn-submit:disabled { opacity: 0.5; cursor: not-allowed; }
+
+        /* FAQ */
+        .faq-item { border-bottom: 1px solid var(--border); padding: 16px 0; }
+        .faq-q { display: flex; justify-content: space-between; align-items: center; cursor: pointer; font-weight: 600; color: var(--text); font-size: 15px; }
+        .faq-q span { font-size: 12px; color: var(--muted); transition: transform 0.2s; }
+        .faq-item.open .faq-q span { transform: rotate(180deg); }
+        .faq-a { max-height: 0; overflow: hidden; transition: max-height 0.3s ease; font-size: 14px; color: var(--muted); line-height: 1.6; padding-top: 0; }
+        .faq-item.open .faq-a { max-height: 200px; padding-top: 12px; }
+
+        /* Footer */
+        footer { background: var(--navy); color: white; padding: 40px 24px; text-align: center; }
+        footer .f-links { display: flex; justify-content: center; gap: 24px; flex-wrap: wrap; margin-bottom: 16px; }
+        footer a { color: rgba(255,255,255,0.7); text-decoration: none; font-size: 14px; }
+        footer a:hover { color: var(--gold); }
+        footer .copy { font-size: 13px; opacity: 0.6; }
+
+        /* Mobile */
+        @media (max-width: 768px) {
+            nav { padding: 12px 16px; }
+            nav .nav-links { display: none; }
+            .hero { padding: 100px 16px 60px; }
+            section { padding: 48px 16px; }
+            .stats-inner { grid-template-columns: 1fr; gap: 16px; }
+            .plans { flex-direction: column; align-items: center; }
+            .plan { width: 100%; max-width: 380px; }
+            .register-form { padding: 24px; }
+            .features-grid { grid-template-columns: 1fr; }
+            .steps { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+
+<nav>
+    <a href="/" class="logo">StaffBot<span>.my</span></a>
+    <div class="nav-links">
+        <a href="#features">Features</a>
+        <a href="#pricing">Pricing</a>
+        <a href="#register">Get Started</a>
+        <a href="/admin/login.html" class="nav-cta">Login</a>
+    </div>
+</nav>
+
+<!-- Hero -->
+<section class="hero">
+    <h1>Your <span>AI Employee</span><br>That Actually Works</h1>
+    <p>StaffBot.my gives you a dedicated AI agent that works 24/7 — answering WhatsApp, executing tasks, remembering your business context, and never taking a day off.</p>
+    <p class="hero-tagline">"Cheaper than a part-timer, more efficient than a full-timer"</p>
+    <div class="hero-btns">
+        <a href="#register" class="btn btn-primary">🚀 Start Free Trial</a>
+        <a href="#features" class="btn btn-outline">See Features</a>
+    </div>
+</section>
+
+<!-- Stats -->
+<div class="stats">
+    <div class="stats-inner">
+        <div><div class="stat-num">24/7</div><div class="stat-label">Always Online</div></div>
+        <div><div class="stat-num">60s</div><div class="stat-label">Average Response Time</div></div>
+        <div><div class="stat-num">99.9%</div><div class="stat-label">Uptime Guaranteed</div></div>
+    </div>
+</div>
+
+<!-- Features -->
+<section id="features">
+    <div class="container">
+        <h2 class="section-title">Why StaffBot?</h2>
+        <p class="section-sub">Not just a chatbot. A full-fledged AI employee that integrates into your business operations.</p>
+        <div class="features-grid">
+            <div class="feature-card"><div class="feature-icon">🤖</div><h3>Dedicated AI Agent</h3><p>Not a shared bot. Your own AI employee that learns your SOP, remembers your customers, and works exclusively for your business.</p></div>
+            <div class="feature-card"><div class="feature-icon">💬</div><h3>WhatsApp Auto-Reply</h3><p>Auto-respond to customers on WhatsApp. Schedule replies, target specific groups, and toggle on/off anytime.</p></div>
+            <div class="feature-card"><div class="feature-icon">⚙️</div><h3>Task Execution</h3><p>Your AI executes tasks autonomously — follow-ups, reminders, reporting, data entry. Set it and forget it.</p></div>
+            <div class="feature-card"><div class="feature-icon">🔗</div><h3>Full Integration</h3><p>Connects to Google Drive, Email, APIs, your website. Can crawl URLs, read documents, and generate reports.</p></div>
+            <div class="feature-card"><div class="feature-icon">🧠</div><h3>Smart Memory</h3><p>Hybrid search across your company data. Your AI remembers past conversations, orders, and business context.</p></div>
+            <div class="feature-card"><div class="feature-icon">🔒</div><h3>Secure & Isolated</h3><p>Each client gets their own isolated container. Your data stays yours — encrypted, private, and never shared.</p></div>
+        </div>
+    </div>
+</section>
+
+<!-- How It Works -->
+<section style="background:var(--light)">
+    <div class="container">
+        <h2 class="section-title">How It Works</h2>
+        <p class="section-sub">Get your AI employee running in minutes, not days.</p>
+        <div class="steps">
+            <div class="step"><div class="step-num">1</div><h3>Sign Up</h3><p>Choose your plan and create your account. No credit card required for Starter.</p></div>
+            <div class="step"><div class="step-num">2</div><h3>Configure</h3><p>Upload your company profile, products, and SOP. Your AI learns your business instantly.</p></div>
+            <div class="step"><div class="step-num">3</div><h3>Deploy</h3><p>Connect WhatsApp, set up auto-reply, assign tasks. Your AI goes live in under 5 minutes.</p></div>
+            <div class="step"><div class="step-num">4</div><h3>Scale</h3><p>Monitor performance, adjust workflows, add more agents. Your AI grows with your business.</p></div>
+        </div>
+    </div>
+</section>
+
+<!-- Pricing -->
+<section id="pricing" class="pricing">
+    <div class="container">
+        <h2 class="section-title">Simple Pricing</h2>
+        <p class="section-sub">Choose the plan that fits your business. Upgrade anytime.</p>
+        <div class="plans">
+            <div class="plan">
+                <h3>Starter</h3>
+                <div class="price">RM49 <span>/month</span></div>
+                <p class="desc">Perfect for small businesses getting started with AI.</p>
+                <ul>
+                    <li>1 AI Employee</li>
+                    <li>100,000 tokens/month</li>
+                    <li>WhatsApp Auto-Reply</li>
+                    <li>Web Dashboard</li>
+                    <li>Email Support</li>
+                </ul>
+                <a href="#register" class="btn btn-primary">Get Started</a>
+            </div>
+            <div class="plan featured">
+                <div class="badge">Most Popular</div>
+                <h3>Professional</h3>
+                <div class="price">RM149 <span>/month</span></div>
+                <p class="desc">For growing businesses that need more power.</p>
+                <ul>
+                    <li>3 AI Employees</li>
+                    <li>500,000 tokens/month</li>
+                    <li>WhatsApp + Scheduling</li>
+                    <li>API Integrations</li>
+                    <li>Google Drive & Email</li>
+                    <li>Task Automation</li>
+                    <li>Priority Support</li>
+                </ul>
+                <a href="#register" class="btn btn-primary">🔥 Choose Pro</a>
+            </div>
+            <div class="plan">
+                <h3>Enterprise</h3>
+                <div class="price">RM499 <span>/month</span></div>
+                <p class="desc">For businesses that demand the best.</p>
+                <ul>
+                    <li>10 AI Employees</li>
+                    <li>2,000,000 tokens/month</li>
+                    <li>Bring Your Own Key (BYOK)</li>
+                    <li>Full Customization</li>
+                    <li>White-label Option</li>
+                    <li>Dedicated Support</li>
+                    <li>Custom Integrations</li>
+                </ul>
+                <a href="#register" class="btn btn-primary">Contact Sales</a>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Registration -->
+<section id="register" class="form-section">
+    <div class="container">
+        <h2 class="section-title">Start Your Free Trial</h2>
+        <p class="section-sub">No credit card required. Get 7 days free on any plan.</p>
+        <form class="register-form" id="registerForm">
+            <h3>Create Your Account</h3>
+            <div class="form-msg" id="formMsg"></div>
+            <div class="form-group">
+                <label>Full Name</label>
+                <input type="text" id="regName" required placeholder="e.g. Ahmad bin Ismail">
+            </div>
+            <div class="form-group">
+                <label>Email Address</label>
+                <input type="email" id="regEmail" required placeholder="you@company.com">
+            </div>
+            <div class="form-group">
+                <label>Company Name</label>
+                <input type="text" id="regCompany" placeholder="Your Company Sdn Bhd">
+            </div>
+            <div class="form-group">
+                <label>Phone Number (WhatsApp)</label>
+                <input type="tel" id="regPhone" placeholder="e.g. 60123456789">
+                <div class="hint">We'll send your login details here</div>
+            </div>
+            <div class="form-group">
+                <label>Choose Plan</label>
+                <select id="regPlan">
+                    <option value="starter">Starter — RM49/month</option>
+                    <option value="professional" selected>Professional — RM149/month 🔥</option>
+                    <option value="enterprise">Enterprise — RM499/month</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Password</label>
+                <input type="password" id="regPassword" required placeholder="Min 8 characters" minlength="8">
+            </div>
+            <button type="submit" class="btn-submit" id="regBtn">🚀 Start My Free Trial</button>
+            <p style="text-align:center;font-size:12px;color:var(--muted);margin-top:12px">By signing up, you agree to our Terms of Service</p>
+        </form>
+    </div>
+</section>
+
+<!-- FAQ -->
+<section style="background:var(--light)">
+    <div class="container" style="max-width:700px">
+        <h2 class="section-title">Frequently Asked Questions</h2>
+        <p class="section-sub">Got questions? We've got answers.</p>
+        <div class="faq-item">
+            <div class="faq-q" onclick="this.parentElement.classList.toggle('open')">What is StaffBot.my? <span>▼</span></div>
+            <div class="faq-a">StaffBot.my is a Digital Employee as a Service platform. We provide dedicated AI agents that work for your business — handling WhatsApp inquiries, executing tasks, and integrating with your tools.</div>
+        </div>
+        <div class="faq-item">
+            <div class="faq-q" onclick="this.parentElement.classList.toggle('open')">How is this different from ChatGPT? <span>▼</span></div>
+            <div class="faq-a">Unlike ChatGPT which is a general chatbot, StaffBot.my agents are dedicated to YOUR business. They learn your SOP, remember your customers, access your data, and execute tasks autonomously — like a real employee.</div>
+        </div>
+        <div class="faq-item">
+            <div class="faq-q" onclick="this.parentElement.classList.toggle('open')">Can I try before buying? <span>▼</span></div>
+            <div class="faq-a">Yes! Every plan comes with a 7-day free trial. No credit card required. You get full access to all features during the trial period.</div>
+        </div>
+        <div class="faq-item">
+            <div class="faq-q" onclick="this.parentElement.classList.toggle('open')">Is my data secure? <span>▼</span></div>
+            <div class="faq-a">Absolutely. Each client gets an isolated Docker container with their own environment. Your data is encrypted and never shared. We follow strict data isolation practices.</div>
+        </div>
+        <div class="faq-item">
+            <div class="faq-q" onclick="this.parentElement.classList.toggle('open')">Can I cancel anytime? <span>▼</span></div>
+            <div class="faq-a">Yes. No long-term contracts. Cancel anytime from your dashboard. If you cancel mid-month, you'll still have access until the end of the billing period.</div>
+        </div>
+    </div>
+</section>
+
+<!-- Footer -->
+<footer>
+    <div class="f-links">
+        <a href="#features">Features</a>
+        <a href="#pricing">Pricing</a>
+        <a href="#register">Get Started</a>
+        <a href="/admin/login.html">Admin Login</a>
+    </div>
+    <div class="copy">© 2026 StaffBot.my — A Marz Technology &amp; Trading product. All rights reserved.</div>
+</footer>
+
+<script>
+document.getElementById('registerForm').addEventListener('submit', async function(e) {
+    e.preventDefault();
+    const btn = document.getElementById('regBtn');
+    const msg = document.getElementById('formMsg');
+    btn.disabled = true;
+    btn.textContent = '⏳ Creating account...';
+
+    const data = {
+        name: document.getElementById('regName').value,
+        email: document.getElementById('regEmail').value,
+        company: document.getElementById('regCompany').value || '',
+        phone: document.getElementById('regPhone').value || '',
+        password: document.getElementById('regPassword').value,
+    };
+
+    try {
+        const res = await fetch('/api/v1/auth/register', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data)
+        });
+        const result = await res.json();
+
+        if (res.ok) {
+            msg.className = 'form-msg success';
+            msg.textContent = '✅ Account created! Redirecting to login...';
+            msg.style.display = 'block';
+            setTimeout(() => { window.location.href = '/admin/login.html'; }, 2000);
+        } else {
+            msg.className = 'form-msg error';
+            msg.textContent = '❌ ' + (result.detail || 'Registration failed. Please try again.');
+            msg.style.display = 'block';
+            btn.disabled = false;
+            btn.textContent = '🚀 Start My Free Trial';
+        }
+    } catch (err) {
+        msg.className = 'form-msg error';
+        msg.textContent = '❌ Connection error. Please check your internet and try again.';
+        msg.style.display = 'block';
+        btn.disabled = false;
+        btn.textContent = '🚀 Start My Free Trial';
+    }
+});
+</script>
+
+</body>
+</html>

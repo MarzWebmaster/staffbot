@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="ms">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tetapan — StaffBot.my</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="/static/css/app.css">
+</head>
+<body>
+    <div class="app-layout">
+        <div class="sidebar">
+            <div class="sidebar-brand"><h2>StaffBot.my</h2><span>Customer Dashboard</span></div>
+            <nav class="sidebar-nav">
+                <a href="dashboard.html"><span>📊</span><span>Dashboard</span></a>
+                <a href="bots.html"><span>🤖</span><span>Staff AI Saya</span></a>
+                <a href="chat.html"><span>💬</span><span>Chat</span></a>
+                <a href="settings.html" class="active"><span>⚙️</span><span>Tetapan</span></a>
+                <a href="billing.html"><span>💰</span><span>Billing</span></a>
+                <a href="usage.html"><span>📈</span><span>Penggunaan</span></a>
+                <a href="#" onclick="logout()" style="margin-top:20px;border-top:1px solid rgba(255,255,255,0.1);padding-top:20px"><span>🚪</span><span>Log Keluar</span></a>
+            </nav>
+            <div id="sidebar-user" style="padding:16px 20px;border-top:1px solid rgba(255,255,255,0.1);margin-top:auto"></div>
+        </div>
+        <div class="main-content">
+            <div class="topbar"><h1>Tetapan</h1></div>
+
+            <!-- Profile -->
+            <div class="card">
+                <div class="card-header"><h3>Profil Syarikat</h3></div>
+                <form onsubmit="return updateProfile(event)">
+                    <div class="grid-2">
+                        <div class="form-group"><label>Nama</label><input type="text" class="form-input" id="pName" required></div>
+                        <div class="form-group"><label>Email</label><input type="email" class="form-input" id="pEmail" required></div>
+                        <div class="form-group"><label>Syarikat</label><input type="text" class="form-input" id="pCompany"></div>
+                        <div class="form-group"><label>Telefon</label><input type="text" class="form-input" id="pPhone"></div>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Simpan Profil</button>
+                </form>
+            </div>
+
+            <!-- API Key -->
+            <div class="card">
+                <div class="card-header"><h3>API Key (BYOK)</h3></div>
+                <p style="font-size:13px;color:var(--text-light);margin-bottom:12px">Masukkan OpenRouter API Key anda. Klik Test untuk verifikasi sebelum save.</p>
+                <form onsubmit="return saveApiKey(event)">
+                    <div style="display:flex;gap:12px;align-items:end">
+                        <div class="form-group" style="flex:1;margin-bottom:0">
+                            <label>OpenRouter API Key</label>
+                            <input type="password" class="form-input" id="apiKey" placeholder="sk-or-v1-...">
+                        </div>
+                        <button type="button" class="btn btn-secondary" onclick="testApiKey()" id="testBtn">Test</button>
+                        <button type="submit" class="btn btn-primary">Save</button>
+                    </div>
+                    <div id="testResult" style="margin-top:8px;font-size:13px"></div>
+                </form>
+                <div id="existingKeys" style="margin-top:12px"></div>
+            </div>
+
+            <!-- Notification Channels -->
+            <div class="card">
+                <div class="card-header"><h3>Saluran Notifikasi</h3></div>
+                <div id="channels-list"><p style="color:var(--text-light)">Loading...</p></div>
+                <button class="btn btn-secondary btn-sm" style="margin-top:12px" onclick="showAddChannel()">+ Tambah Saluran</button>
+            </div>
+
+            <!-- Add Channel Modal -->
+            <div class="modal-overlay" id="addChannelModal">
+                <div class="modal">
+                    <h3>Tambah Saluran Notifikasi</h3>
+                    <form onsubmit="return addChannel(event)">
+                        <div class="form-group"><label>Jenis</label>
+                            <select class="form-input" id="channelType">
+                                <option value="whatsapp">WhatsApp</option>
+                                <option value="email">Email</option>
+                                <option value="sms">SMS</option>
+                            </select>
+                        </div>
+                        <div class="form-group"><label>Nilai (No Telefon / Email)</label><input type="text" class="form-input" id="channelValue" required></div>
+                        <div class="modal-actions">
+                            <button type="button" class="btn btn-secondary" onclick="closeModal('addChannelModal')">Batal</button>
+                            <button type="submit" class="btn btn-primary">Tambah</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div id="toast-container" class="toast-container"></div>
+    <script src="/static/js/app.js"></script>
+    <script>
+    let userData = null;
+    async function init() {
+        userData = await checkAuth();
+        if (!userData) return;
+        renderSidebarUser(userData);
+        document.getElementById('pName').value = userData.name;
+        document.getElementById('pEmail').value = userData.email;
+        document.getElementById('pCompany').value = userData.company || '';
+        document.getElementById('pPhone').value = userData.phone || '';
+        loadApiKeys();
+        loadChannels();
+    }
+
+    async function updateProfile(e) {
+        e.preventDefault();
+        await api(`/clients/${userData.id}`, { method: 'PUT', body: JSON.stringify({
+            name: document.getElementById('pName').value,
+            email: document.getElementById('pEmail').value,
+            company: document.getElementById('pCompany').value,
+            phone: document.getElementById('pPhone').value,
+        })});
+        showToast('Profil dikemaskini', 'success');
+        return false;
+    }
+
+    async function loadApiKeys() {
+        try {
+            const keys = await api(`/clients/${userData.id}/api-keys`);
+            document.getElementById('existingKeys').innerHTML = keys.length ? 
+                keys.map(k => `<div style="font-size:13px;padding:4px 0">🔑 ${k.provider}: ${k.key_prefix || '***'} ${k.is_active ? '✅' : '❌'} ${k.is_managed ? '(Managed)' : ''}</div>`).join('') : '';
+        } catch {}
+    }
+
+    async function testApiKey() {
+        const key = document.getElementById('apiKey').value.trim();
+        if (!key) { document.getElementById('testResult').innerHTML = '<span style="color:var(--danger)">Sila masukkan API Key</span>'; return; }
+        document.getElementById('testBtn').disabled = true; document.getElementById('testBtn').textContent = 'Menguji...';
+        document.getElementById('testResult').innerHTML = '<span class="loading"></span> Menguji...';
+        try {
+            const res = await api('/auth/login', { 
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ key, provider: 'openrouter' })
+            }).catch(() => ({ valid: false }));
+            // For MVP, just test via a simple fetch to OpenRouter
+            const testRes = await fetch('https://openrouter.ai/api/v1/auth/key', { headers: { 'Authorization': `Bearer ${key}` } });
+            const data = await testRes.json();
+            if (data.error) throw new Error(data.error);
+            document.getElementById('testResult').innerHTML = '<span style="color:var(--success)">✅ API Key sah!</span>';
+            showToast('API Key valid!', 'success');
+        } catch(e) {
+            document.getElementById('testResult').innerHTML = `<span style="color:var(--danger)">❌ Key tidak sah: ${e.message}</span>`;
+        }
+        document.getElementById('testBtn').disabled = false; document.getElementById('testBtn').textContent = 'Test';
+    }
+
+    async function saveApiKey(e) {
+        e.preventDefault();
+        const key = document.getElementById('apiKey').value.trim();
+        if (!key) return false;
+        // Save via setup endpoint
+        await api('/clients/setup', { method: 'POST', body: JSON.stringify({ api_key: key }) });
+        showToast('API Key disimpan', 'success');
+        document.getElementById('apiKey').value = '';
+        loadApiKeys();
+        return false;
+    }
+
+    async function loadChannels() {
+        try {
+            const channels = await api('/notifications/channels');
+            document.getElementById('channels-list').innerHTML = channels.length ?
+                channels.map(c => `
+                    <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border)">
+                        <div><strong>${c.channel}</strong>: ${c.value} ${c.is_primary ? '⭐' : ''}</div>
+                        <div style="display:flex;gap:8px">
+                            <span class="status-badge ${c.is_active ? 'status-active' : 'status-error'}">${c.is_active ? 'Aktif' : 'Tidak Aktif'}</span>
+                            <button class="btn btn-danger btn-sm" onclick="deleteChannel(${c.id})">✕</button>
+                        </div>
+                    </div>
+                `).join('') : '<p style="color:var(--text-light)">Tiada saluran notifikasi.</p>';
+        } catch {}
+    }
+
+    function showAddChannel() { openModal('addChannelModal'); }
+
+    async function addChannel(e) {
+        e.preventDefault();
+        await api('/notifications/channels', { method: 'POST', body: JSON.stringify({
+            channel: document.getElementById('channelType').value,
+            value: document.getElementById('channelValue').value,
+        })});
+        closeModal('addChannelModal');
+        showToast('Saluran ditambah', 'success');
+        loadChannels();
+        return false;
+    }
+
+    async function deleteChannel(id) {
+        if (!confirm('Buang saluran ini?')) return;
+        await api(`/notifications/channels/${id}`, { method: 'DELETE' });
+        loadChannels();
+    }
+
+    init();
+    </script>
+</body>
+</html>
