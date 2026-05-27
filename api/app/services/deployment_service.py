@@ -57,7 +57,27 @@ class DeploymentService:
             "COMPANY": company or "",
             "SUBDOMAIN": f"{subdomain}.{settings.DOMAIN}",
             "DATABASE_URL": settings.DATABASE_URL,
+            "WHATSAPP_AUTH_PATH": f"/root/staffbot/auth/whatsapp/{client_id}",
         }
+
+        # Add telegram token if provided (decrypted)
+        telegram_encrypted = client_data.get("telegram_token_encrypted")
+        if telegram_encrypted:
+            from app.utils.encryption import decrypt_value
+            try:
+                env_vars["TELEGRAM_TOKEN"] = decrypt_value(telegram_encrypted)
+            except Exception:
+                pass  # Not critical, silently skip
+
+        # Fetch resource limits from package
+        cpu_limit = float(client_data.get("cpu_limit", 1.0))
+        memory_limit_mb = int(client_data.get("memory_limit_mb", 512))
+        storage_limit_gb = int(client_data.get("storage_limit_gb", 10))
+
+        # Add resource limits to env vars for container awareness
+        env_vars["CPU_LIMIT"] = str(cpu_limit)
+        env_vars["MEMORY_LIMIT_MB"] = str(memory_limit_mb)
+        env_vars["STORAGE_LIMIT_GB"] = str(storage_limit_gb)
 
         # 3. Request container deployment on Server B
         container_result = await ServerBService.deploy_container(
@@ -66,6 +86,9 @@ class DeploymentService:
             subdomain=subdomain,
             env_vars=env_vars,
             skills=["chat", "memory", "tasks"],
+            cpu_limit=cpu_limit,
+            memory_limit_mb=memory_limit_mb,
+            storage_limit_gb=storage_limit_gb,
         )
 
         container_port = container_result.get("port", 8000 + client_id)

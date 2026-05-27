@@ -5,7 +5,7 @@ from app.database import Base
 
 
 def utcnow():
-    return datetime.now(timezone.utc).replace(tzinfo=None)
+    return datetime.now(timezone.utc)
 
 
 class Client(Base):
@@ -23,6 +23,8 @@ class Client(Base):
     container_port = Column(Integer, nullable=True)
     container_id = Column(String(255), nullable=True)
     telegram_token_encrypted = Column(Text, nullable=True)
+    whatsapp_number = Column(String(50), nullable=True)          # e.g., "60123456789"
+    whatsapp_auth_path = Column(String(255), nullable=True)      # e.g., "/auth/client_5"
     created_at = Column(DateTime, default=utcnow)
     updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
 

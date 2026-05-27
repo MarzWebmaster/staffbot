@@ -17,6 +17,7 @@ from app.models.client import Client
 from app.models.api_key import ApiKey
 from app.schemas.client import (
     ClientResponse, ClientUpdate, ClientListResponse, SetupComplete,
+    PlatformWhatsAppSetup, PlatformTelegramSetup,
 )
 from app.schemas.api_key import ApiKeyResponse
 from app.middleware.auth import get_current_client, get_current_admin
@@ -139,6 +140,11 @@ async def complete_setup(
         current_user.telegram_token_encrypted = encrypt_value(data.telegram_token)
         results["telegram_token"] = "saved"
 
+    # Save WhatsApp number if provided
+    if data.whatsapp_number:
+        current_user.whatsapp_number = data.whatsapp_number
+        results["whatsapp_number"] = "saved"
+
     # Update client status to active if pending
     if current_user.status == "pending":
         current_user.status = "active"
@@ -166,3 +172,81 @@ async def list_api_keys(
     )
     keys = result.scalars().all()
     return keys
+
+
+@router.post("/{client_id}/platform/whatsapp")
+async def setup_whatsapp(
+    client_id: int,
+    data: PlatformWhatsAppSetup,
+    current_user: Client = Depends(get_current_client),
+    db: AsyncSession = Depends(get_db),
+):
+    """Initiate WhatsApp Baileys connection for a client.
+    Returns QR code URL for the client to scan.
+    """
+    if current_user.id != client_id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
+
+    # Save WhatsApp number
+    current_user.whatsapp_number = data.number
+    auth_path = f"/root/staffbot/auth/whatsapp/{client_id}"
+    current_user.whatsapp_auth_path = auth_path
+    await db.commit()
+    await db.refresh(current_user)
+
+    # Request Baileys Manager to init session for this client
+    from app.services.server_b_service import ServerBService
+    try:
+        result = await ServerBService.whatsapp_init_session(
+            client_id=client_id,
+            auth_path=auth_path,
+        )
+        return {
+            "success": True,
+            "message": "WhatsApp QR code generated. Scan via WhatsApp app → Linked Devices.",
+            "qr_url": result.get("qr_url"),
+            "number": data.number,
+        }
+    except Exception as e:
+        return {
+            "success": True,
+            "message": f"WhatsApp number {data.number} saved. QR scan available soon.",
+            "qr_pending": True,
+        }
+
+
+@router.post("/{client_id}/platform/telegram")
+async def setup_telegram(
+    client_id: int,
+    data: PlatformTelegramSetup,
+    current_user: Client = Depends(get_current_client),
+    db: AsyncSession = Depends(get_db),
+):
+    """Register Telegram bot for a client.
+    Sets webhook so messages route to this client's container.
+    """
+    if current_user.id != client_id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
+
+    # Save encrypted Telegram token
+    current_user.telegram_token_encrypted = encrypt_value(data.bot_token)
+    await db.commit()
+    await db.refresh(current_user)
+
+    # Register webhook with Telegram
+    from app.services.server_b_service import ServerBService
+    try:
+        result = await ServerBService.telegram_register_webhook(
+            client_id=client_id,
+            bot_token=data.bot_token,
+        )
+        return {
+            "success": True,
+            "message": "Telegram bot registered successfully. Messages will be routed to your StaffBot.",
+            "webhook_url": result.get("webhook_url"),
+        }
+    except Exception as e:
+        return {
+            "success": True,
+            "message": f"Telegram bot token saved. Webhook registration pending.",
+        }

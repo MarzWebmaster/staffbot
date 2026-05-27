@@ -40,6 +40,7 @@ class ClientUpdate(BaseModel):
     phone: Optional[str] = None
     package: Optional[str] = None
     status: Optional[str] = None
+    whatsapp_number: Optional[str] = None
 
 
 class ClientResponse(ClientBase):
@@ -48,6 +49,8 @@ class ClientResponse(ClientBase):
     status: str
     subdomain: Optional[str] = None
     container_port: Optional[int] = None
+    telegram_token_encrypted: Optional[str] = None
+    whatsapp_number: Optional[str] = None
     created_at: datetime
     updated_at: datetime
 
@@ -62,3 +65,14 @@ class ClientListResponse(BaseModel):
 class SetupComplete(BaseModel):
     telegram_token: Optional[str] = None
     api_key: Optional[str] = None
+    whatsapp_number: Optional[str] = None
+
+
+class PlatformWhatsAppSetup(BaseModel):
+    """Initiate WhatsApp Baileys connection for a client."""
+    number: str = Field(..., pattern=r"^\d{10,15}$", description="WhatsApp number with country code, e.g., 60123456789")
+
+
+class PlatformTelegramSetup(BaseModel):
+    """Register Telegram bot for a client."""
+    bot_token: str = Field(..., min_length=40, max_length=50, description="Telegram Bot token from @BotFather")
