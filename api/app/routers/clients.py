@@ -250,3 +250,94 @@ async def setup_telegram(
             "success": True,
             "message": f"Telegram bot token saved. Webhook registration pending.",
         }
+
+@router.post("/{client_id}/deploy")
+async def force_deploy(
+    client_id: int,
+    admin: Client = Depends(get_current_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Admin-only: Force deploy container for a client (even without payment).
+    Triggers full deployment pipeline: subdomain → DNS → container → notifications."""
+    result = await db.execute(select(Client).where(Client.id == client_id))
+    client = result.scalar_one_or_none()
+    if not client:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Client not found")
+
+    if client.status == "active" and client.container_id:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Client {client_id} already has an active container ({client.container_id})",
+        )
+
+    # Trigger deployment
+    from app.services.deployment_service import DeploymentService
+    try:
+        deploy_result = await DeploymentService.deploy({
+            "id": client.id,
+            "name": client.name,
+            "email": client.email,
+            "company": client.company or "",
+            "package": client.package or "basic",
+            "telegram_token_encrypted": client.telegram_token_encrypted,
+            "cpu_limit": 1.0,
+            "memory_limit_mb": 512,
+            "storage_limit_gb": 10,
+        })
+
+        # Update client with deployment info
+        from datetime import datetime
+        client.subdomain = deploy_result["subdomain_raw"]
+        client.container_port = deploy_result["port"]
+        client.container_id = deploy_result["container_id"]
+        client.status = "active"
+        client.updated_at = datetime.utcnow()
+
+        # Create subscription if doesn't exist
+        from app.models.subscription import Subscription
+        sub_result = await db.execute(
+            select(Subscription).where(Subscription.client_id == client.id)
+        )
+        sub = sub_result.scalar_one_or_none()
+        if not sub:
+            sub = Subscription(
+                client_id=client.id,
+                package=client.package or "basic",
+                status="active",
+                managed_token_quota=5000000,
+                start_date=datetime.now(timezone.utc),
+            )
+            db.add(sub)
+
+        await db.commit()
+        await db.refresh(client)
+
+        # Send notifications
+        await DeploymentService.send_deployment_notifications(
+            client_id=client.id,
+            client_name=client.name,
+            client_email=client.email,
+            subdomain=deploy_result["subdomain_raw"],
+            package=client.package or "basic",
+            amount=0.0,
+        )
+
+        return {
+            "success": True,
+            "message": f"Client {client.name} deployed successfully!",
+            "client": {
+                "id": client.id,
+                "name": client.name,
+                "email": client.email,
+                "subdomain": deploy_result["subdomain"],
+                "container_id": client.container_id,
+                "port": client.container_port,
+                "status": client.status,
+            },
+        }
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Deployment failed: {str(e)}",
+        )
