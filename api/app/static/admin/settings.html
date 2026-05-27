@@ -21,13 +21,7 @@
             <div class="topbar"><h1>System Settings</h1></div>
 
             <form onsubmit="return saveSettings(event)">
-                <div class="card">
-                    <div class="card-header"><h3>Stripe</h3></div>
-                    <div class="grid-2">
-                        <div class="form-group"><label>Secret Key</label><input type="password" class="form-input" id="stripe_key"></div>
-                        <div class="form-group"><label>Webhook Secret</label><input type="password" class="form-input" id="stripe_wh"></div>
-                    </div>
-                </div>
+                <h2 style="font-size:18px;font-weight:700;margin:24px 0 12px;color:#fff">General</h2>
                 <div class="card">
                     <div class="card-header"><h3>Cloudflare</h3></div>
                     <div class="grid-2">
@@ -53,13 +47,14 @@
                     </div>
                 </div>
                 <div class="card">
-                    <div class="card-header"><h3>Admin Notifikasi</h3></div>
+                    <div class="card-header"><h3>Admin Notification</h3></div>
                     <div class="grid-3">
                         <div class="form-group"><label>WhatsApp Admin</label><input type="text" class="form-input" id="admin_wa"></div>
                         <div class="form-group"><label>Email Admin</label><input type="email" class="form-input" id="admin_email"></div>
                         <div class="form-group"><label>Phone Admin (SMS)</label><input type="text" class="form-input" id="admin_phone"></div>
                     </div>
                 </div>
+
                 <button type="submit" class="btn btn-primary" id="saveSettingsBtn">Simpan Semua Settings</button>
             </form>
         </div>
@@ -68,8 +63,6 @@
     <script src="/static/js/app.js?v=1779798256"></script>
     <script>
     const SETTING_KEYS = {
-        stripe_key: {key: 'stripe_secret_key', encrypted: true},
-        stripe_wh: {key: 'stripe_webhook_secret', encrypted: true},
         cf_token: {key: 'cloudflare_api_token', encrypted: true},
         cf_zone: {key: 'cloudflare_zone_id', encrypted: false},
         sb_url: {key: 'server_b_api_url', encrypted: false},

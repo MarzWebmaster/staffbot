@@ -25,6 +25,18 @@
                 <div id="stripeStatus"><p style="color:var(--text-light)">Checking...</p></div>
             </div>
 
+            <!-- Stripe Keys Configuration -->
+            <div class="card">
+                <div class="card-header"><h3>Stripe Keys</h3></div>
+                <form onsubmit="return saveStripeKeys(event)">
+                    <div class="grid-2">
+                        <div class="form-group"><label>Secret Key</label><input type="password" class="form-input" id="stripe_key" placeholder="sk_live_..."></div>
+                        <div class="form-group"><label>Webhook Secret</label><input type="password" class="form-input" id="stripe_wh" placeholder="whsec_..."></div>
+                    </div>
+                    <button type="submit" class="btn btn-primary" id="saveStripeBtn">Save Stripe Keys</button>
+                </form>
+            </div>
+
             <!-- Recent Transactions -->
             <div class="card">
                 <div class="card-header"><h3>Recent Transactions</h3></div>
@@ -35,7 +47,6 @@
             <div class="card">
                 <div class="card-header"><h3>Quick Actions</h3></div>
                 <div style="display:flex;gap:12px;flex-wrap:wrap">
-                    <a href="settings.html" class="btn btn-outline">⚙️ Stripe Settings</a>
                     <a href="https://dashboard.stripe.com/" target="_blank" class="btn btn-outline">📊 Stripe Dashboard</a>
                 </div>
             </div>
@@ -44,11 +55,72 @@
     <div id="toast-container" class="toast-container"></div>
     <script src="/static/js/app.js?v=1779798256"></script>
     <script>
+    const STRIPE_KEYS = {
+        stripe_key: {key: 'stripe_secret_key', encrypted: true},
+        stripe_wh: {key: 'stripe_webhook_secret', encrypted: true},
+    };
+
+    async function loadStripeKeys() {
+        try {
+            const s = await api('/admin/settings/');
+            s.forEach(setting => {
+                const inputId = Object.keys(STRIPE_KEYS).find(k => STRIPE_KEYS[k].key === setting.key);
+                if (inputId && document.getElementById(inputId)) {
+                    document.getElementById(inputId).value = setting.value || '';
+                }
+            });
+        } catch {}
+    }
+
+    async function saveStripeKeys(e) {
+        e.preventDefault();
+        const btn = document.getElementById('saveStripeBtn');
+        btn.disabled = true;
+        btn.textContent = 'Saving...';
+        try {
+            for (const [inputId, cfg] of Object.entries(STRIPE_KEYS)) {
+                const val = document.getElementById(inputId).value.trim();
+                if (val) {
+                    await api('/admin/settings/', { method: 'PUT', body: JSON.stringify({
+                        key: cfg.key,
+                        value: val,
+                        encrypted: cfg.encrypted,
+                    })});
+                }
+            }
+            showToast('Stripe keys saved', 'success');
+            // Refresh status
+            const status = await api('/admin/payments/status');
+            const card = document.getElementById('stripeStatus');
+            if (status.connected) {
+                card.innerHTML = `
+                    <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap">
+                        <span class="status-badge status-active">✅ Connected</span>
+                        <span style="font-size:13px;color:var(--text-light)">Account: ${status.account_name || 'N/A'}</span>
+                        <span style="font-size:13px;color:var(--text-light)">Mode: ${status.livemode ? '🔴 Live' : '🟡 Test'}</span>
+                    </div>
+                `;
+            } else {
+                card.innerHTML = `
+                    <div style="display:flex;align-items:center;gap:12px">
+                        <span class="status-badge status-error">❌ Not Connected</span>
+                        <span style="font-size:13px;color:var(--text-light)">${status.detail || 'Not connected'}</span>
+                    </div>
+                `;
+            }
+        } catch {}
+        btn.disabled = false;
+        btn.textContent = 'Save Stripe Keys';
+        return false;
+    }
+
     async function init() {
         const user = await checkAdminAuth('/admin/login.html');
         if (!user) return;
         renderSidebar('payments');
         renderSidebarUser(user);
+
+        await loadStripeKeys();
 
         // Check Stripe status
         try {
@@ -66,8 +138,7 @@
                 card.innerHTML = `
                     <div style="display:flex;align-items:center;gap:12px">
                         <span class="status-badge status-error">❌ Not Connected</span>
-                        <span style="font-size:13px;color:var(--text-light)">${status.detail || 'Set Stripe keys in Settings'}</span>
-                        <a href="settings.html" class="btn btn-sm btn-primary">Configure</a>
+                        <span style="font-size:13px;color:var(--text-light)">${status.detail || 'Set Stripe keys below'}</span>
                     </div>
                 `;
             }
@@ -92,7 +163,6 @@
             }
         } catch {}
     }
-    init();
-    </script>
+    init();    </script>
 </body>
 </html>
