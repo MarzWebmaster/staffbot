@@ -152,19 +152,19 @@
     function renderCategoryCheckboxes() {
         document.getElementById('skillsCheckboxes').innerHTML = skillCategories.map(c => {
             const checked = selectedSkills.includes(c.name);
-            return '<label class="cat-checkbox' + (checked ? ' checked' : '') + '" onclick="toggleSkill('' + c.name + '', this)">' +
+            return '<label class="cat-checkbox' + (checked ? ' checked' : '') + '" onclick="toggleSkill(''' + c.name + ''', this)">' +
                 '<input type="checkbox" value="' + c.name + '"' + (checked ? ' checked' : '') + '>' +
                 c.display_name +
-                '<span class="cat-id-badge">(\' + c.count + ' skills)</span>' +
+                '<span class="cat-id-badge">(' + c.count + ' skills)</span>' +
             '</label>';
         }).join('');
 
         document.getElementById('toolsCheckboxes').innerHTML = toolCategories.map(c => {
             const checked = selectedTools.includes(c.name);
-            return '<label class="cat-checkbox' + (checked ? ' checked' : '') + '" onclick="toggleTool('' + c.name + '', this)">' +
+            return '<label class="cat-checkbox' + (checked ? ' checked' : '') + '" onclick="toggleTool(''' + c.name + ''', this)">' +
                 '<input type="checkbox" value="' + c.name + '"' + (checked ? ' checked' : '') + '>' +
                 c.display_name +
-                '<span class="cat-id-badge">(\' + c.count + ' tools)</span>' +
+                '<span class="cat-id-badge">(' + c.count + ' tools)</span>' +
             '</label>';
         }).join('');
     }
