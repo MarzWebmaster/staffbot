@@ -73,7 +73,7 @@ async def stripe_webhook(
                 stripe_session_id=session["id"],
                 package=package,
                 status="active",
-                start_date=datetime.now(timezone.utc),
+                start_date=datetime.now(timezone.utc).replace(tzinfo=None),
             )
             db.add(sub)
         else:

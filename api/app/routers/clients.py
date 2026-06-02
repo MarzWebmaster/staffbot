@@ -305,7 +305,7 @@ async def force_deploy(
                 package=client.package or "basic",
                 status="active",
                 managed_token_quota=5000000,
-                start_date=datetime.now(timezone.utc),
+                start_date=datetime.now(timezone.utc).replace(tzinfo=None),
             )
             db.add(sub)
 

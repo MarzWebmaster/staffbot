@@ -215,7 +215,7 @@ class DockerService:
                     cpu_period=cpu_period,
                     cpu_quota=cpu_quota,
                     pids_limit=100,
-                    ports={"8000/tcp": ("127.0.0.1", port)},
+                    ports={"8000/tcp": ("127.0.0.1", None)},  # None = Docker auto-assigns free port
                     volumes={container_dir: {"bind": "/app/data", "mode": "rw"}},
                     labels={
                         "staffbot.client_id": str(client_id),
@@ -223,13 +223,16 @@ class DockerService:
                     },
                 )
 
+                # Reload container to get actual assigned port
+                container.reload()
+                actual_port = DockerService._get_container_port(container) or port
                 return {
                     "success": True,
                     "container_id": container.id,
                     "container_name": container_name,
-                    "port": port,
+                    "port": actual_port,
                     "status": "running",
-                    "message": "Container deployed locally",
+                    "message": f"Container deployed locally on port {actual_port}",
                     "deploy_method": "local",
                 }
 

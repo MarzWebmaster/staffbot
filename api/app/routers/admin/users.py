@@ -106,7 +106,7 @@ async def create_user(
         package=data.package,
         status="active" if data.status == "active" else "pending",
         managed_token_quota=5000000 if data.status == "active" else 0,
-        start_date=datetime.now(timezone.utc),
+        start_date=datetime.now(timezone.utc).replace(tzinfo=None),
     )
     db.add(sub)
     await db.commit()
