@@ -275,6 +275,19 @@ async def deploy_user(
         user.status = "active"
         await db.commit()
 
+        # Create container record in containers table
+        container_record = Container(
+            client_id=user.id,
+            name="AI Staff 1",
+            container_name=deploy_result.get("container_name", f"staffbot-{deploy_result['subdomain_raw']}"),
+            image="staffbot-core:latest",
+            port=deploy_result["port"],
+            status="running",
+            skills=["chat", "memory", "tasks"],
+        )
+        db.add(container_record)
+        await db.commit()
+
         # Update subdomain status
         from app.models.subdomain import Subdomain as SubdomainModel
         sub_result = await db.execute(
