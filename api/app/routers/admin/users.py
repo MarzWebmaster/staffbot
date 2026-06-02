@@ -9,12 +9,27 @@ from sqlalchemy import select
 from app.database import get_db
 from app.models.client import Client
 from app.models.subscription import Subscription
+from app.models.container import Container
 from app.schemas.client import ClientResponse, ClientListResponse
 from app.schemas.admin import UserUpdateAdmin, UserCreateAdmin
 from app.middleware.auth import get_current_admin
 from app.utils.security import hash_password
 
 router = APIRouter()
+
+
+@router.get("/container-stats")
+async def container_stats(
+    admin: Client = Depends(get_current_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Return live vs not-live container counts."""
+    from sqlalchemy import func
+    total_res = await db.execute(select(func.count(Container.id)))
+    total = total_res.scalar() or 0
+    live_res = await db.execute(select(func.count(Container.id)).where(Container.status == "running"))
+    live = live_res.scalar() or 0
+    return {"total": total, "live": live, "not_live": total - live}
 
 
 @router.get("", response_model=ClientListResponse)
