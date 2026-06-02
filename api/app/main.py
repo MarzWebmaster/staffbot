@@ -147,6 +147,7 @@ async def health_check():
 
 # Import and register routers
 from app.routers import auth, clients, subscriptions, containers, webhooks, notifications
+from app.routers.chat import router as chat_router
 from app.routers.billing import router as billing_router
 from app.routers.llm_providers import router as user_llm_providers_router
 from app.routers.admin import dashboard, packages, users, settings as admin_settings, policy as admin_policy, subdomains as admin_subdomains
@@ -173,6 +174,7 @@ app.include_router(admin_settings.router, prefix="/api/v1/admin/settings", tags=
 app.include_router(admin_llm_providers_router, prefix="/api/v1/admin/providers", tags=["Admin LLM Providers"])
 app.include_router(user_llm_providers_router, prefix="/api/v1/providers", tags=["LLM Providers"])
 app.include_router(admin_affiliates_router, prefix="/api/v1/admin/affiliates", tags=["Admin Affiliates"])
+app.include_router(chat_router, prefix="/api/v1/chat", tags=["Chat"])
 app.include_router(admin_payments_router, prefix="/api/v1/admin", tags=["Admin Payments"])
 app.include_router(admin_topups_router, prefix="/api/v1/admin/topup-packages", tags=["Admin Top-Up"])
 app.include_router(admin_policy.router, prefix="/api/v1/admin/policy", tags=["Admin Policy"])

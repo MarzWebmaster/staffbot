@@ -27,10 +27,13 @@
         <div class="main-content">
             <div class="topbar">
                 <h1>Chat with AI Staff</h1>
-                <div>
+                <div style="display:flex;align-items:center;gap:12px">
                     <select class="form-input" id="botSelector" style="width:200px" onchange="switchBot()">
                         <option value="">Select Staff...</option>
                     </select>
+                    <div id="tokenBadge" style="font-size:12px;padding:6px 12px;border-radius:20px;background:var(--bg-secondary);color:var(--text-light);white-space:nowrap;display:none">
+                        <span id="tokenBadgeText">Tokens: -</span>
+                    </div>
                 </div>
             </div>
             <div class="card">
@@ -53,13 +56,14 @@
     <script src="/static/js/app.js?v=1779798256"></script>
     <script>
     let currentBotId = null;
+    let tokenQuotaExceeded = false;
     const params = new URLSearchParams(window.location.search);
 
     async function init() {
         const user = await checkAuth();
         if (!user) return;
         renderSidebarUser(user);
-        await loadBots();
+        await Promise.all([loadBots(), loadTokenStatus()]);
         if (params.get('bot')) { document.getElementById('botSelector').value = params.get('bot'); switchBot(); }
     }
 
@@ -73,12 +77,57 @@
         } catch {}
     }
 
+    async function loadTokenStatus() {
+        try {
+            const status = await api('/chat/token-status');
+            const badge = document.getElementById('tokenBadge');
+            const badgeText = document.getElementById('tokenBadgeText');
+            badge.style.display = 'inline-block';
+
+            if (!status.has_subscription) {
+                badge.style.background = 'var(--danger)';
+                badge.style.color = 'white';
+                badgeText.textContent = 'No subscription';
+                return;
+            }
+
+            const remaining = status.remaining || 0;
+            const quota = status.quota || 0;
+            const pct = status.percent_used || 0;
+
+            if (quota > 0) {
+                if (remaining <= 0) {
+                    badge.style.background = 'var(--danger)';
+                    badge.style.color = 'white';
+                    badgeText.textContent = 'Tokens: EXHAUSTED';
+                    tokenQuotaExceeded = true;
+                } else if (pct >= 90) {
+                    badge.style.background = 'var(--warning, #f59e0b)';
+                    badge.style.color = 'white';
+                    badgeText.textContent = `Tokens: ${formatNum(remaining)} left (${Math.round(100 - pct)}%)`;
+                } else {
+                    badgeText.textContent = `Tokens: ${formatNum(remaining)} left`;
+                }
+            } else {
+                badgeText.textContent = 'Unlimited tokens';
+            }
+        } catch {
+            // Silently fail — badge stays hidden
+        }
+    }
+
+    function formatNum(n) {
+        if (n >= 1000000) return (n / 1000000).toFixed(1) + 'M';
+        if (n >= 1000) return (n / 1000).toFixed(0) + 'K';
+        return n.toString();
+    }
+
     function switchBot() {
         currentBotId = document.getElementById('botSelector').value;
         const input = document.getElementById('chatInput');
         const btn = document.getElementById('sendBtn');
         const msgs = document.getElementById('chatMessages');
-        
+
         if (currentBotId) {
             input.disabled = false; btn.disabled = false; input.focus();
             msgs.innerHTML = `<div class="chat-msg chat-bot">AI Staff is ready to help. Type your message.<div class="msg-time">${new Date().toLocaleTimeString()}</div></div>`;
@@ -88,30 +137,95 @@
         }
     }
 
+    function appendMessage(text, sender, extra) {
+        const msgs = document.getElementById('chatMessages');
+        const extraHtml = extra ? `<div style="font-size:11px;color:var(--text-light);margin-top:4px">${extra}</div>` : '';
+        msgs.innerHTML += `<div class="chat-msg chat-${sender}">${text}${extraHtml}<div class="msg-time">${new Date().toLocaleTimeString()}</div></div>`;
+        msgs.scrollTop = msgs.scrollHeight;
+    }
+
+    function setSending(disabled) {
+        document.getElementById('sendBtn').disabled = disabled;
+        document.getElementById('chatInput').disabled = disabled;
+        if (!disabled) document.getElementById('chatInput').focus();
+    }
+
     async function sendMessage() {
         const input = document.getElementById('chatInput');
         const msg = input.value.trim();
         if (!msg || !currentBotId) return;
-        
-        input.value = '';
-        const msgs = document.getElementById('chatMessages');
-        msgs.innerHTML += `<div class="chat-msg chat-user">${msg}<div class="msg-time">${new Date().toLocaleTimeString()}</div></div>`;
-        msgs.scrollTop = msgs.scrollHeight;
-        
-        // Show loading
-        msgs.innerHTML += `<div class="chat-msg chat-bot"><div class="loading"></div> Waiting for response...</div>`;
-        msgs.scrollTop = msgs.scrollHeight;
-        
-        try {
-            // For MVP, send to a bot endpoint (will be proxied to Server B's container later)
-            const resp = await api(`/containers/${currentBotId}`, { method: 'GET' });
-            msgs.querySelector('.chat-msg:last-child').remove();
-            msgs.innerHTML += `<div class="chat-msg chat-bot">Sorry, full chat features will be available once Server B is connected. StaffBot is under development.<div class="msg-time">${new Date().toLocaleTimeString()}</div></div>`;
-        } catch {
-            msgs.querySelector('.chat-msg:last-child').remove();
-            msgs.innerHTML += `<div class="chat-msg chat-bot">Error: Unable to connect to AI Staff.<div class="msg-time">${new Date().toLocaleTimeString()}</div></div>`;
+
+        // Block if quota exceeded
+        if (tokenQuotaExceeded) {
+            appendMessage('⚠️ Your token limit has been reached. Please <a href="billing.html" style="color:var(--accent);text-decoration:underline">top up tokens</a> or upgrade your package to continue chatting.', 'bot', 'Token quota exceeded');
+            return;
         }
+
+        input.value = '';
+        appendMessage(msg, 'user');
+        setSending(true);
+
+        // Show typing indicator
+        const msgs = document.getElementById('chatMessages');
+        const typingId = 'typing-' + Date.now();
+        msgs.innerHTML += `<div class="chat-msg chat-bot" id="${typingId}"><div class="loading"></div> Thinking...</div>`;
         msgs.scrollTop = msgs.scrollHeight;
+
+        try {
+            const resp = await api('/chat/send', {
+                method: 'POST',
+                body: JSON.stringify({
+                    content: msg,
+                    container_id: parseInt(currentBotId),
+                    provider: 'mimo'
+                })
+            });
+
+            // Remove typing indicator
+            const typingEl = document.getElementById(typingId);
+            if (typingEl) typingEl.remove();
+
+            if (resp.success === false) {
+                // Handle specific errors
+                if (resp.error === 'token_quota_exceeded') {
+                    tokenQuotaExceeded = true;
+                    appendMessage(
+                        '⚠️ <strong>Token limit reached!</strong><br>You have used all your allocated tokens. To continue chatting, please:<br>• <a href="billing.html" style="color:var(--accent);text-decoration:underline">Top up tokens</a><br>• <a href="billing.html" style="color:var(--accent);text-decoration:underline">Upgrade your package</a>',
+                        'bot',
+                        'Quota: ' + formatNum(resp.used || 0) + ' / ' + formatNum(resp.quota || 0) + ' used'
+                    );
+                    loadTokenStatus(); // Refresh badge
+                    return;
+                }
+                if (resp.error === 'no_subscription' || resp.error === 'subscription_inactive') {
+                    appendMessage(
+                        '⚠️ ' + (resp.message || 'No active subscription.') + '<br><a href="billing.html" style="color:var(--accent);text-decoration:underline">Subscribe now</a>',
+                        'bot'
+                    );
+                    return;
+                }
+                appendMessage('❌ ' + (resp.message || 'Something went wrong. Please try again.'), 'bot');
+                return;
+            }
+
+            // Success — show response
+            const reply = resp.response || resp.message || resp.content || 'No response received.';
+            const tokensUsed = resp.tokens_used || 0;
+            const extraParts = [];
+            if (tokensUsed > 0) extraParts.push('Tokens: ' + formatNum(tokensUsed));
+            if (resp.quota_warning) extraParts.push('⚠️ ' + resp.quota_warning);
+            appendMessage(reply, 'bot', extraParts.join(' · '));
+
+            // Refresh token status after each message
+            loadTokenStatus();
+
+        } catch (e) {
+            const typingEl = document.getElementById(typingId);
+            if (typingEl) typingEl.remove();
+            appendMessage('❌ Unable to connect to AI Staff. Please try again.', 'bot', e.message || 'Network error');
+        }
+
+        setSending(false);
     }
 
     init();
