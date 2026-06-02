@@ -161,7 +161,7 @@
 
         $('tableBody').innerHTML = allSubdomains.map(s => {
             return '<tr style="border-bottom:1px solid rgba(255,255,255,0.05)">' +
-                '<td data-label="Subdomain" style="padding:12px 16px"><strong style="color:#06b6d4">' + s.subdomain + '</strong></td>' +
+                '<td data-label="Subdomain" style="padding:12px 16px"><strong style="color:#06b6d4">' + s.subdomain + '.staffbot.my</strong></td>' +
                 '<td data-label="Assigned To" style="padding:12px 16px;font-size:13px;color:var(--text-light)">' + (s.client_name || '<span style="color:rgba(255,255,255,0.3)">—</span>') + '</td>' +
                 '<td data-label="Status" style="padding:12px 16px"><span class="status-badge ' + s.status + '">' + s.status.charAt(0).toUpperCase() + s.status.slice(1) + '</span></td>' +
                 '<td data-label="Created" style="padding:12px 16px;font-size:12px;color:var(--text-light)">' + fmtDate(s.created_at) + '</td>' +
@@ -213,7 +213,7 @@
         if (!prefix) { showToast('Enter a valid subdomain prefix', 'error'); return false; }
 
         const body = {
-            subdomain: prefix + '.staffbot.my',
+            subdomain: prefix,
             client_id: $('subdomainClient').value ? parseInt($('subdomainClient').value) : null,
             notes: $('subdomainNotes').value || null,
         };

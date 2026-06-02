@@ -225,7 +225,7 @@ async def deploy_user(
         sub_result = await db.execute(
             select(Subdomain).where(
                 Subdomain.client_id == user_id,
-                Subdomain.status.in_(["reserved", "available"])
+                Subdomain.status.in_(["reserved", "assigned", "active", "available"])
             )
         )
         sub = sub_result.scalar_one_or_none()
@@ -237,6 +237,10 @@ async def deploy_user(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="User has no subdomain assigned. Create a subdomain first via Subdomains page.",
         )
+
+    # Strip .staffbot.my suffix if present (admin panel stores full domain)
+    if subdomain.endswith(".staffbot.my"):
+        subdomain = subdomain[:-len(".staffbot.my")]
 
     # Check if already deployed (has running container)
     container_result = await db.execute(

@@ -65,8 +65,13 @@ async def create_subdomain(
     db: AsyncSession = Depends(get_db),
 ):
     """Create a new subdomain."""
+    # Strip .staffbot.my suffix if accidentally included
+    subdomain_name = data.subdomain
+    if subdomain_name.endswith(".staffbot.my"):
+        subdomain_name = subdomain_name[:-len(".staffbot.my")]
+
     # Check uniqueness
-    existing = await db.execute(select(Subdomain).where(Subdomain.subdomain == data.subdomain))
+    existing = await db.execute(select(Subdomain).where(Subdomain.subdomain == subdomain_name))
     if existing.scalar_one_or_none():
         raise HTTPException(status_code=409, detail="Subdomain already exists")
 
@@ -77,7 +82,7 @@ async def create_subdomain(
             raise HTTPException(status_code=404, detail="Client not found")
 
     sub = Subdomain(
-        subdomain=data.subdomain,
+        subdomain=subdomain_name,
         client_id=data.client_id,
         status=data.status if not data.client_id else "assigned",
         notes=data.notes,
@@ -102,6 +107,10 @@ async def update_subdomain(
         raise HTTPException(status_code=404, detail="Subdomain not found")
 
     update_data = data.model_dump(exclude_none=True)
+
+    # Strip .staffbot.my suffix if present
+    if update_data.get("subdomain") and update_data["subdomain"].endswith(".staffbot.my"):
+        update_data["subdomain"] = update_data["subdomain"][:-len(".staffbot.my")]
 
     # Auto-set status based on client_id
     if "client_id" in update_data:
