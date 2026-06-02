@@ -1,15 +1,17 @@
-"""Chat router — proxies to Gateway with token tracking + BYOK support."""
+"""Chat router — proxies to Gateway with token tracking + BYOK + message history."""
 import os, httpx, json, logging
-from fastapi import APIRouter, Depends, HTTPException
+from datetime import datetime, timezone
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
-from typing import Optional
+from typing import Optional, List
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, text
 from app.database import get_db
 from app.middleware.auth import get_current_client
 from app.models.client import Client
 from app.models.subscription import Subscription
 from app.models.api_key import ApiKey
+from app.models.chat_message import ChatMessage
 from app.services.enforcement_service import EnforcementService
 
 router = APIRouter()
@@ -27,21 +29,37 @@ class ChatSendRequest(BaseModel):
     api_key: Optional[str] = None
 
 
+async def _save_message(db: AsyncSession, client_id: int, role: str, content: str,
+                        container_id: int = None, model: str = None,
+                        provider: str = None, tokens_used: int = 0):
+    """Save a chat message to the database."""
+    msg = ChatMessage(
+        client_id=client_id,
+        container_id=container_id,
+        role=role,
+        content=content,
+        model=model,
+        provider=provider,
+        tokens_used=tokens_used,
+    )
+    db.add(msg)
+    await db.flush()
+    return msg
+
+
 @router.post("/send")
 async def chat_send(
     data: ChatSendRequest,
     current_user: Client = Depends(get_current_client),
     db: AsyncSession = Depends(get_db),
 ):
-    """Send a chat message with token tracking + BYOK support."""
+    """Send a chat message with token tracking + BYOK + message persistence."""
     client_id = current_user.id
 
     # ── 1. Determine token source ────────────────────────────────
-    # BYOK if: api_key passed in request, OR user has BYOK key for this provider
     is_byok = bool(data.api_key)
 
     if not is_byok:
-        # Check if user has BYOK key for this provider
         byok_result = await db.execute(
             select(ApiKey).where(
                 ApiKey.client_id == client_id,
@@ -52,8 +70,7 @@ async def chat_send(
         )
         byok_key = byok_result.scalar_one_or_none()
         if byok_key and byok_key.key_encrypted:
-            # User has BYOK — we'll use managed token (gateway handles the key)
-            is_byok = False  # Gateway uses its own key routing
+            is_byok = False
         else:
             is_byok = False
 
@@ -109,7 +126,18 @@ async def chat_send(
         },
     }
 
-    # ── 4. Proxy to Gateway ──────────────────────────────────────
+    # ── 4. Save user message BEFORE sending ───────────────────────
+    await _save_message(
+        db=db,
+        client_id=client_id,
+        role="user",
+        content=data.content,
+        container_id=data.container_id,
+        provider=data.provider,
+    )
+    await db.commit()
+
+    # ── 5. Proxy to Gateway ──────────────────────────────────────
     headers = {
         "Content-Type": "application/json",
         "x-api-key": GATEWAY_KEY,
@@ -131,21 +159,43 @@ async def chat_send(
                 headers=headers,
             )
     except httpx.TimeoutException:
+        # Save error as assistant message
+        await _save_message(db=db, client_id=client_id, role="assistant",
+                           content="[Error: Request timed out]", provider=data.provider)
+        await db.commit()
         return {"success": False, "error": "timeout", "message": "Request timed out. Please try again."}
     except Exception as e:
         logger.error(f"Gateway error for client #{client_id}: {e}")
+        await _save_message(db=db, client_id=client_id, role="assistant",
+                           content=f"[Error: AI service unavailable]", provider=data.provider)
+        await db.commit()
         return {"success": False, "error": "gateway_error", "message": "AI service temporarily unavailable."}
 
     if resp.status_code != 200:
+        await _save_message(db=db, client_id=client_id, role="assistant",
+                           content=f"[Error: Gateway {resp.status_code}]", provider=data.provider)
+        await db.commit()
         return {"success": False, "error": "gateway_error", "message": f"Gateway error: {resp.status_code}"}
 
     result = resp.json()
 
-    # ── 5. Track token usage (managed tokens only, not BYOK) ─────
+    # ── 6. Save assistant response ────────────────────────────────
+    if result.get("success") and result.get("content"):
+        await _save_message(
+            db=db,
+            client_id=client_id,
+            role="assistant",
+            content=result["content"],
+            container_id=data.container_id,
+            model=result.get("model"),
+            provider=result.get("provider", data.provider),
+            tokens_used=result.get("tokens_used", 0),
+        )
+
+    # ── 7. Track token usage (managed tokens only, not BYOK) ─────
     if not data.api_key and result.get("success") and result.get("tokens_used"):
         tokens_used = result["tokens_used"]
 
-        # Re-fetch sub for update
         sub_result = await db.execute(
             select(Subscription).where(Subscription.client_id == client_id)
         )
@@ -154,52 +204,59 @@ async def chat_send(
         if sub:
             sub.managed_token_used = (sub.managed_token_used or 0) + tokens_used
 
-            # Track per-provider usage
             if not sub.provider_token_usage:
                 sub.provider_token_usage = {}
             prov = data.provider or "mimo"
             sub.provider_token_usage[prov] = sub.provider_token_usage.get(prov, 0) + tokens_used
 
-            await db.commit()
-
-            # Add quota info to response
             remaining = max(0, (sub.managed_token_quota or 0) - sub.managed_token_used)
             result["quota_remaining"] = remaining
             result["quota_used"] = sub.managed_token_used
 
-            # Warn if running low (< 10%)
             if sub.managed_token_quota > 0 and remaining < sub.managed_token_quota * 0.1:
                 result["quota_warning"] = f"Low token balance: {int(remaining):,} tokens remaining."
 
+    await db.commit()
     return result
 
 
 @router.get("/history")
 async def chat_history(
     container_id: Optional[int] = None,
-    limit: int = 50,
+    limit: int = Query(default=50, le=200),
     current_user: Client = Depends(get_current_client),
+    db: AsyncSession = Depends(get_db),
 ):
-    """Get chat history."""
-    params = {"client_id": current_user.id, "limit": limit}
+    """Get chat history from local DB."""
+    query = (
+        select(ChatMessage)
+        .where(ChatMessage.client_id == current_user.id)
+    )
+
     if container_id:
-        params["container_id"] = container_id
+        from sqlalchemy import or_
+        query = query.where(or_(ChatMessage.container_id == container_id, ChatMessage.container_id.is_(None)))
 
-    headers = {
-        "Content-Type": "application/json",
-        "x-api-key": GATEWAY_KEY,
+    query = query.order_by(ChatMessage.created_at.asc()).limit(limit)
+
+    result = await db.execute(query)
+    messages = result.scalars().all()
+
+    return {
+        "client_id": current_user.id,
+        "messages": [
+            {
+                "id": m.id,
+                "role": m.role,
+                "content": m.content,
+                "model": m.model,
+                "provider": m.provider,
+                "tokens_used": m.tokens_used,
+                "created_at": m.created_at.isoformat() if m.created_at else None,
+            }
+            for m in messages
+        ],
     }
-
-    async with httpx.AsyncClient(timeout=30) as client:
-        resp = await client.get(
-            f"{GATEWAY_URL}/api/chat/history",
-            params=params,
-            headers=headers,
-        )
-
-    if resp.status_code != 200:
-        raise HTTPException(status_code=resp.status_code, detail=resp.text[:500])
-    return resp.json()
 
 
 @router.get("/token-status")

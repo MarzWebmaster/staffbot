@@ -11,3 +11,4 @@ from app.models.affiliate import (
     AffiliatePayout, AffiliateClick,
 )
 from app.models.token_usage import TokenUsageLog
+from app.models.chat_message import ChatMessage

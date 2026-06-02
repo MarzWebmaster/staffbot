@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Chat — StaffBot.my</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="stylesheet" href="/static/css/app.css?v=1779798256">
+    <link rel="stylesheet" href="/static/css/app.css?v=1748882000">
 </head>
 <body>
     <button class="sidebar-toggle" onclick="toggleSidebar()">☰</button>
@@ -53,10 +53,11 @@
         </div>
     </div>
     <div id="toast-container" class="toast-container"></div>
-    <script src="/static/js/app.js?v=1779798256"></script>
+    <script src="/static/js/app.js?v=1748882000"></script>
     <script>
     let currentBotId = null;
     let tokenQuotaExceeded = false;
+    let historyLoaded = false;
     const params = new URLSearchParams(window.location.search);
 
     async function init() {
@@ -122,7 +123,7 @@
         return n.toString();
     }
 
-    function switchBot() {
+    async function switchBot() {
         currentBotId = document.getElementById('botSelector').value;
         const input = document.getElementById('chatInput');
         const btn = document.getElementById('sendBtn');
@@ -130,17 +131,49 @@
 
         if (currentBotId) {
             input.disabled = false; btn.disabled = false; input.focus();
-            msgs.innerHTML = `<div class="chat-msg chat-bot">AI Staff is ready to help. Type your message.<div class="msg-time">${new Date().toLocaleTimeString()}</div></div>`;
+            // Load chat history from DB
+            msgs.innerHTML = `<div class="chat-msg chat-bot"><div class="loading"></div> Loading history...</div>`;
+            await loadHistory(parseInt(currentBotId));
         } else {
             input.disabled = true; btn.disabled = true;
             msgs.innerHTML = `<div class="chat-msg chat-bot">Select an AI staff above to start chatting.<div class="msg-time">Now</div></div>`;
         }
     }
 
-    function appendMessage(text, sender, extra) {
+    async function loadHistory(containerId) {
+        const msgs = document.getElementById('chatMessages');
+        try {
+            const resp = await api(`/chat/history?container_id=${containerId}&limit=50`);
+            const messages = resp.messages || [];
+
+            if (messages.length === 0) {
+                msgs.innerHTML = `<div class="chat-msg chat-bot">AI Staff is ready to help. Type your message.<div class="msg-time">${new Date().toLocaleTimeString()}</div></div>`;
+            } else {
+                msgs.innerHTML = '';
+                for (const m of messages) {
+                    const sender = m.role === 'user' ? 'user' : 'bot';
+                    const time = m.created_at ? new Date(m.created_at).toLocaleTimeString() : '';
+                    const extra = m.tokens_used > 0 ? `Tokens: ${formatNum(m.tokens_used)}` : '';
+                    appendMessageRaw(m.content, sender, extra, time);
+                }
+                msgs.scrollTop = msgs.scrollHeight;
+            }
+        } catch (e) {
+            msgs.innerHTML = `<div class="chat-msg chat-bot">AI Staff is ready to help. Type your message.<div class="msg-time">${new Date().toLocaleTimeString()}</div></div>`;
+        }
+        historyLoaded = true;
+    }
+
+    function appendMessageRaw(text, sender, extra, time) {
         const msgs = document.getElementById('chatMessages');
         const extraHtml = extra ? `<div style="font-size:11px;color:var(--text-light);margin-top:4px">${extra}</div>` : '';
-        msgs.innerHTML += `<div class="chat-msg chat-${sender}">${text}${extraHtml}<div class="msg-time">${new Date().toLocaleTimeString()}</div></div>`;
+        const timeStr = time || new Date().toLocaleTimeString();
+        msgs.innerHTML += `<div class="chat-msg chat-${sender}">${text}${extraHtml}<div class="msg-time">${timeStr}</div></div>`;
+    }
+
+    function appendMessage(text, sender, extra) {
+        appendMessageRaw(text, sender, extra, null);
+        const msgs = document.getElementById('chatMessages');
         msgs.scrollTop = msgs.scrollHeight;
     }
 
