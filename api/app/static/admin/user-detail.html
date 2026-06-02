@@ -278,8 +278,13 @@
         const bar = $('actionBar');
         if (isView) {
             $('pageTitle').textContent = currentUser.name || 'User Profile';
+            const subdomain = currentUser.subdomain || '';
+            const hasContainer = subdomain && currentUser.container_port;
             bar.innerHTML = '<a href="?id=' + currentUser.id + '&edit=1" class="btn btn-warning">✏️ Edit</a>' +
-                '<button onclick="deleteUser()" class="btn btn-danger">🗑️ Delete</button>';
+                '<button onclick="deleteUser()" class="btn btn-danger">🗑️ Delete</button>' +
+                (!hasContainer
+                    ? '<button onclick="deployUser()" class="btn btn-success" style="background:#06b6d4">🚀 Deploy</button>'
+                    : '<span style="color:rgba(255,255,255,0.3);font-size:12px;margin-left:8px">✓ Deployed</span>');
         } else {
             $('pageTitle').textContent = 'Edit: ' + (currentUser.name || currentUser.email || 'User');
             bar.innerHTML = '<button onclick="saveUser()" class="btn btn-success">💾 Save Changes</button>' +
@@ -368,6 +373,27 @@
             showToast('User deleted', 'success');
             window.location.href = 'users.html';
         } catch(e) { showToast(e.message || 'Failed to delete', 'error'); }
+    }
+
+    async function deployUser() {
+        if (!currentUser) return;
+        if (!confirm('Deploy container + bind subdomain for "' + (currentUser.name || currentUser.email) + '"?\n\nThis will create a Docker container, assign a port, and bind the subdomain.')) return;
+
+        const btn = event.target;
+        btn.disabled = true;
+        btn.textContent = '⏳ Deploying...';
+        showToast('Deploying... this takes ~30 seconds', 'info');
+
+        try {
+            const result = await api('/admin/users/' + currentUser.id + '/deploy', { method: 'POST' });
+            showToast('Deployed! ' + (result.verification && result.verification.summary || ''), 'success');
+            // Reload to show updated state
+            setTimeout(() => window.location.reload(), 2000);
+        } catch(e) {
+            showToast(e.message || 'Deployment failed', 'error');
+            btn.disabled = false;
+            btn.textContent = '🚀 Deploy';
+        }
     }
 
     function formatDate(d) {

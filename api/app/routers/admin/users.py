@@ -15,6 +15,9 @@ from app.schemas.admin import UserUpdateAdmin, UserCreateAdmin
 from app.middleware.auth import get_current_admin
 from app.utils.security import hash_password
 
+import logging
+logger = logging.getLogger(__name__)
+
 router = APIRouter()
 
 
@@ -198,3 +201,122 @@ async def list_user_containers(
         "status": c.status,
         "created_at": c.created_at.isoformat() if c.created_at else None,
     } for c in containers]
+
+
+@router.post("/{user_id}/deploy")
+async def deploy_user(
+    user_id: int,
+    admin: Client = Depends(get_current_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Admin: Manually trigger full deployment for a user.
+    Uses the user's reserved subdomain, creates container, binds port.
+    """
+    result = await db.execute(select(Client).where(Client.id == user_id))
+    user = result.scalar_one_or_none()
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+
+    # Determine subdomain — check client.subdomain first, then subdomains table
+    subdomain = user.subdomain
+    if not subdomain:
+        from app.models.subdomain import Subdomain
+        sub_result = await db.execute(
+            select(Subdomain).where(
+                Subdomain.client_id == user_id,
+                Subdomain.status.in_(["reserved", "available"])
+            )
+        )
+        sub = sub_result.scalar_one_or_none()
+        if sub:
+            subdomain = sub.subdomain
+
+    if not subdomain:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="User has no subdomain assigned. Create a subdomain first via Subdomains page.",
+        )
+
+    # Check if already deployed (has running container)
+    container_result = await db.execute(
+        select(Container).where(Container.client_id == user_id)
+    )
+    existing_containers = container_result.scalars().all()
+    running = [c for c in existing_containers if c.status == "running"]
+    if running:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"User already has {len(running)} running container(s). Delete them first.",
+        )
+
+    # ── Trigger deployment ──────────────────────────────────────
+    from app.services.deployment_service import DeploymentService
+    from app.services.notification_service import NotificationService
+
+    try:
+        deploy_result = await DeploymentService.deploy({
+            "id": user.id,
+            "name": user.name,
+            "email": user.email,
+            "company": user.company or "",
+            "subdomain": subdomain,
+            "package": user.package,
+        })
+
+        # Update client with deployment info
+        user.subdomain = deploy_result["subdomain_raw"]
+        user.container_port = deploy_result["port"]
+        user.container_id = deploy_result["container_id"]
+        user.status = "active"
+        await db.commit()
+
+        # Update subdomain status
+        from app.models.subdomain import Subdomain as SubdomainModel
+        sub_result = await db.execute(
+            select(SubdomainModel).where(SubdomainModel.subdomain == deploy_result["subdomain_raw"])
+        )
+        subdomain_record = sub_result.scalar_one_or_none()
+        if subdomain_record:
+            subdomain_record.status = "active"
+            subdomain_record.notes = f"Manually deployed by admin {admin.name}"
+            await db.commit()
+
+        # ── Verification ──────────────────────────────────────────
+        verify_result = await DeploymentService.verify_deployment(
+            subdomain_raw=deploy_result["subdomain_raw"],
+            port=deploy_result["port"],
+            container_id=deploy_result["container_id"],
+        )
+
+        # Notify admin
+        await NotificationService.notify_admin(
+            subject="🚀 Manual Deployment Triggered",
+            body=(
+                f"Admin {admin.name} triggered deployment:\n"
+                f"• User: {user.name} ({user.email})\n"
+                f"• Subdomain: {deploy_result['subdomain']}\n"
+                f"• Port: {deploy_result['port']}\n"
+                f"• Container: {deploy_result['container_id']}\n"
+                f"• Verification: {verify_result['summary']}"
+            ),
+        )
+
+        return {
+            "status": "success",
+            "deployment": {
+                "subdomain": deploy_result["subdomain"],
+                "port": deploy_result["port"],
+                "container_id": deploy_result["container_id"],
+            },
+            "verification": verify_result,
+        }
+
+    except Exception as e:
+        logger.error(f"Manual deployment failed for user {user_id}: {e}")
+        user.status = "deploy_error"
+        await db.commit()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Deployment failed: {str(e)}",
+        )
