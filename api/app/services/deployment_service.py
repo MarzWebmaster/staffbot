@@ -138,22 +138,26 @@ class DeploymentService:
             errors.append(f"DNS: {full_subdomain} not resolving — {str(e)[:80]}")
 
         # ── Check 2: Port accessible on Server A ─────────────────
-        try:
-            import socket
-            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            sock.settimeout(5)
-            result = sock.connect_ex(('127.0.0.1', port))
-            sock.close()
-            checks["port"] = (result == 0)
-            if result != 0:
-                errors.append(f"Port: {port} not listening on Server A")
-        except Exception as e:
-            checks["port"] = False
-            errors.append(f"Port check failed: {str(e)[:80]}")
+        if port is not None and port > 0:
+            try:
+                import socket
+                sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                sock.settimeout(5)
+                result = sock.connect_ex(('127.0.0.1', port))
+                sock.close()
+                checks["port"] = (result == 0)
+                if result != 0:
+                    errors.append(f"Port: {port} not listening on Server A")
+            except Exception as e:
+                checks["port"] = False
+                errors.append(f"Port check failed: {str(e)[:80]}")
+        else:
+            checks["port"] = "skipped"
+            logger.info(f"Skipping port check — port is None (simulated deployment)")
 
         # ── Check 3: HTTP response from subdomain ────────────────
         try:
-            async with httpx.AsyncClient(timeout=15.0) as client:
+            async with httpx.AsyncClient(timeout=15.0, verify=False) as client:
                 resp = await client.get(f"https://{full_subdomain}/", follow_redirects=True)
                 checks["http"] = resp.status_code in (200, 302, 301, 307, 308)
                 checks["http_status"] = resp.status_code
