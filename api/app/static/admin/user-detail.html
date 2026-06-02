@@ -33,6 +33,25 @@
         .btn-warning:hover { background: #d97706; }
         .action-bar { display: flex; gap: 8px; flex-wrap: wrap; }
         .field-hint { font-size: 11px; color: rgba(255,255,255,0.3); margin-top: 2px; }
+        /* Token Usage Stats */
+        .token-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-bottom: 16px; }
+        .token-stat-card { background: #1e293b; border: 1px solid rgba(255,255,255,0.08); border-radius: 10px; padding: 16px; text-align: center; }
+        .token-stat-card .label { font-size: 11px; color: rgba(255,255,255,0.4); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px; }
+        .token-stat-card .value { font-size: 24px; font-weight: 700; }
+        .token-stat-card .sub { font-size: 11px; color: rgba(255,255,255,0.3); margin-top: 4px; }
+        .period-filters { display: flex; gap: 8px; margin-bottom: 12px; }
+        .period-filters button { padding: 6px 16px; border: 1px solid rgba(255,255,255,0.15); border-radius: 20px; background: transparent; color: rgba(255,255,255,0.6); font-size: 12px; cursor: pointer; transition: all 0.2s; }
+        .period-filters button.active { background: #3b82f6; border-color: #3b82f6; color: #fff; }
+        .period-filters button:hover:not(.active) { background: rgba(255,255,255,0.05); color: #fff; }
+        .bar-chart { display: flex; align-items: flex-end; gap: 3px; height: 180px; padding: 0 4px; overflow-x: auto; }
+        .bar-chart .bar-col { flex: 1; min-width: 10px; max-width: 40px; display: flex; flex-direction: column; align-items: center; height: 100%; justify-content: flex-end; }
+        .bar-chart .bar { width: 100%; background: linear-gradient(to top, #3b82f6, #818cf8); border-radius: 3px 3px 0 0; min-height: 2px; position: relative; cursor: pointer; transition: opacity 0.2s; }
+        .bar-chart .bar:hover { opacity: 0.8; }
+        .bar-chart .bar-label { font-size: 9px; color: rgba(255,255,255,0.3); margin-top: 6px; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 35px; }
+        .bar-tooltip { position: absolute; bottom: 100%; left: 50%; transform: translateX(-50%); background: #000; color: #fff; font-size: 10px; padding: 4px 8px; border-radius: 4px; white-space: nowrap; pointer-events: none; opacity: 0; transition: opacity 0.2s; }
+        .bar:hover .bar-tooltip { opacity: 1; }
+        .model-list { display: flex; gap: 12px; flex-wrap: wrap; }
+        .model-tag { background: rgba(99,102,241,0.15); border: 1px solid rgba(99,102,241,0.3); border-radius: 6px; padding: 6px 12px; font-size: 12px; color: #a5b4fc; }
     </style>
 </head>
 <body>
@@ -55,6 +74,37 @@
 
             <div id="loading" style="text-align:center;padding:60px;color:var(--text-light)">Loading...</div>
             <div id="content" style="display:none">
+
+                <!-- Token Usage Section -->
+                <div class="detail-card" style="border-left:4px solid #f59e0b">
+                    <h3>📊 Token Usage</h3>
+                    <div class="token-stats" id="tokenStats">
+                        <div class="token-stat-card">
+                            <div class="label">Total Used</div>
+                            <div class="value" style="color:#f59e0b" id="stat-total">—</div>
+                            <div class="sub">all-time tokens</div>
+                        </div>
+                        <div class="token-stat-card">
+                            <div class="label">Managed Used</div>
+                            <div class="value" style="color:#3b82f6" id="stat-managed">—</div>
+                            <div class="sub">quota consumed</div>
+                        </div>
+                        <div class="token-stat-card">
+                            <div class="label">Balance</div>
+                            <div class="value" style="color:#22c55e" id="stat-balance">—</div>
+                            <div class="sub" id="stat-quota-label">remaining</div>
+                        </div>
+                    </div>
+                    <div class="period-filters">
+                        <button onclick="loadTokenUsage('daily')" id="btn-daily" class="active">Daily</button>
+                        <button onclick="loadTokenUsage('monthly')" id="btn-monthly">Monthly</button>
+                        <button onclick="loadTokenUsage('yearly')" id="btn-yearly">Yearly</button>
+                    </div>
+                    <div class="bar-chart" id="barChart" style="min-height:180px">
+                        <div style="display:flex;align-items:center;justify-content:center;width:100%;color:rgba(255,255,255,0.2);font-size:13px">Loading chart...</div>
+                    </div>
+                    <div style="margin-top:12px" id="topModels"></div>
+                </div>
 
                 <!-- Profile Card -->
                 <div class="detail-card" style="border-left:4px solid #3b82f6">
@@ -198,6 +248,7 @@
             populateFields();
             await loadUserSubdomains(userId);
             await loadUserContainers(userId);
+            await loadTokenUsage('daily');
             applyMode();
         } catch(e) {
             $('loading').innerHTML = '<p style="color:#ef4444">Failed to load user: ' + (e.message || 'Unknown error') + '</p>';
@@ -399,6 +450,82 @@
     function formatDate(d) {
         if (!d) return '-';
         try { return new Date(d).toLocaleDateString('en-MY', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }); } catch(e) { return d; }
+    }
+
+    // ── Token Usage ──────────────────────────────────────────
+    let currentPeriod = 'daily';
+
+    async function loadTokenUsage(period) {
+        currentPeriod = period || currentPeriod;
+        // Update filter buttons
+        document.querySelectorAll('.period-filters button').forEach(b => b.classList.remove('active'));
+        document.getElementById('btn-' + currentPeriod).classList.add('active');
+
+        const userId = new URLSearchParams(window.location.search).get('id');
+        if (!userId) return;
+
+        try {
+            const data = await api('/admin/users/' + userId + '/token-usage?period=' + currentPeriod);
+            renderTokenStats(data);
+            renderTokenChart(data.timeseries);
+            renderTopModels(data.top_models);
+        } catch(e) {
+            document.getElementById('barChart').innerHTML = '<div style="display:flex;align-items:center;justify-content:center;width:100%;color:rgba(255,255,255,0.2);font-size:13px">No usage data</div>';
+        }
+    }
+
+    function fmt(n) {
+        if (n == null) return '—';
+        if (n >= 1e9) return (n / 1e9).toFixed(1) + 'B';
+        if (n >= 1e6) return (n / 1e6).toFixed(1) + 'M';
+        if (n >= 1e3) return (n / 1e3).toFixed(1) + 'K';
+        return n.toLocaleString();
+    }
+
+    function renderTokenStats(data) {
+        document.getElementById('stat-total').textContent = fmt(data.total_used);
+        document.getElementById('stat-managed').textContent = fmt(data.managed_used);
+        document.getElementById('stat-balance').textContent = fmt(data.balance);
+        document.getElementById('stat-quota-label').textContent = 'of ' + fmt(data.managed_quota) + ' quota';
+    }
+
+    function renderTokenChart(timeseries) {
+        const container = document.getElementById('barChart');
+        if (!timeseries || !timeseries.length) {
+            container.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;width:100%;color:rgba(255,255,255,0.2);font-size:13px">No data yet</div>';
+            return;
+        }
+
+        // Reverse so oldest first (left to right)
+        const data = timeseries.slice().reverse();
+        const maxVal = Math.max(...data.map(d => d.tokens), 1);
+
+        let html = '';
+        data.forEach(d => {
+            const pct = Math.max(2, (d.tokens / maxVal) * 100);
+            const label = currentPeriod === 'daily'
+                ? new Date(d.period).toLocaleDateString('en-MY', { day: '2-digit', month: 'short' }).replace(' ', '<br>')
+                : currentPeriod === 'monthly'
+                    ? new Date(d.period + '-01').toLocaleDateString('en-MY', { month: 'short', year: '2-digit' })
+                    : new Date(d.period + '-01-01').toLocaleDateString('en-MY', { year: 'numeric' });
+
+            html += '<div class="bar-col">' +
+                '<div class="bar" style="height:' + pct + '%">' +
+                    '<div class="bar-tooltip">' + fmt(d.tokens) + ' tokens<br>' + d.requests + ' reqs</div>' +
+                '</div>' +
+                '<div class="bar-label">' + label + '</div>' +
+            '</div>';
+        });
+        container.innerHTML = html;
+    }
+
+    function renderTopModels(models) {
+        const container = document.getElementById('topModels');
+        if (!models || !models.length) { container.innerHTML = ''; return; }
+        container.innerHTML = '<div style="margin-top:8px;font-size:11px;color:rgba(255,255,255,0.4);margin-bottom:6px">TOP MODELS</div>' +
+            '<div class="model-list">' + models.map(m =>
+                '<div class="model-tag">' + m.model + ' <span style="color:rgba(255,255,255,0.4);margin-left:4px">' + fmt(m.tokens) + '</span></div>'
+            ).join('') + '</div>';
     }
 
     init();
