@@ -90,12 +90,17 @@ async def register(client_data: ClientCreate, db: AsyncSession = Depends(get_db)
         )
         db.add(subdomain)
 
-    # Create pending subscription
+    # Create pending subscription — quota from package
+    from app.models.package import Package
+    pkg_result = await db.execute(select(Package).where(Package.name == package_name))
+    pkg = pkg_result.scalar_one_or_none()
+    token_quota = pkg.managed_tokens if pkg else 0
+
     sub = Subscription(
         client_id=client.id,
         package=package_name,
         status="pending",
-        managed_token_quota=0,
+        managed_token_quota=token_quota,
         start_date=datetime.now(),
     )
     db.add(sub)

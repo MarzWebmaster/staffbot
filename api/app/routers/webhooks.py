@@ -46,10 +46,61 @@ async def stripe_webhook(
     if event["type"] == "checkout.session.completed":
         session = event["data"]["object"]
         metadata = session.get("metadata", {})
+        session_type = metadata.get("type", "subscription")
         customer_email = metadata.get("customer_email", session.get("customer_email", ""))
         customer_name = metadata.get("customer_name", "")
-        package = metadata.get("package", "basic")
         amount = session.get("amount_total", 0) / 100.0  # Convert cents to MYR
+
+        # ── Token Top-Up ────────────────────────────────────────────
+        if session_type == "topup":
+            client_id = int(metadata.get("client_id", 0))
+            tokens = int(metadata.get("tokens", 0))
+            if not client_id or not tokens:
+                return {"status": "error", "message": "Missing client_id or tokens in topup metadata"}
+
+            # Find client
+            from sqlalchemy import select
+            result = await db.execute(select(Client).where(Client.id == client_id))
+            client = result.scalar_one_or_none()
+            if not client:
+                return {"status": "error", "message": f"Client {client_id} not found"}
+
+            # Update subscription quota
+            sub_result = await db.execute(
+                select(Subscription).where(Subscription.client_id == client_id)
+            )
+            sub = sub_result.scalar_one_or_none()
+            if sub:
+                sub.managed_token_quota = (sub.managed_token_quota or 0) + tokens
+                sub.status = "active"
+            else:
+                # No subscription yet — create one
+                sub = Subscription(
+                    client_id=client_id,
+                    package=client.package,
+                    status="active",
+                    managed_token_quota=tokens,
+                    start_date=datetime.now(timezone.utc).replace(tzinfo=None),
+                )
+                db.add(sub)
+
+            # Record top-up
+            from app.models.token_topup import TokenTopup
+            topup = TokenTopup(
+                client_id=client_id,
+                tokens=tokens,
+                amount_paid=amount,
+                status="completed",
+                stripe_session_id=session["id"],
+            )
+            db.add(topup)
+            await db.commit()
+
+            logger.info(f"✅ Top-up: +{tokens:,} tokens for {client.email} (${amount:.2f})")
+            return {"status": "success", "type": "topup", "client_id": client_id, "tokens": tokens}
+
+        # ── Subscription Purchase ───────────────────────────────────
+        package = metadata.get("package", "basic")
 
         # Find or create client
         from sqlalchemy import select
