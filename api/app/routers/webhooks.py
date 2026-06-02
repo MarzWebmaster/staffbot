@@ -53,6 +53,13 @@ async def stripe_webhook(
 
         # Find or create client
         from sqlalchemy import select
+        from app.models.package import Package
+        
+        # Look up package token quota
+        pkg_result = await db.execute(select(Package).where(Package.name == package))
+        pkg = pkg_result.scalar_one_or_none()
+        token_quota = pkg.managed_tokens if pkg else 0
+        
         result = await db.execute(select(Client).where(Client.email == customer_email))
         client = result.scalar_one_or_none()
 
@@ -73,6 +80,7 @@ async def stripe_webhook(
                 stripe_session_id=session["id"],
                 package=package,
                 status="active",
+                managed_token_quota=token_quota,
                 start_date=datetime.now(timezone.utc).replace(tzinfo=None),
             )
             db.add(sub)
@@ -86,6 +94,7 @@ async def stripe_webhook(
             if sub:
                 sub.package = package
                 sub.status = "active"
+                sub.managed_token_quota = token_quota
                 sub.stripe_session_id = session["id"]
 
         await db.commit()

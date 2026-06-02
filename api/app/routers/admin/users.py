@@ -100,12 +100,18 @@ async def create_user(
     db.add(client)
     await db.flush()
 
+    # Look up package token quota
+    from app.models.package import Package
+    pkg_result = await db.execute(select(Package).where(Package.name == data.package))
+    pkg = pkg_result.scalar_one_or_none()
+    token_quota = pkg.managed_tokens if pkg else 0
+
     # Create subscription
     sub = Subscription(
         client_id=client.id,
         package=data.package,
         status="active" if data.status == "active" else "pending",
-        managed_token_quota=5000000 if data.status == "active" else 0,
+        managed_token_quota=token_quota if data.status == "active" else 0,
         start_date=datetime.now(timezone.utc).replace(tzinfo=None),
     )
     db.add(sub)
