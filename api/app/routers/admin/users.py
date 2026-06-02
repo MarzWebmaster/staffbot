@@ -149,8 +149,24 @@ async def update_user(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
 
     update_data = data.model_dump(exclude_none=True)
+    old_package = user.package
     for key, value in update_data.items():
         setattr(user, key, value)
+
+    # If package changed, sync subscription
+    if 'package' in update_data and update_data['package'] != old_package:
+        sub_result = await db.execute(
+            select(Subscription).where(Subscription.client_id == user_id)
+        )
+        sub = sub_result.scalar_one_or_none()
+        if sub:
+            from app.models.package import Package
+            pkg_result = await db.execute(
+                select(Package).where(Package.name == update_data['package'])
+            )
+            pkg = pkg_result.scalar_one_or_none()
+            sub.package = update_data['package']
+            sub.managed_token_quota = pkg.managed_tokens if pkg else sub.managed_token_quota
 
     await db.commit()
     await db.refresh(user)
