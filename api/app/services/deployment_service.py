@@ -79,6 +79,9 @@ class DeploymentService:
         container_id = container_result.get("container_id", f"container_{client_id}")
         container_name = container_result.get("container_name", f"staffbot-{subdomain}")
 
+        # 3. Auto-configure nginx reverse proxy
+        nginx_map = DeploymentService._update_nginx_map(subdomain, container_port)
+
         return {
             "subdomain": f"{subdomain}.{settings.DOMAIN}",
             "subdomain_raw": subdomain,
@@ -87,7 +90,37 @@ class DeploymentService:
             "container_name": container_name,
             "dns": dns_result,
             "container": container_result,
+            "nginx": nginx_map,
         }
+
+    @staticmethod
+    def _update_nginx_map(subdomain, port):
+        """Write subdomain -> port mapping to nginx map file. Host cron handles reload."""
+        import os
+        map_file = "/etc/nginx/ssl/subdomain_ports.map"
+        entry = f"{subdomain}.staffbot.my {port};"
+        try:
+            existing = []
+            if os.path.exists(map_file):
+                with open(map_file) as fh:
+                    existing = [l.strip() for l in fh if l.strip() and not l.startswith("#")]
+            new_entries = []
+            found = False
+            for line in existing:
+                if line.startswith(f"{subdomain}.staffbot.my"):
+                    new_entries.append(entry)
+                    found = True
+                else:
+                    new_entries.append(line)
+            if not found:
+                new_entries.append(entry)
+            with open(map_file, "w") as fh:
+                fh.write("\n".join(new_entries) + "\n")
+            logger.info(f"Nginx map updated: {entry}")
+            return {"ok": True, "entry": entry}
+        except Exception as e:
+            logger.warning(f"Nginx map update failed: {e}")
+            return {"ok": False, "error": str(e)}
 
     @staticmethod
     async def verify_deployment(subdomain_raw: str, port: int, container_id: str, warmup_delay: int = 15) -> dict:
