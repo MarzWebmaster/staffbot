@@ -134,9 +134,9 @@ function renderSidebar(active) {
             href: 'users.html',
             icon: '👥', label: 'Users', id: 'users-parent', submenu: [
                 { href: 'users.html', label: '👥 All Users', id: 'users' },
-                { href: 'subdomains.html', label: '🌐 Subdomains', id: 'subdomains' }
             ]
         },
+        { href: 'subdomains.html', icon: '🌐', label: 'Subdomains', id: 'subdomains' },
         { href: 'packages.html', icon: '📦', label: 'Package', id: 'packages' },
         { 
             href: 'billing.html',
