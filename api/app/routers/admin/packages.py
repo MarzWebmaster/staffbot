@@ -13,6 +13,9 @@ from app.schemas.admin import PackageCreate, PackageUpdate
 from app.middleware.auth import get_current_admin
 from app.services.docker_service import DockerService
 
+import logging
+logger = logging.getLogger(__name__)
+
 router = APIRouter()
 
 
@@ -135,9 +138,24 @@ async def update_package(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Package not found")
 
     update_data = data.model_dump(exclude_none=True)
+    old_tokens = pkg.managed_tokens
     for key, value in update_data.items():
         if key != "id":
             setattr(pkg, key, value)
+
+    await db.flush()
+
+    # If managed_tokens changed, sync all active subscriptions for this package
+    if 'managed_tokens' in update_data and update_data['managed_tokens'] != old_tokens:
+        from app.models.subscription import Subscription
+        from sqlalchemy import update as sqla_update
+        result = await db.execute(
+            sqla_update(Subscription)
+            .where(Subscription.package == pkg.name)
+            .values(managed_token_quota=update_data['managed_tokens'])
+        )
+        synced = result.rowcount
+        logger.info(f"Package '{pkg.name}' token quota changed: {old_tokens} → {update_data['managed_tokens']} — synced {synced} subscriptions")
 
     await db.commit()
     return {"message": f"Package '{pkg.name}' updated"}
