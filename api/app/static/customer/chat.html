@@ -204,6 +204,14 @@
                     );
                     return;
                 }
+                if (resp.error === 'rate_limited') {
+                    appendMessage(
+                        '⚠️ <strong>Too many requests!</strong><br>You have exceeded the daily request limit for your package. Please try again later or <a href="billing.html" style="color:var(--accent);text-decoration:underline">upgrade your package</a> for higher limits.',
+                        'bot'
+                    );
+                    return;
+                }
+
                 appendMessage('❌ ' + (resp.message || 'Something went wrong. Please try again.'), 'bot');
                 return;
             }

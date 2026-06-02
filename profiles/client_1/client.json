@@ -1,0 +1,9 @@
+{
+  "client_id": 1,
+  "package": "business",
+  "name": "Final Test",
+  "email": "final@test.my",
+  "company": "TestCo",
+  "created_at": "2026-06-02T15:13:02.391366+00:00",
+  "updated_at": "2026-06-02T18:39:36.332903+00:00"
+}

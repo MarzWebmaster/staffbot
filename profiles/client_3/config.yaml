@@ -1,0 +1,23 @@
+agent:
+  max_tool_rounds: 100
+  max_turns: 60
+client:
+  company: Marz Technology
+  email: reimy@marzcomputer.com.my
+  id: 3
+  name: Reimy
+  package: enterprise
+governance: {}
+model:
+  default: deepseek/deepseek-chat
+  provider: openrouter
+rate_limit:
+  burst: 50
+  daily_token_quota: 500000
+  max_concurrent_llm: 10
+  requests_per_second: 20
+skills:
+  disabled: []
+toolsets:
+  disabled: []
+  enabled: []

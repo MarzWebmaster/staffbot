@@ -157,6 +157,25 @@ async def update_package(
         synced = result.rowcount
         logger.info(f"Package '{pkg.name}' token quota changed: {old_tokens} → {update_data['managed_tokens']} — synced {synced} subscriptions")
 
+        # Hot-reload gateway profiles for all affected users (no restart needed)
+        if synced > 0:
+            try:
+                # Fetch affected client IDs
+                subs_result = await db.execute(
+                    select(Subscription.client_id).where(Subscription.package == pkg.name)
+                )
+                affected_ids = [row[0] for row in subs_result.fetchall()]
+                if affected_ids:
+                    import httpx
+                    async with httpx.AsyncClient(timeout=10) as client:
+                        await client.put(
+                            "http://staffbot-gateway:8080/admin/reload-profile/batch",
+                            json=affected_ids,
+                        )
+                    logger.info(f"Gateway batch reloaded {len(affected_ids)} profiles for package '{pkg.name}'")
+            except Exception as e:
+                logger.warning(f"Gateway batch reload skipped for package '{pkg.name}': {e}")
+
     await db.commit()
     return {"message": f"Package '{pkg.name}' updated"}
 

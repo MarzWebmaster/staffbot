@@ -1,0 +1,38 @@
+agent:
+  max_tool_rounds: 30
+  max_turns: 20
+client:
+  company: TestCo
+  email: final@test.my
+  id: 1
+  name: Final Test
+  package: business
+governance: {}
+model:
+  default: deepseek/deepseek-chat
+  provider: openrouter
+rate_limit:
+  burst: 10
+  daily_token_quota: 10000
+  max_concurrent_llm: 2
+  requests_per_second: 5
+skills:
+  disabled: []
+toolsets:
+  disabled:
+  - browser
+  - delegation
+  - cronjob
+  - kanban
+  - homeassistant
+  - discord_admin
+  enabled:
+  - web
+  - file
+  - terminal
+  - memory
+  - search
+  - skills
+  - session_search
+  - messaging
+  - clarify

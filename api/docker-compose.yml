@@ -39,6 +39,7 @@ services:
       - /root/staffbot/containers:/root/staffbot/containers
       - /root/staffbot/api/app/static:/app/app/static
       - /etc/nginx/ssl:/etc/nginx/ssl
+      - /root/staffbot/profiles:/app/data/profiles
     depends_on:
       db:
         condition: service_healthy
@@ -53,13 +54,16 @@ services:
       - "127.0.0.1:8080:8080"
     environment:
       - AUTH_KEY=AUTH_KEY_REDACTED
-      - OPENROUTER_API_KEY=
       - DATABASE_URL=postgresql://staffbot:DB_PASS_REDACTED@db:5432/staffbot_db
+      - STAFFBOT_PROFILES_DIR=/app/data/profiles
+      - MIMO_BASE=https://jemaahapi.tail5cfbb9.ts.net/v1
+      - MIMO_KEY=sk-jemaah-mimo-key-2024-prod
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - /root/staffbot/containers:/root/staffbot/containers
       - /root/staffbot/api/app/static:/app/app/static
       - /etc/nginx/ssl:/etc/nginx/ssl
+      - /root/staffbot/profiles:/app/data/profiles
     depends_on:
       db:
         condition: service_healthy
