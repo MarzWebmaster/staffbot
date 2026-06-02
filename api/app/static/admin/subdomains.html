@@ -31,6 +31,10 @@
         .btn-action:hover { background: rgba(255,255,255,0.1); }
         .btn-action.danger { color: #ef4444; border-color: rgba(239,68,68,0.3); }
         .btn-action.danger:hover { background: rgba(239,68,68,0.15); }
+        @media (max-width: 768px) {
+            .search-filter-bar { flex-direction: column; align-items: stretch; }
+            .search-filter-bar input, .search-filter-bar select { width: 100% !important; box-sizing: border-box; }
+        }
     </style>
 </head>
 <body>
@@ -87,7 +91,7 @@
 
     <!-- Add/Edit Modal -->
     <div class="modal-overlay" id="subdomainModal" style="display:none">
-        <div class="modal" style="width:520px;max-height:85vh;overflow-y:auto">
+        <div class="modal" style="max-width:95vw;width:520px;max-height:85vh;overflow-y:auto">
             <h3 id="modalTitle">Add Subdomain</h3>
             <form onsubmit="return save(event)">
                 <input type="hidden" id="editId">
