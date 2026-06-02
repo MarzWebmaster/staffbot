@@ -89,7 +89,7 @@ async def update_token_usage(
     data: TokenUsageUpdate,
     db: AsyncSession = Depends(get_db),
 ):
-    """Update token usage (called by Server B container)."""
+    """Update token usage (called by Gateway container)."""
     result = await db.execute(
         select(Subscription).where(Subscription.client_id == client_id)
     )

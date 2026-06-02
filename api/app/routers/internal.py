@@ -1,6 +1,6 @@
-"""Internal router — for Server B Gateway communication.
+"""Internal router — for Gateway communication (same server).
 
-Endpoints here are authenticated via x-api-key (STAFFBOT_SERVER_B_API_KEY),
+Endpoints here are authenticated via x-api-key (STAFFBOT_GATEWAY_API_KEY),
 NOT via user JWT tokens.
 """
 import os
@@ -17,13 +17,13 @@ from app.utils.encryption import decrypt_value
 
 router = APIRouter()
 
-SERVER_B_API_KEY = os.environ.get("STAFFBOT_SERVER_B_API_KEY", "")
+GATEWAY_API_KEY = os.environ.get("STAFFBOT_SERVER_B_API_KEY", "")
 
 async def verify_internal(x_api_key: str = Header(None)):
-    """Verify internal API key for Server B communication."""
-    if not SERVER_B_API_KEY:
+    """Verify internal API key for Gateway communication."""
+    if not GATEWAY_API_KEY:
         raise HTTPException(status_code=500, detail="Internal auth not configured")
-    if not x_api_key or x_api_key != SERVER_B_API_KEY:
+    if not x_api_key or x_api_key != GATEWAY_API_KEY:
         raise HTTPException(status_code=401, detail="Invalid internal API key")
     return True
 
@@ -50,7 +50,7 @@ async def resolve_provider(
 ):
     """Resolve a provider config with decrypted API key.
     
-    Called by Server B Gateway to get managed API keys
+    Called by Gateway to get managed API keys
     for making LLM calls on behalf of clients.
     """
     result = await db.execute(

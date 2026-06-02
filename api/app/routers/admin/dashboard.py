@@ -15,7 +15,7 @@ from app.models.container import Container
 from app.models.token_usage import TokenUsageLog
 from app.schemas.admin import DashboardStats, SystemHealth, TokenUsageResponse, TokenUsageSummary, TokenUsagePoint
 from app.middleware.auth import get_current_admin
-from app.services.server_b_service import ServerBService
+from app.services.server_b_service import GatewayService
 
 router = APIRouter()
 
@@ -227,17 +227,17 @@ async def get_system_health(
     except Exception:
         db_status = "error"
 
-    # Check Server B
+    # Check Gateway
     try:
-        b_health = await ServerBService.health_check()
-        server_b_status = b_health.get("status", "unknown")
+        b_health = await GatewayService.health_check()
+        gateway_status = b_health.get("status", "unknown")
     except Exception:
-        server_b_status = "unreachable"
+        gateway_status = "unreachable"
 
     return SystemHealth(
         api_status="ok",
         db_status=db_status,
-        server_b_status=server_b_status,
+        gateway_status=gateway_status,
         uptime=0.0,  # TODO: track app start time
     )
 

@@ -11,7 +11,7 @@ Deployment flow:
   1. Create DB record → status="provisioning"
   2. Fetch Package for resource limits (CPU, RAM)
   3. Generate subdomain/container_name
-  4. Call DockerService.deploy_container() — tries Server B → local → simulated
+  4. Call DockerService.deploy_container() — tries Gateway → local → simulated
   5. Update record with results
      - Success → status="running", save container_name/port/image
      - Failure → status="error", save error message
@@ -115,7 +115,7 @@ async def create_container(
     1. Check package bot limit
     2. Create DB record → status = "provisioning"
     3. Look up package resource limits
-    4. Deploy actual Docker container (Server B → local → simulated)
+    4. Deploy actual Docker container (local Docker → local → simulated)
     5. Update DB record with results
     """
     # ── Step 1: Check package bot limit ──────────────────────────

@@ -1,4 +1,4 @@
-"""Chat router — proxies to Server B gateway with enforcement."""
+"""Chat router — proxies to Gateway (same server) with enforcement."""
 import os, httpx, json
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
@@ -11,8 +11,8 @@ from app.services.enforcement_service import EnforcementService
 
 router = APIRouter()
 
-SERVER_B_URL = os.environ.get("STAFFBOT_SERVER_B_API_URL", "http://69.161.221.104:8080")
-SERVER_B_KEY = os.environ.get("STAFFBOT_SERVER_B_API_KEY", "")
+GATEWAY_URL = os.environ.get("STAFFBOT_SERVER_B_API_URL", "http://staffbot-gateway:8080")
+GATEWAY_KEY = os.environ.get("STAFFBOT_SERVER_B_API_KEY", "")
 
 
 class ChatSendRequest(BaseModel):
@@ -51,15 +51,15 @@ async def chat_send(
         },
     }
 
-    # Step 3: Proxy to Server B with enforcement context
+    # Step 3: Proxy to Gateway with enforcement context
     headers = {
         "Content-Type": "application/json",
-        "x-api-key": SERVER_B_KEY,
+        "x-api-key": GATEWAY_KEY,
     }
 
     async with httpx.AsyncClient(timeout=120) as client:
         resp = await client.post(
-            f"{SERVER_B_URL}/api/chat/send",
+            f"{GATEWAY_URL}/api/chat/send",
             json={
                 "client_id": current_user.id,
                 "container_id": data.container_id,
@@ -90,12 +90,12 @@ async def chat_history(
 
     headers = {
         "Content-Type": "application/json",
-        "x-api-key": SERVER_B_KEY,
+        "x-api-key": GATEWAY_KEY,
     }
 
     async with httpx.AsyncClient(timeout=30) as client:
         resp = await client.get(
-            f"{SERVER_B_URL}/api/chat/history",
+            f"{GATEWAY_URL}/api/chat/history",
             params=params,
             headers=headers,
         )

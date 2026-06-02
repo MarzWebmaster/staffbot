@@ -1,4 +1,4 @@
-"""Tasks router — proxies to Server B gateway."""
+"""Tasks router — proxies to Gateway (same server)."""
 import os, httpx
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
@@ -7,9 +7,9 @@ from app.middleware.auth import get_current_client
 from app.models.client import Client
 
 router = APIRouter()
-SERVER_B_URL = os.environ.get("STAFFBOT_SERVER_B_API_URL", "http://69.161.221.104:8080")
-SERVER_B_KEY = os.environ.get("STAFFBOT_SERVER_B_API_KEY", "")
-HEADERS = {"Content-Type": "application/json", "x-api-key": SERVER_B_KEY}
+GATEWAY_URL = os.environ.get("STAFFBOT_SERVER_B_API_URL", "http://staffbot-gateway:8080")
+GATEWAY_KEY = os.environ.get("STAFFBOT_SERVER_B_API_KEY", "")
+HEADERS = {"Content-Type": "application/json", "x-api-key": GATEWAY_KEY}
 
 class TaskCreateRequest(BaseModel):
     title: str
@@ -28,7 +28,7 @@ async def create_task(
 ):
     async with httpx.AsyncClient(timeout=30) as client:
         resp = await client.post(
-            f"{SERVER_B_URL}/api/tasks/create",
+            f"{GATEWAY_URL}/api/tasks/create",
             json={
                 "client_id": current_user.id,
                 "title": data.title,
@@ -52,7 +52,7 @@ async def list_tasks(
         params["status"] = status
     async with httpx.AsyncClient(timeout=30) as client:
         resp = await client.get(
-            f"{SERVER_B_URL}/api/tasks/list",
+            f"{GATEWAY_URL}/api/tasks/list",
             params=params,
             headers=HEADERS,
         )
@@ -71,7 +71,7 @@ async def update_task(
     if data.description is not None: payload["description"] = data.description
     async with httpx.AsyncClient(timeout=30) as client:
         resp = await client.put(
-            f"{SERVER_B_URL}/api/tasks/{task_id}",
+            f"{GATEWAY_URL}/api/tasks/{task_id}",
             json=payload,
             headers=HEADERS,
         )

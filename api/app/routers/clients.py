@@ -195,9 +195,9 @@ async def setup_whatsapp(
     await db.refresh(current_user)
 
     # Request Baileys Manager to init session for this client
-    from app.services.server_b_service import ServerBService
+    from app.services.server_b_service import GatewayService
     try:
-        result = await ServerBService.whatsapp_init_session(
+        result = await GatewayService.whatsapp_init_session(
             client_id=client_id,
             auth_path=auth_path,
         )
@@ -234,9 +234,9 @@ async def setup_telegram(
     await db.refresh(current_user)
 
     # Register webhook with Telegram
-    from app.services.server_b_service import ServerBService
+    from app.services.server_b_service import GatewayService
     try:
-        result = await ServerBService.telegram_register_webhook(
+        result = await GatewayService.telegram_register_webhook(
             client_id=client_id,
             bot_token=data.bot_token,
         )

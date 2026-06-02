@@ -42,7 +42,7 @@ class Settings(BaseSettings):
     CLOUDFLARE_API_TOKEN: str = ""
     CLOUDFLARE_ZONE_ID: str = ""
     
-    # Server B (Internal API via WireGuard)
+    # Gateway (Internal API — same Docker network)
     SERVER_B_API_URL: str = "http://staffbot-gateway:8080"  # Gateway on same Docker network (NOT a separate server)
     SERVER_B_API_KEY: str = ""  # Auth key for Gateway (same server, NOT external)
     

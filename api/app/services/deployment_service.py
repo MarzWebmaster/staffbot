@@ -8,7 +8,7 @@ Coordinates the full deployment flow when a new client subscribes:
 4. Update database state
 5. Send notifications to client + admin
 
-ALL services run on ONE server (Tencent). No external Server B.
+ALL services run on ONE server (Tencent). No external Gateway.
 """
 import re
 import secrets
@@ -17,7 +17,7 @@ from typing import Optional
 import httpx
 from app.services.cloudflare_service import CloudflareService
 from app.services.docker_service import DockerService
-from app.services.server_b_service import ServerBService
+from app.services.server_b_service import GatewayService
 from app.services.notification_service import NotificationService
 from app.config import get_settings
 
@@ -148,7 +148,7 @@ class DeploymentService:
 
         # ── Check 4: Container health via Gateway ─────────────────
         try:
-            health = await ServerBService.health_check()
+            health = await GatewayService.health_check()
             checks["container"] = health.get("status") == "ok"
             if not checks["container"]:
                 errors.append(f"Gateway: health check failed — {health}")

@@ -1,9 +1,8 @@
 """Docker management service — 1 container per user, multiple Staff AI inside.
 
-Supports three modes in priority order:
-1. Server B API — via WireGuard tunnel (production dual-server)
-2. Local Docker SDK — via docker-py (single-server MVP)
-3. Simulated — demo/test mode when no Docker available
+All deployment is local (same server). Two modes:
+1. Local Docker SDK — docker.from_env() directly (production path)
+2. Simulated — demo/test mode when Docker unavailable
 """
 import os
 import socket
@@ -73,24 +72,7 @@ class DockerService:
         # Find by label
         label = f"staffbot.client_id={client_id}"
 
-        # Server B
-        if settings.SERVER_B_API_KEY:
-            try:
-                import httpx
-                resp = httpx.get(
-                    f"{settings.SERVER_B_API_URL}/api/containers",
-                    headers={"X-API-Key": settings.SERVER_B_API_KEY},
-                    timeout=5,
-                )
-                if resp.status_code == 200:
-                    containers = resp.json()
-                    for c in containers:
-                        if str(c.get("client_id")) == str(client_id):
-                            return c
-            except Exception:
-                pass
-
-        # Local Docker
+        # Local Docker (direct — same server, no HTTP hop needed)
         if DockerService._docker_available():
             try:
                 client = DockerService._get_local_docker()
@@ -173,41 +155,7 @@ class DockerService:
             "GATEWAY_AUTH_KEY": settings.SERVER_B_API_KEY or "local-dev",
         }
 
-        # --- METHOD 1: Server B API ---
-        if settings.SERVER_B_API_KEY:
-            try:
-                import httpx
-                resp = httpx.post(
-                    f"{settings.SERVER_B_API_URL}/api/deploy",
-                    json={
-                        "client_id": client_id,
-                        "container_name": container_name,
-                        "subdomain": subdomain or container_name,
-                        "env_vars": env,
-                        "skills": skill_categories,
-                        "cpu_limit": cpu_limit,
-                        "memory_limit_mb": memory_limit_mb,
-                        "storage_limit_gb": storage_limit_gb,
-                    },
-                    headers={"X-API-Key": settings.SERVER_B_API_KEY},
-                    timeout=30,
-                )
-                if resp.status_code == 200:
-                    data = resp.json()
-                    status = "running" if data.get("success") else "error"
-                    return {
-                        "success": data.get("success", False),
-                        "container_id": data.get("container_id", ""),
-                        "container_name": data.get("container_name", container_name),
-                        "port": data.get("port", 9000),
-                        "status": status,
-                        "message": data.get("message", "Deployed via Server B"),
-                        "deploy_method": "server_b",
-                    }
-            except Exception as e:
-                logger.warning(f"Server B deploy failed: {e}")
-
-        # --- METHOD 2: Local Docker SDK ---
+        # --- Local Docker SDK (PRIMARY — same server, direct Docker socket) ---
         if DockerService._docker_available():
             try:
                 client = DockerService._get_local_docker()

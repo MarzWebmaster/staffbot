@@ -1,8 +1,10 @@
 """
-Server B Internal API Service.
+Gateway Internal API Service.
 
-Handles communication between Server A (Public) and Server B (Private/Containers)
-via WireGuard VPN tunnel (10.0.0.0/24 subnet).
+Communicates with the Gateway container (staffbot-gateway:8080) on the SAME Docker host.
+Handles: chat proxying, WhatsApp/Telegram session management, health checks.
+
+DEPRECATED: deploy_container() and other Docker operations should use DockerService directly.
 """
 import httpx
 import logging
@@ -14,7 +16,7 @@ settings = get_settings()
 logger = logging.getLogger(__name__)
 
 
-class ServerBService:
+class GatewayService:
     @staticmethod
     def is_configured() -> bool:
         return bool(settings.SERVER_B_API_KEY)
@@ -37,8 +39,8 @@ class ServerBService:
         memory_limit_mb: int = 512,
         storage_limit_gb: int = 10,
     ) -> dict:
-        """Request Server B to deploy a new container for a client."""
-        if not ServerBService.is_configured():
+        """DEPRECATED: Use DockerService directly instead of HTTP-to-Gateway a new container for a client."""
+        if not GatewayService.is_configured():
             return {
                 "success": True,
                 "test_mode": True,
@@ -51,7 +53,7 @@ class ServerBService:
             try:
                 resp = await client.post(
                     f"{settings.SERVER_B_API_URL}/api/deploy",
-                    headers=ServerBService._headers(),
+                    headers=GatewayService._headers(),
                     json={
                         "client_id": client_id,
                         "container_name": container_name,
@@ -67,11 +69,11 @@ class ServerBService:
                 resp.raise_for_status()
                 return resp.json()
             except httpx.TimeoutException:
-                logger.warning(f"Server B deploy timeout for {container_name}, falling back to simulated")
+                logger.warning(f"Gateway deploy timeout for {container_name}, falling back to simulated")
             except httpx.HTTPStatusError as e:
-                logger.warning(f"Server B deploy error ({e.response.status_code}) for {container_name}: {e.response.text[:200]}, falling back to simulated")
+                logger.warning(f"Gateway deploy error ({e.response.status_code}) for {container_name}: {e.response.text[:200]}, falling back to simulated")
             except Exception as e:
-                logger.warning(f"Server B connection error for {container_name}: {str(e)[:200]}, falling back to simulated")
+                logger.warning(f"Gateway connection error for {container_name}: {str(e)[:200]}, falling back to simulated")
 
         # Fallback: simulated deployment with assigned port
         import os
@@ -84,7 +86,7 @@ class ServerBService:
             "container_name": container_name,
             "port": assigned_port,
             "status": "running",
-            "message": f"Simulated deployment (Server B unavailable)",
+            "message": f"Simulated deployment (Gateway unavailable)",
             "deploy_method": "simulated",
         }
 
@@ -94,13 +96,13 @@ class ServerBService:
         env_vars: dict,
     ) -> dict:
         """Update an existing container's env vars (e.g., after setup wizard)."""
-        if not ServerBService.is_configured():
+        if not GatewayService.is_configured():
             return {"success": True, "test_mode": True}
 
         async with httpx.AsyncClient() as client:
             resp = await client.put(
                 f"{settings.SERVER_B_API_URL}/api/container/{container_name}",
-                headers=ServerBService._headers(),
+                headers=GatewayService._headers(),
                 json={"env_vars": env_vars},
                 timeout=30.0,
             )
@@ -118,7 +120,7 @@ class ServerBService:
 
         NOTE: Storage limit changes require container recreation.
         """
-        if not ServerBService.is_configured():
+        if not GatewayService.is_configured():
             return {"success": True, "test_mode": True,
                     "message": "Simulated resource update",
                     "container_name": container_name,
@@ -129,7 +131,7 @@ class ServerBService:
             try:
                 resp = await client.post(
                     f"{settings.SERVER_B_API_URL}/api/container/{container_name}/update-resources",
-                    headers=ServerBService._headers(),
+                    headers=GatewayService._headers(),
                     json={
                         "cpu_limit": cpu_limit,
                         "memory_limit_mb": memory_limit_mb,
@@ -142,29 +144,29 @@ class ServerBService:
             except httpx.TimeoutException:
                 raise HTTPException(
                     status_code=status.HTTP_504_GATEWAY_TIMEOUT,
-                    detail="Server B resource update timeout",
+                    detail="Gateway resource update timeout",
                 )
             except httpx.HTTPStatusError as e:
                 raise HTTPException(
                     status_code=status.HTTP_502_BAD_GATEWAY,
-                    detail=f"Server B error: {e.response.text}",
+                    detail=f"Gateway error: {e.response.text}",
                 )
             except Exception as e:
                 raise HTTPException(
                     status_code=status.HTTP_502_BAD_GATEWAY,
-                    detail=f"Server B connection error: {str(e)}",
+                    detail=f"Gateway connection error: {str(e)}",
                 )
 
     @staticmethod
     async def get_container_status(container_name: str) -> dict:
-        """Check container status on Server B."""
-        if not ServerBService.is_configured():
+        """DEPRECATED: Check container via DockerService."""
+        if not GatewayService.is_configured():
             return {"status": "running", "test_mode": True}
 
         async with httpx.AsyncClient() as client:
             resp = await client.get(
                 f"{settings.SERVER_B_API_URL}/api/container/{container_name}/status",
-                headers=ServerBService._headers(),
+                headers=GatewayService._headers(),
                 timeout=10.0,
             )
             resp.raise_for_status()
@@ -172,8 +174,8 @@ class ServerBService:
 
     @staticmethod
     async def health_check() -> dict:
-        """Ping Server B API Gateway."""
-        if not ServerBService.is_configured():
+        """Ping Gateway health endpoint."""
+        if not GatewayService.is_configured():
             return {"status": "ok", "test_mode": True}
 
         async with httpx.AsyncClient() as client:
@@ -194,14 +196,14 @@ class ServerBService:
         """Request Baileys Manager to initialize a WhatsApp session for a client.
         Returns QR code data for the client to scan.
         """
-        if not ServerBService.is_configured():
+        if not GatewayService.is_configured():
             return {"success": True, "test_mode": True, "qr_url": None, "message": "Simulated session init"}
 
         async with httpx.AsyncClient() as client:
             try:
                 resp = await client.post(
                     f"{settings.SERVER_B_API_URL}/api/whatsapp/session/init",
-                    headers=ServerBService._headers(),
+                    headers=GatewayService._headers(),
                     json={"client_id": client_id, "auth_path": auth_path},
                     timeout=30.0,
                 )
@@ -218,14 +220,14 @@ class ServerBService:
         bot_token: str,
     ) -> dict:
         """Register a Telegram webhook so messages route to this client's container."""
-        if not ServerBService.is_configured():
+        if not GatewayService.is_configured():
             return {"success": True, "test_mode": True, "webhook_url": f"https://staffbot.my/api/incoming/telegram/{client_id}"}
 
         async with httpx.AsyncClient() as client:
             try:
                 resp = await client.post(
                     f"{settings.SERVER_B_API_URL}/api/telegram/webhook/register",
-                    headers=ServerBService._headers(),
+                    headers=GatewayService._headers(),
                     json={"client_id": client_id, "bot_token": bot_token},
                     timeout=15.0,
                 )

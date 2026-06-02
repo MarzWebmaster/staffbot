@@ -3,7 +3,7 @@ Webhooks router.
 
 Handles incoming webhooks from:
 - Stripe (payment events)
-- Server B (container status updates)
+- Gateway (container status updates)
 """
 from fastapi import APIRouter, Request, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -178,17 +178,17 @@ async def stripe_webhook(
 
 
 @router.post("/server-b/status")
-async def server_b_status_webhook(
+async def gateway_status_webhook(
     data: dict,
     request: Request,
     db: AsyncSession = Depends(get_db),
 ):
     """
-    Receive container status updates from Server B.
+    Receive container status updates from Gateway.
 
     Payload: { "container_name": "...", "status": "running|stopped|error", "message": "..." }
     """
-    # Verify request comes from Server B
+    # Verify request comes from Gateway
     api_key = request.headers.get("X-API-Key", "")
     if api_key != settings.SERVER_B_API_KEY:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid API key")

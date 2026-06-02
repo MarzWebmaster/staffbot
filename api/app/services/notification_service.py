@@ -2,7 +2,7 @@
 Multi-channel notification service.
 
 Supports:
-- WhatsApp (via Baileys on Server B)
+- WhatsApp (via Baileys on Gateway)
 - Email (via SMTP)
 - SMS (via API)
 - In-app (mark in DB, dashboard polls for unread)
@@ -21,9 +21,9 @@ settings = get_settings()
 class NotificationService:
     @staticmethod
     async def send_whatsapp(to: str, message: str) -> dict:
-        """Send WhatsApp via Baileys on Server B."""
+        """Send WhatsApp via Baileys on Gateway."""
         if not settings.SERVER_B_API_KEY:
-            return {"success": True, "test_mode": True, "note": "No Server B configured"}
+            return {"success": True, "test_mode": True, "note": "No Gateway configured"}
 
         async with httpx.AsyncClient() as client:
             try:

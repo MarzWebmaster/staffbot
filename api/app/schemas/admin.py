@@ -19,7 +19,7 @@ class DashboardStats(BaseModel):
 class SystemHealth(BaseModel):
     api_status: str
     db_status: str
-    server_b_status: str
+    gateway_status: str
     uptime: float
 
 
