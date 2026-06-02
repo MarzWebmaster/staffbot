@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Referral — StaffBot.my</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="stylesheet" href="/static/css/app.css?v=1779798256">
+    <link rel="stylesheet" href="/static/css/app.css?v=1780388378">
 </head>
 <body>
     <button class="sidebar-toggle" onclick="toggleSidebar()">☰</button>
@@ -19,20 +19,20 @@
         <div class="main-content">
             <div class="topbar"><h1>🔗 Referral Links</h1></div>
             <div class="grid-4">
-                <div class="card stat-card"><div class="stat-label">Total Referrals</div><div class="stat-value" id="ref-total">0</div></div>
-                <div class="card stat-card"><div class="stat-label">Converted</div><div class="stat-value" id="ref-converted">0</div></div>
-                <div class="card stat-card"><div class="stat-label">Commission Earned</div><div class="stat-value" id="ref-commission">RM0.00</div></div>
-                <div class="card stat-card"><div class="stat-label">Conversion Rate</div><div class="stat-value" id="ref-rate">0%</div></div>
+                <div class="card stat-card admin-stat admin-stat-blue"><div class="stat-label">🔗 Total Referrals</div><div class="stat-value" id="ref-total">0</div></div>
+                <div class="card stat-card admin-stat admin-stat-green"><div class="stat-label">✅ Converted</div><div class="stat-value" id="ref-converted">0</div></div>
+                <div class="card stat-card admin-stat admin-stat-amber"><div class="stat-label">💰 Commission Earned</div><div class="stat-value" id="ref-commission">RM0.00</div></div>
+                <div class="card stat-card admin-stat admin-stat-purple"><div class="stat-label">📊 Conversion Rate</div><div class="stat-value" id="ref-rate">0%</div></div>
             </div>
-            <div class="card">
-                <div class="card-header"><h3>Referral Links</h3></div>
+            <div class="card admin-card admin-card-blue" style="border-radius:12px;margin-top:16px">
+                <div class="card-header"><h3>🔗 Referral Links</h3></div>
                 <div style="padding:16px;text-align:center;color:var(--text-light)">
                     <p style="font-size:13px">Referral links can be generated once the affiliate system is active with clients.</p>
                     <p style="font-size:13px;margin-top:4px">Each affiliate gets a unique tracking link to share.</p>
                 </div>
             </div>
-            <div class="card">
-                <div class="card-header"><h3>Referral History</h3></div>
+            <div class="card admin-card admin-card-amber" style="border-radius:12px;margin-top:16px">
+                <div class="card-header"><h3>📜 Referral History</h3></div>
                 <div id="referralHistory"><p style="color:var(--text-light);padding:16px;text-align:center">No referral activity yet.</p></div>
             </div>
         </div>

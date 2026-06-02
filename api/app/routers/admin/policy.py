@@ -2,7 +2,7 @@
 
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, delete
+from sqlalchemy import select, delete, text
 
 from app.database import get_db
 from app.models.client import Client
@@ -11,6 +11,81 @@ from app.schemas.admin import SettingUpdate
 from app.middleware.auth import get_current_admin
 
 router = APIRouter()
+
+# ── Category Mapping: old → 15 customer-facing display categories ────
+CATEGORY_MAP = {
+    # 🛡 Cybersecurity
+    "security": "🛡 Cybersecurity", "hermes-red-teaming": "🛡 Cybersecurity", "hub-red-teaming": "🛡 Cybersecurity",
+    # 🤖 AI & Automation
+    "aiml": "🤖 AI & Automation", "automation": "🤖 AI & Automation",
+    "autonomous-ai-agents": "🤖 AI & Automation", "hermes-autonomous-ai-agents": "🤖 AI & Automation",
+    "hub-autonomous-ai-agents": "🤖 AI & Automation", "mlops": "🤖 AI & Automation",
+    "hermes-mlops": "🤖 AI & Automation", "hub-mlops": "🤖 AI & Automation",
+    "hermes-inference": "🤖 AI & Automation", "hermes-models": "🤖 AI & Automation",
+    "hermes-evaluation": "🤖 AI & Automation",
+    # 🎨 Design & Media
+    "creative-design": "🎨 Design & Media", "creative": "🎨 Design & Media",
+    "hermes-creative": "🎨 Design & Media", "hub-creative": "🎨 Design & Media",
+    "hermes-media": "🎨 Design & Media", "hub-media": "🎨 Design & Media", "branding": "🎨 Design & Media",
+    # ☁️ DevOps & Infra
+    "devops": "☁️ DevOps & Infra", "dev-infra": "☁️ DevOps & Infra",
+    "hermes-devops": "☁️ DevOps & Infra", "hub-devops": "☁️ DevOps & Infra",
+    "system": "☁️ DevOps & Infra", "integration": "☁️ DevOps & Infra", "integrations": "☁️ DevOps & Infra",
+    "migration": "☁️ DevOps & Infra", "technical": "☁️ DevOps & Infra",
+    "mcp": "☁️ DevOps & Infra", "hermes-mcp": "☁️ DevOps & Infra", "hub-mcp": "☁️ DevOps & Infra",
+    "local": "☁️ DevOps & Infra", "blockchain": "☁️ DevOps & Infra",
+    "hermes-smart-home": "☁️ DevOps & Infra", "hub-smart-home": "☁️ DevOps & Infra",
+    # 📊 Data & Research
+    "research": "📊 Data & Research", "hermes-research": "📊 Data & Research", "hub-research": "📊 Data & Research",
+    "business-intelligence": "📊 Data & Research", "hermes-data-science": "📊 Data & Research",
+    "hub-data-science": "📊 Data & Research",
+    # 🌐 Web & Development
+    "software-development": "🌐 Web & Development", "web-development": "🌐 Web & Development",
+    "hermes-software-development": "🌐 Web & Development", "hub-software-development": "🌐 Web & Development",
+    "hermes-github": "🌐 Web & Development", "hub-github": "🌐 Web & Development",
+    # 📋 Productivity
+    "productivity": "📋 Productivity", "hermes-productivity": "📋 Productivity",
+    "hub-productivity": "📋 Productivity", "documents": "📋 Productivity",
+    "hermes-note-taking": "📋 Productivity", "hub-note-taking": "📋 Productivity",
+    # 📈 Marketing & Sales
+    "marketing": "📈 Marketing & Sales", "sales": "📈 Marketing & Sales",
+    "sales-marketing": "📈 Marketing & Sales", "hub-business-development": "📈 Marketing & Sales",
+    "hermes-social-media": "📈 Marketing & Sales", "hub-social-media": "📈 Marketing & Sales",
+    "entrepreneurship": "📈 Marketing & Sales", "economy": "📈 Marketing & Sales",
+    "ecommerce": "📈 Marketing & Sales",
+    # 💬 Communication
+    "communication": "💬 Communication", "messaging": "💬 Communication",
+    "hermes-email": "💬 Communication", "hub-email": "💬 Communication", "email": "💬 Communication",
+    # 💰 Finance & Accounting
+    "finance": "💰 Finance & Accounting", "accounting": "💰 Finance & Accounting",
+    # 📝 Content Writing
+    "knowledge": "📝 Content Writing",
+    # ⚖️ Legal & Compliance
+    "governance": "⚖️ Legal & Compliance",
+    # 🍎 Apple Ecosystem
+    "hermes-apple": "🍎 Apple Ecosystem", "hub-apple": "🍎 Apple Ecosystem",
+    # 🎮 Gaming
+    "hermes-gaming": "🎮 Gaming", "hub-gaming": "🎮 Gaming",
+    # 🔧 Technical Support (catch-all)
+    "operations": "🔧 Technical Support", "customer-support": "🔧 Technical Support",
+    "management": "🔧 Technical Support", "hermes-skills": "🔧 Technical Support",
+    "dogfood": "🔧 Technical Support", "technology": "🔧 Technical Support",
+    "industry": "🔧 Technical Support", "hr": "🔧 Technical Support",
+    # Domain-specific → mapped to closest functional
+    "manufacturing": "🔧 Technical Support",
+    "healthcare": "🔧 Technical Support",
+    "education": "🔧 Technical Support",
+    "construction": "🔧 Technical Support",
+    "hospitality": "🔧 Technical Support",
+    "real-estate": "🔧 Technical Support",
+    "logistics": "🔧 Technical Support",
+    "agriculture": "🔧 Technical Support",
+    "health": "🔧 Technical Support",
+}
+
+def get_display_category(cat: str) -> str:
+    """Map old category to new display category. Returns original if unmapped."""
+    return CATEGORY_MAP.get(cat, cat)
 
 # ── Built-in skills registry ────────────────────────────────────────
 # Curated from The CEO system, Anthropic/skills, hoodini/ai-agents-skills,
@@ -863,7 +938,6 @@ BUILTIN_TOOLSETS = [
     {"id": "integration_erp", "name": "ERP (ERPNext)", "category": "integration", "desc": "Connect ERPNext API for finance, invoicing, and operations sync", "default": False, "risk": "high"},
     {"id": "integration_crm", "name": "CRM Integration", "category": "integration", "desc": "Connect CRM for leads, opportunities, and account updates", "default": False, "risk": "high"},
     {"id": "integration_ticketing", "name": "Ticketing System", "category": "integration", "desc": "Connect support ticketing for customer service workflows", "default": False, "risk": "medium"},
-    {"id": "integration_social_media", "name": "Social Media", "category": "integration", "desc": "Connect social channels for publishing, monitoring, campaigns", "default": False, "risk": "medium"},
     {"id": "integration_email_imap_smtp", "name": "Email (IMAP/SMTP)", "category": "integration", "desc": "Connect email inbox to read/send/manage emails", "default": True, "risk": "high"},
     {"id": "integration_github_copilot", "name": "GitHub Copilot", "category": "integration", "desc": "Connect GitHub for Copilot SDK authentication", "default": False, "risk": "medium"},
 
@@ -880,6 +954,36 @@ BUILTIN_TOOLSETS = [
 
     # ── LOCAL AGENT TOOLS ────────────────────────────────────────────
     {"id": "integration_local_folder_ocr", "name": "Local Folder & OCR", "category": "local", "desc": "Read local folder on office PC, extract text via OCR", "default": False, "risk": "high"},
+
+    # ── POS INTEGRATIONS (MALAYSIA) ──────────────────────────────────
+    {"id": "integration_pos_storehub", "name": "StoreHub POS", "category": "pos", "desc": "Connect StoreHub POS — order sync, menu update, sales report, inventory tracking", "default": False, "risk": "high"},
+    {"id": "integration_pos_foodpanda", "name": "FoodPanda Merchant", "category": "pos", "desc": "Connect FoodPanda Merchant API — order management, menu sync, auto-accept, rider tracking", "default": False, "risk": "high"},
+    {"id": "integration_pos_grab", "name": "Grab Merchant (GrabFood)", "category": "pos", "desc": "Connect Grab Merchant — GrabFood order management, promo sync, store hours, settlement reports", "default": False, "risk": "high"},
+    {"id": "integration_pos_sitegiant", "name": "SiteGiant", "category": "pos", "desc": "Connect SiteGiant — multi-channel e-commerce, Shopee/Lazada sync, inventory central, order fulfillment", "default": False, "risk": "high"},
+    {"id": "integration_pos_easystore", "name": "EasyStore", "category": "pos", "desc": "Connect EasyStore — unified e-commerce dashboard, order management, customer CRM, marketing tools", "default": False, "risk": "high"},
+    {"id": "integration_pos_oddle", "name": "Oddle", "category": "pos", "desc": "Connect Oddle — F&B online ordering, reservation system, CRM, loyalty program", "default": False, "risk": "high"},
+    {"id": "integration_pos_beep", "name": "Beep POS", "category": "pos", "desc": "Connect Beep — F&B POS, QR ordering, kitchen display, loyalty, analytics", "default": False, "risk": "high"},
+    {"id": "integration_pos_loyverse", "name": "Loyverse POS", "category": "pos", "desc": "Connect Loyverse — free POS for retail/F&B, inventory, employee management, loyalty cards", "default": False, "risk": "medium"},
+    {"id": "integration_pos_shopify", "name": "Shopify POS", "category": "pos", "desc": "Connect Shopify POS — unified online/offline retail, inventory sync, customer profiles, payment processing", "default": False, "risk": "high"},
+
+    # ── SOCIAL MEDIA INTEGRATIONS ─────────────────────────────────────
+    {"id": "integration_social_whatsapp", "name": "WhatsApp Business", "category": "social-media", "desc": "WhatsApp Business API — auto-reply, broadcast, catalog, Quick Replies, Malaysia #1 messaging", "default": True, "risk": "medium"},
+    {"id": "integration_social_telegram", "name": "Telegram", "category": "social-media", "desc": "Telegram Bot & Channel — broadcast, inline buttons, file sharing, polling, Asia/EMEA dominant", "default": True, "risk": "medium"},
+    {"id": "integration_social_facebook", "name": "Facebook & Messenger", "category": "social-media", "desc": "Facebook Page & Messenger — post scheduling, inbox management, comment auto-reply, ads comment moderation", "default": True, "risk": "medium"},
+    {"id": "integration_social_instagram", "name": "Instagram", "category": "social-media", "desc": "Instagram Business — DM auto-reply, story/reel scheduling, comment management, hashtag analytics", "default": True, "risk": "medium"},
+    {"id": "integration_social_tiktok", "name": "TikTok", "category": "social-media", "desc": "TikTok for Business — DM management, video scheduling, trend alerts, comment moderation, shop integration", "default": False, "risk": "medium"},
+    {"id": "integration_social_x", "name": "X / Twitter", "category": "social-media", "desc": "X (Twitter) API — tweet scheduling, DM auto-reply, mention monitoring, thread composer, analytics", "default": False, "risk": "medium"},
+    {"id": "integration_social_linkedin", "name": "LinkedIn", "category": "social-media", "desc": "LinkedIn Pages & Sales Navigator — post scheduling, InMail automation, lead gen, company page management", "default": False, "risk": "medium"},
+    {"id": "integration_social_line", "name": "LINE", "category": "social-media", "desc": "LINE Official Account — Japan/Thailand/Taiwan #1 messenger, rich messages, coupon, chatbot, LINE Pay", "default": False, "risk": "medium"},
+    {"id": "integration_social_wechat", "name": "WeChat", "category": "social-media", "desc": "WeChat Official Account — China #1 platform, Mini Programs, WeChat Pay, customer service API", "default": False, "risk": "high"},
+    {"id": "integration_social_kakaotalk", "name": "KakaoTalk", "category": "social-media", "desc": "KakaoTalk Channel — Korea #1 messenger, smart reply, coupon, commerce, KakaoPay integration", "default": False, "risk": "medium"},
+    {"id": "integration_social_zalo", "name": "Zalo", "category": "social-media", "desc": "Zalo Official Account — Vietnam #1 platform, broadcast, customer care, ZaloPay, mini apps", "default": False, "risk": "medium"},
+    {"id": "integration_social_viber", "name": "Viber", "category": "social-media", "desc": "Viber Business — Eastern Europe/SEA messaging, chatbots, rich media, transactional messages", "default": False, "risk": "medium"},
+    {"id": "integration_social_discord", "name": "Discord", "category": "social-media", "desc": "Discord Bot — community management, moderation, roles, voice channels, gaming/creator economy", "default": False, "risk": "medium"},
+    {"id": "integration_social_youtube", "name": "YouTube", "category": "social-media", "desc": "YouTube Data & Content API — comment management, video analytics, playlist curation, live chat moderation", "default": False, "risk": "medium"},
+    {"id": "integration_social_reddit", "name": "Reddit", "category": "social-media", "desc": "Reddit API — subreddit monitoring, post scheduling, comment engagement, trend alert, AMA management", "default": False, "risk": "medium"},
+    {"id": "integration_social_pinterest", "name": "Pinterest", "category": "social-media", "desc": "Pinterest Business — pin scheduling, board management, analytics, shopping pins, visual discovery", "default": False, "risk": "low"},
+    {"id": "integration_social_snapchat", "name": "Snapchat", "category": "social-media", "desc": "Snapchat Business — ad management, story scheduling, AR lens analytics, Snap Pixel tracking", "default": False, "risk": "medium"},
 ]
 
 DEFAULT_GOVERNANCE_POLICY = {
@@ -1038,27 +1142,41 @@ async def list_skills(
     admin: Client = Depends(get_current_admin),
     db: AsyncSession = Depends(get_db),
 ):
-    """List all available skills with their enabled/disabled status."""
-    # Load saved policy from DB
+    """List all available skills from database with enabled/disabled status."""
+    # Load skills from skills_registry table (exclude archived)
     result = await db.execute(
+        text("SELECT name, description, category, display_category, tags FROM skills_registry WHERE category NOT LIKE '.archive%' ORDER BY name")
+    )
+    rows = result.fetchall()
+    
+    # Load saved policy for enabled skills
+    policy_result = await db.execute(
         select(Setting).where(Setting.key == "governance_policy")
     )
-    setting = result.scalar_one_or_none()
-
+    setting = policy_result.scalar_one_or_none()
     policy = {}
     if setting:
         import json
         policy = json.loads(setting.value)
+    enabled_skills = set(policy.get("enabled_skills", []))
 
-    enabled_skills = set(policy.get("enabled_skills", [s["id"] for s in BUILTIN_SKILLS if s["default"]]))
+    skills = []
+    for row in rows:
+        name, desc, cat, dc, tags = row
+        skills.append({
+            "id": name,
+            "name": name.replace("-", " ").title(),
+            "desc": desc or "",
+            "category": cat or "",
+            "display_category": dc or get_display_category(cat or ""),
+            "enabled": name in enabled_skills,
+            "src": "db",
+        })
 
     return {
-        "skills": [
-            {**s, "enabled": s["id"] in enabled_skills}
-            for s in BUILTIN_SKILLS
-        ],
-        "total": len(BUILTIN_SKILLS),
-        "enabled": len(enabled_skills),
+        "skills": skills,
+        "total": len(skills),
+        "enabled": len([s for s in skills if s["enabled"]]),
     }
 
 

@@ -6,7 +6,7 @@
     <title>Usage — StaffBot.my</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <link rel="stylesheet" href="/static/css/app.css?v=1779798256">
+    <link rel="stylesheet" href="/static/css/app.css?v=1780388378">
 </head>
 <body>
     <button class="sidebar-toggle" onclick="toggleSidebar()">☰</button>
@@ -21,21 +21,21 @@
         <div class="main-content">
             <div class="topbar"><h1>📈 Usage Analytics</h1></div>
             <div class="grid-4" id="usageStats">
-                <div class="card stat-card"><div class="stat-label">Total Tokens</div><div class="stat-value" id="usage-total">-</div></div>
-                <div class="card stat-card"><div class="stat-label">API Calls Today</div><div class="stat-value" id="usage-today">-</div></div>
-                <div class="card stat-card"><div class="stat-label">Active Today</div><div class="stat-value" id="usage-active-clients">-</div></div>
-                <div class="card stat-card"><div class="stat-label">Avg Tokens/Call</div><div class="stat-value" id="usage-avg">-</div></div>
+                <div class="card stat-card admin-stat admin-stat-blue"><div class="stat-label">⚡ Total Tokens</div><div class="stat-value" id="usage-total">-</div></div>
+                <div class="card stat-card admin-stat admin-stat-green"><div class="stat-label">📞 API Calls Today</div><div class="stat-value" id="usage-today">-</div></div>
+                <div class="card stat-card admin-stat admin-stat-purple"><div class="stat-label">👥 Active Today</div><div class="stat-value" id="usage-active-clients">-</div></div>
+                <div class="card stat-card admin-stat admin-stat-amber"><div class="stat-label">📊 Avg Tokens/Call</div><div class="stat-value" id="usage-avg">-</div></div>
             </div>
             <div class="inline-grid-2" style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:16px">
-                <div class="card">
-                    <div class="card-header"><h3>Daily Token Usage</h3></div>
+                <div class="card admin-card admin-card-purple" style="border-radius:12px">
+                    <div class="card-header"><h3>📈 Daily Token Usage</h3></div>
                     <div style="padding:16px">
                         <canvas id="dailyTokenChart" height="200"></canvas>
                         <p id="dailyTokenEmpty" style="text-align:center;color:var(--text-light);padding:40px;display:none">No data yet.</p>
                     </div>
                 </div>
-                <div class="card">
-                    <div class="card-header"><h3>Usage by Client</h3></div>
+                <div class="card admin-card admin-card-green" style="border-radius:12px">
+                    <div class="card-header"><h3>👤 Usage by Client</h3></div>
                     <div id="usageByClient"><p style="color:var(--text-light);padding:24px;text-align:center">No data yet.</p></div>
                 </div>
             </div>

@@ -9,7 +9,20 @@ class Settings(BaseSettings):
     DATABASE_URL: str = "postgresql://staffbot:staffbot@localhost:5432/staffbot_db"
     
     # Auth
-    SECRET_KEY: str = secrets.token_urlsafe(32)
+    SECRET_KEY: str = ""
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        if not self.SECRET_KEY:
+            key_file = "/app/data/.secret_key"
+            os.makedirs(os.path.dirname(key_file), exist_ok=True)
+            if os.path.exists(key_file):
+                with open(key_file, 'r') as f:
+                    self.SECRET_KEY = f.read().strip()
+            else:
+                self.SECRET_KEY = secrets.token_urlsafe(32)
+                with open(key_file, 'w') as f:
+                    f.write(self.SECRET_KEY)
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 1440  # 24 hours
     
     # CORS — restrict to known domains

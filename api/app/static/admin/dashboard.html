@@ -6,7 +6,7 @@
     <title>Admin Dashboard — StaffBot.my</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <link rel="stylesheet" href="/static/css/app.css?v=1779798256">
+    <link rel="stylesheet" href="/static/css/app.css?v=1780388378">
 </head>
 <body>
     <button class="sidebar-toggle" onclick="toggleSidebar()">☰</button>
@@ -21,20 +21,28 @@
         <div class="main-content">
             <div class="topbar"><h1>Admin Dashboard</h1></div>
             <div class="grid-4" id="adminStats">
-                <div class="card stat-card"><div class="stat-label">Total Users</div><div class="stat-value" id="stat-users">-</div></div>
-                <div class="card stat-card"><div class="stat-label">Active</div><div class="stat-value" id="stat-active">-</div></div>
-                <div class="card stat-card"><div class="stat-label">Active Containers</div><div class="stat-value" id="stat-containers">-</div></div>
-                <div class="card stat-card"><div class="stat-label">Pending Deployments</div><div class="stat-value" id="stat-pending">-</div></div>
+                <div class="card stat-card" style="border-left:4px solid #3b82f6;background:linear-gradient(135deg,#eff6ff,#dbeafe);border-radius:12px">
+                    <div class="stat-label">👥 Total Users</div><div class="stat-value" style="color:#2563eb" id="stat-users">-</div>
+                </div>
+                <div class="card stat-card" style="border-left:4px solid #22c55e;background:linear-gradient(135deg,#f0fdf4,#dcfce7);border-radius:12px">
+                    <div class="stat-label">✅ Active</div><div class="stat-value" style="color:#16a34a" id="stat-active">-</div>
+                </div>
+                <div class="card stat-card" style="border-left:4px solid #8b5cf6;background:linear-gradient(135deg,#f5f3ff,#ede9fe);border-radius:12px">
+                    <div class="stat-label">🐳 Active Containers</div><div class="stat-value" style="color:#7c3aed" id="stat-containers">-</div>
+                </div>
+                <div class="card stat-card" style="border-left:4px solid #f59e0b;background:linear-gradient(135deg,#fffbeb,#fef3c7);border-radius:12px">
+                    <div class="stat-label">⏳ Pending Deployments</div><div class="stat-value" style="color:#d97706" id="stat-pending">-</div>
+                </div>
             </div>
             <div class="inline-grid-2" style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:24px">
-                <div class="card">
+                <div class="card" style="border-top:3px solid #6366f1;border-radius:12px">
                     <div class="card-header"><h3>📈 Token Usage (7 Days)</h3></div>
                     <div style="padding:16px">
                         <canvas id="tokenChart" height="200"></canvas>
                         <p id="tokenChartEmpty" style="text-align:center;color:var(--text-light);padding:40px;display:none">No token usage data yet. Data appears once containers process requests.</p>
                     </div>
                 </div>
-                <div class="card">
+                <div class="card" style="border-top:3px solid #22c55e;border-radius:12px">
                     <div class="card-header"><h3>💵 Monthly Revenue</h3></div>
                     <div style="padding:16px">
                         <canvas id="revenueChart" height="200"></canvas>
@@ -42,11 +50,11 @@
                     </div>
                 </div>
             </div>
-            <div class="card">
-                <div class="card-header"><h3>System Health</h3></div>
+            <div class="card" style="border-top:3px solid #06b6d4;border-radius:12px">
+                <div class="card-header"><h3>💚 System Health</h3></div>
                 <div id="systemHealth"><p style="color:var(--text-light)">Loading...</p></div>
             </div>
-            <div class="card" style="margin-top:16px">
+            <div class="card" style="margin-top:16px;border-top:3px solid #f59e0b;border-radius:12px">
                 <div class="card-header"><h3>🔄 Recent Activity</h3></div>
                 <div id="recentActivity"><p style="color:var(--text-light)">Loading...</p></div>
             </div>
@@ -77,17 +85,20 @@
             const health = await api('/admin/health');
             document.getElementById('systemHealth').innerHTML = `
                 <div class="inline-grid-3" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px">
-                    <div style="padding:16px;border:1px solid var(--border);border-radius:8px;text-align:center">
-                        <div style="font-size:13px;color:var(--text-light)">API</div>
-                        <div class="status-badge status-${health.api_status === 'ok' ? 'active' : 'error'}">${health.api_status}</div>
+                    <div style="padding:20px 16px;border-radius:10px;text-align:center;background:${health.api_status === 'ok' ? 'linear-gradient(135deg,#f0fdf4,#dcfce7)' : 'linear-gradient(135deg,#fef2f2,#fee2e2)'};border:1px solid ${health.api_status === 'ok' ? '#bbf7d0' : '#fecaca'}">
+                        <div style="font-size:24px;margin-bottom:6px">🖥️</div>
+                        <div style="font-size:13px;font-weight:600;color:var(--text)">API</div>
+                        <div class="status-badge status-${health.api_status === 'ok' ? 'active' : 'error'}" style="margin-top:6px;font-size:12px">${health.api_status === 'ok' ? 'Online' : 'Down'}</div>
                     </div>
-                    <div style="padding:16px;border:1px solid var(--border);border-radius:8px;text-align:center">
-                        <div style="font-size:13px;color:var(--text-light)">Database</div>
-                        <div class="status-badge status-${health.db_status === 'ok' ? 'active' : 'error'}">${health.db_status}</div>
+                    <div style="padding:20px 16px;border-radius:10px;text-align:center;background:${health.db_status === 'ok' ? 'linear-gradient(135deg,#f0fdf4,#dcfce7)' : 'linear-gradient(135deg,#fef2f2,#fee2e2)'};border:1px solid ${health.db_status === 'ok' ? '#bbf7d0' : '#fecaca'}">
+                        <div style="font-size:24px;margin-bottom:6px">🗄️</div>
+                        <div style="font-size:13px;font-weight:600;color:var(--text)">Database</div>
+                        <div class="status-badge status-${health.db_status === 'ok' ? 'active' : 'error'}" style="margin-top:6px;font-size:12px">${health.db_status === 'ok' ? 'Online' : 'Down'}</div>
                     </div>
-                    <div style="padding:16px;border:1px solid var(--border);border-radius:8px;text-align:center">
-                        <div style="font-size:13px;color:var(--text-light)">Server B</div>
-                        <div class="status-badge status-${health.server_b_status === 'ok' ? 'active' : health.server_b_status === 'unreachable' ? 'error' : 'pending'}">${health.server_b_status}</div>
+                    <div style="padding:20px 16px;border-radius:10px;text-align:center;background:${health.server_b_status === 'ok' ? 'linear-gradient(135deg,#f0fdf4,#dcfce7)' : health.server_b_status === 'unreachable' ? 'linear-gradient(135deg,#fef2f2,#fee2e2)' : 'linear-gradient(135deg,#fffbeb,#fef3c7)'};border:1px solid ${health.server_b_status === 'ok' ? '#bbf7d0' : health.server_b_status === 'unreachable' ? '#fecaca' : '#fde68a'}">
+                        <div style="font-size:24px;margin-bottom:6px">🌐</div>
+                        <div style="font-size:13px;font-weight:600;color:var(--text)">Server B</div>
+                        <div class="status-badge status-${health.server_b_status === 'ok' ? 'active' : health.server_b_status === 'unreachable' ? 'error' : 'pending'}" style="margin-top:6px;font-size:12px">${health.server_b_status === 'ok' ? 'Online' : health.server_b_status === 'unreachable' ? 'Offline' : 'Unknown'}</div>
                     </div>
                 </div>
             `;

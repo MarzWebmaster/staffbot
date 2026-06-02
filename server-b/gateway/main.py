@@ -22,7 +22,8 @@ import docker
 from fastapi import FastAPI, HTTPException, Depends, Header
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from typing import Optional, List
+from typing import Optional, List, Dict
+from datetime import datetime
 import numpy as np
 
 AUTH_KEY = os.environ.get("AUTH_KEY", "staffbot-secret-key")
@@ -31,6 +32,20 @@ CONTAINER_DIR = "/root/staffbot/containers"
 STAFFBOT_CORE_IMAGE = "staffbot-core:latest"
 BAILEYS_MANAGER_URL = os.environ.get("BAILEYS_MANAGER_URL", "http://baileys-manager:8653")
 TELEGRAM_MANAGER_URL = os.environ.get("TELEGRAM_MANAGER_URL", "http://telegram-manager:8654")
+STAFFBOT_API_URL = os.environ.get("STAFFBOT_API_URL", "http://staffbot-api:8000")
+# Provider pricing per 1M tokens (what we pay)
+PROVIDER_PRICING = {
+    "deepseek-pchp17": {"input": 0.14, "output": 0.28},
+    "deepseek-chat": {"input": 0.27, "output": 1.10},
+    "deepseek-v4-flash": {"input": 0.14, "output": 0.28},
+    "deepseek-reasoner": {"input": 0.55, "output": 2.19},
+    "gemini": {"input": 0.10, "output": 0.40},
+    "gemini-2.0-flash": {"input": 0.10, "output": 0.40},
+    "gemini-2.0-pro": {"input": 1.25, "output": 5.00},
+    "openrouter": {"input": 0.15, "output": 0.60},
+}
+STAFFBOT_TOKEN_RATE = float(os.environ.get("STAFFBOT_TOKEN_RATE", "0.10"))  # USD per 1M tokens (StaffBot rate to customer)
+STAFFBOT_API_KEY = os.environ.get("STAFFBOT_API_KEY", AUTH_KEY)
 
 
 def validate_container_name(name: str) -> str:
@@ -82,6 +97,15 @@ class MemorySave(BaseModel):
     client_id: int
     content: str
     metadata: dict = {}
+
+class ChatRequest(BaseModel):
+    client_id: int
+    container_id: Optional[int] = None
+    content: str
+    provider: str = "openrouter"
+    model: Optional[str] = None
+    api_key: Optional[str] = None
+    system_context: Optional[dict] = None
 
 
 async def verify_auth(x_api_key: str = Header(None)):
@@ -564,6 +588,342 @@ async def save_memory(data: MemorySave, auth=Depends(verify_auth)):
         if conn:
             await conn.close()
 
+
+
+
+# =====================
+
+
+# =====================
+# Chat + LLM Proxy with Token Tracking
+# =====================
+
+# ── Provider key cache (TTL 5 min) ──
+_provider_cache: Dict[str, dict] = {}
+_CACHE_TTL = 300  # 5 minutes
+
+def _cache_get(key: str) -> Optional[dict]:
+    entry = _provider_cache.get(key)
+    if entry:
+        age = (datetime.now() - entry.get("ts", datetime.min)).total_seconds()
+        if age < _CACHE_TTL:
+            return entry["data"]
+    return None
+
+def _cache_set(key: str, data: dict):
+    _provider_cache[key] = {"data": data, "ts": datetime.now()}
+
+
+def _calc_cost(provider: str, model: str, input_tokens: int, output_tokens: int) -> dict:
+    """Calculate dual cost: provider cost (what we pay) + StaffBot rate (what customer pays)."""
+    pricing = PROVIDER_PRICING.get(provider, {"input": 0.15, "output": 0.60})
+    provider_input_rate = pricing.get("input", 0.15) / 1_000_000
+    provider_output_rate = pricing.get("output", 0.60) / 1_000_000
+    provider_cost = (input_tokens * provider_input_rate) + (output_tokens * provider_output_rate)
+    
+    staffbot_rate = STAFFBOT_TOKEN_RATE / 1_000_000
+    staffbot_cost = (input_tokens + output_tokens) * staffbot_rate
+    
+    return {
+        "provider_cost": round(provider_cost, 6),
+        "staffbot_cost": round(staffbot_cost, 6),
+        "staffbot_rate_per_1m": STAFFBOT_TOKEN_RATE,
+        "provider_rates": {"input": pricing.get("input"), "output": pricing.get("output")},
+    }
+
+
+@app.post("/api/chat/send")
+async def chat_send(req: ChatRequest, auth=Depends(verify_auth)):
+    """Chat endpoint — LLM proxy with token tracking + quota enforcement.
+    
+    Flow:
+    1. Resolve provider config (cached BYOK or managed)
+    2. Check quota before calling LLM
+    3. Call LLM provider API (with retry)
+    4. Save chat messages
+    5. Record token usage with dual cost
+    6. Update managed_token_used
+    7. Return response
+    """
+    client_id = req.client_id
+    provider_name = req.provider
+    model = req.model
+    content = req.content
+    byok_key = req.api_key
+
+    # ── 1. Resolve provider + API key ──
+    if byok_key:
+        api_key = byok_key
+        base_url = "https://api.deepseek.com/v1"
+        if provider_name == "openrouter":
+            base_url = "https://openrouter.ai/api/v1"
+        elif provider_name == "gemini":
+            base_url = "https://generativelanguage.googleapis.com/v1beta/models"
+        if not model:
+            model = "deepseek-v4-flash"
+    else:
+        # Check cache first
+        cache_key = provider_name
+        cached = _cache_get(cache_key)
+        if cached:
+            api_key = cached["api_key"]
+            base_url = cached["base_url"]
+            if not model:
+                model = cached.get("default_model", "deepseek-v4-flash")
+        else:
+            resolved = await _resolve_provider(provider_name, client_id)
+            if not resolved:
+                raise HTTPException(status_code=502, detail=f"Provider '{provider_name}' not available")
+            api_key = resolved.get("api_key", "")
+            base_url = resolved.get("base_url", "")
+            if not model:
+                model = resolved.get("default_model", "deepseek-v4-flash")
+            _cache_set(cache_key, {"api_key": api_key, "base_url": base_url, "default_model": model})
+    
+    if not api_key:
+        raise HTTPException(status_code=502, detail=f"No API key available for provider: {provider_name}")
+
+    # ── 2. Check quota (cached for 30s) ──
+    quota_cache_key = f"quota_{client_id}"
+    quota_info = _cache_get(quota_cache_key)
+    if not quota_info:
+        quota_info = await _check_quota(client_id)
+        _cache_set(quota_cache_key, quota_info)
+    
+    if quota_info.get("exceeded"):
+        return {
+            "success": False,
+            "error": "token_quota_exceeded",
+            "message": f"Token quota exceeded. Used: {quota_info['used']}, Limit: {quota_info['quota']}",
+            "quota": quota_info["quota"],
+            "used": quota_info["used"],
+        }
+
+    # ── 3. Call LLM with retry (3 attempts) ──
+    import asyncio
+    llm_response = None
+    last_error = None
+    for attempt in range(3):
+        try:
+            llm_response = await _call_llm(
+                base_url=base_url,
+                api_key=api_key,
+                model=model,
+                messages=[{"role": "user", "content": content}],
+                system_context=req.system_context,
+            )
+            break
+        except Exception as e:
+            last_error = e
+            if attempt < 2:
+                await asyncio.sleep(1.0 * (attempt + 1))
+    
+    if not llm_response:
+        raise HTTPException(status_code=502, detail=f"LLM error after 3 retries: {str(last_error)}")
+
+    # ── 4. Calculate costs ──
+    input_tokens = llm_response.get("input_tokens", 0)
+    output_tokens = llm_response.get("output_tokens", 0)
+    total_tokens = input_tokens + output_tokens
+    costs = _calc_cost(provider_name, model, input_tokens, output_tokens)
+    
+    # ── 5. Save chat messages ──
+    await _save_chat_message(client_id, req.container_id, "user", content, model, provider_name, 0)
+    await _save_chat_message(client_id, req.container_id, "assistant", llm_response.get("content", ""), model, provider_name, total_tokens)
+    
+    # ── 6. Record token usage with dual cost ──
+    await _record_token_usage(
+        client_id=client_id,
+        provider=provider_name,
+        model=model,
+        input_tokens=input_tokens,
+        output_tokens=output_tokens,
+        total_tokens=total_tokens,
+        provider_cost=costs["provider_cost"],
+    )
+    
+    # ── 7. Update managed_token_used ──
+    await _update_quota(client_id, total_tokens)
+    
+    # Invalidate quota cache
+    _provider_cache.pop(quota_cache_key, None)
+
+    return {
+        "success": True,
+        "content": llm_response.get("content", ""),
+        "model": model,
+        "provider": provider_name,
+        "tokens": {
+            "input": input_tokens,
+            "output": output_tokens,
+            "total": total_tokens,
+        },
+        "costs": costs,
+    }
+
+
+@app.get("/api/chat/history")
+async def chat_history(client_id: int, container_id: Optional[int] = None, limit: int = 50, auth=Depends(verify_auth)):
+    """Get chat history for a client."""
+    conn = None
+    try:
+        conn = await asyncpg.connect(DATABASE_URL)
+        query = "SELECT id, client_id, container_id, role, content, model, provider, tokens_used, created_at FROM chat_messages WHERE client_id = $1"
+        params: list = [client_id]
+        if container_id:
+            query += " AND container_id = $2"
+            params.append(container_id)
+        query += f" ORDER BY created_at DESC LIMIT ${len(params) + 1}"
+        params.append(limit)
+        
+        rows = await conn.fetch(query, *params)
+        return {
+            "success": True,
+            "messages": [dict(r) for r in rows],
+        }
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+    finally:
+        if conn:
+            await conn.close()
+
+
+# ── LLM Helper Functions ──
+
+async def _resolve_provider(provider_name: str, client_id: int) -> Optional[dict]:
+    """Resolve provider config from Server A API (returns decrypted key)."""
+    try:
+        async with httpx.AsyncClient(timeout=15) as client:
+            resp = await client.post(
+                f"{STAFFBOT_API_URL}/api/v1/internal/provider/resolve",
+                json={"provider_name": provider_name, "client_id": client_id},
+                headers={"x-api-key": STAFFBOT_API_KEY, "Content-Type": "application/json"},
+            )
+            if resp.status_code == 200:
+                return resp.json()
+            return None
+    except Exception:
+        return None
+
+
+async def _check_quota(client_id: int) -> dict:
+    """Check if client has remaining token quota."""
+    conn = None
+    try:
+        conn = await asyncpg.connect(DATABASE_URL)
+        row = await conn.fetchrow(
+            "SELECT managed_token_quota, managed_token_used FROM subscriptions WHERE client_id = $1",
+            client_id,
+        )
+        if not row:
+            return {"quota": 0, "used": 0, "exceeded": False, "remaining": 0}
+        
+        quota = float(row["managed_token_quota"] or 0)
+        used = float(row["managed_token_used"] or 0)
+        
+        if quota <= 0:
+            return {"quota": 0, "used": used, "exceeded": False, "remaining": -1}
+        
+        return {
+            "quota": quota,
+            "used": used,
+            "remaining": max(0, quota - used),
+            "exceeded": used >= quota,
+        }
+    except Exception as e:
+        return {"quota": 0, "used": 0, "exceeded": False, "remaining": -1, "error": str(e)}
+    finally:
+        if conn:
+            await conn.close()
+
+
+async def _call_llm(base_url: str, api_key: str, model: str, messages: list, system_context: Optional[dict] = None) -> dict:
+    """Call LLM provider API (OpenAI-compatible format)."""
+    url = f"{base_url.rstrip('/')}/chat/completions"
+    
+    if system_context:
+        sys_msg = f"[SYSTEM CONTEXT]\n{json.dumps(system_context, indent=2)}"
+        messages = [{"role": "system", "content": sys_msg}] + messages
+
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json",
+    }
+    
+    payload = {
+        "model": model,
+        "messages": messages,
+        "max_tokens": 4096,
+        "temperature": 0.7,
+    }
+    
+    async with httpx.AsyncClient(timeout=120) as client:
+        resp = await client.post(url, json=payload, headers=headers)
+        
+        if resp.status_code != 200:
+            error_detail = resp.text[:500]
+            raise Exception(f"LLM API error {resp.status_code}: {error_detail}")
+        
+        data = resp.json()
+        
+        return {
+            "content": data["choices"][0]["message"]["content"],
+            "model": data.get("model", model),
+            "input_tokens": data.get("usage", {}).get("prompt_tokens", 0),
+            "output_tokens": data.get("usage", {}).get("completion_tokens", 0),
+        }
+
+
+async def _save_chat_message(client_id: int, container_id: Optional[int], role: str, content: str, model: str, provider: str, tokens_used: int):
+    """Save a chat message to chat_messages table."""
+    conn = None
+    try:
+        conn = await asyncpg.connect(DATABASE_URL)
+        await conn.execute(
+            """INSERT INTO chat_messages 
+               (client_id, container_id, role, content, model, provider, tokens_used, created_at)
+               VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())""",
+            client_id, container_id, role, content, model, provider, tokens_used,
+        )
+    except Exception:
+        pass
+    finally:
+        if conn:
+            await conn.close()
+
+
+async def _record_token_usage(client_id: int, provider: str, model: str, input_tokens: int, output_tokens: int, total_tokens: int, provider_cost: float = 0.0):
+    """Insert token usage record into token_usage_log with provider cost."""
+    conn = None
+    try:
+        conn = await asyncpg.connect(DATABASE_URL)
+        await conn.execute(
+            """INSERT INTO token_usage_log 
+               (client_id, provider, model, input_tokens, output_tokens, total_tokens, cost, endpoint, created_at)
+               VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW())""",
+            client_id, provider, model, input_tokens, output_tokens, total_tokens, provider_cost, "/api/chat/send",
+        )
+    except Exception:
+        pass
+    finally:
+        if conn:
+            await conn.close()
+
+
+async def _update_quota(client_id: int, tokens_used: int):
+    """Update managed_token_used in subscriptions."""
+    conn = None
+    try:
+        conn = await asyncpg.connect(DATABASE_URL)
+        await conn.execute(
+            "UPDATE subscriptions SET managed_token_used = managed_token_used + $2 WHERE client_id = $1",
+            client_id, tokens_used,
+        )
+    except Exception:
+        pass
+    finally:
+        if conn:
+            await conn.close()
 
 def _docker_ok():
     try: docker_client.ping(); return "ok"

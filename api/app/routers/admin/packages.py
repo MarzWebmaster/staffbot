@@ -46,88 +46,40 @@ async def list_categories(
     admin: Client = Depends(get_current_admin),
     db: AsyncSession = Depends(get_db),
 ):
-    """List all skill and tool categories dynamically from BUILTIN_SKILLS/BUILTIN_TOOLSETS."""
-    import ast, re
+    """List skill categories from DB with individual skills. Tool categories from DB tool_categories."""
+    import re
 
-    # Read policy.py to extract BUILTIN_SKILLS and BUILTIN_TOOLSETS
-    policy_path = os.path.join(os.path.dirname(__file__), "policy.py")
-    if not os.path.exists(policy_path):
-        return {"skill_categories": [], "tool_categories": []}
+    # ── Skills: query from skills_registry with individual names ──
+    result = await db.execute(
+        text("SELECT display_category, name FROM skills_registry WHERE category NOT LIKE '.archive%' AND display_category IS NOT NULL ORDER BY display_category, name")
+    )
+    skill_rows = result.fetchall()
+    skill_cats = {}
+    for dc, name in skill_rows:
+        if dc not in skill_cats:
+            skill_cats[dc] = {"name": dc, "display_name": dc, "count": 0, "skills": []}
+        skill_cats[dc]["skills"].append(name)
+        skill_cats[dc]["count"] += 1
+    skill_categories = sorted(skill_cats.values(), key=lambda x: -x["count"])
 
-    with open(policy_path, "r") as f:
-        policy_content = f.read()
-
-    # Extract BUILTIN_SKILLS section
-    skills_start = policy_content.find("BUILTIN_SKILLS = [")
-    skills_end = policy_content.find("BUILTIN_TOOLSETS = [")
-    skills_section = policy_content[skills_start:skills_end] if skills_start >= 0 else ""
-
-    # Extract skill dicts and group by category
-    skill_categories = {}
-    if skills_section:
-        idx = 0
-        while idx < len(skills_section):
-            bs = skills_section.find("{", idx)
-            if bs == -1: break
-            depth = 1; be = bs + 1
-            while depth > 0 and be < len(skills_section):
-                if skills_section[be] == "{": depth += 1
-                elif skills_section[be] == "}": depth -= 1
-                be += 1
-            d = skills_section[bs:be]
-            id_m = re.search(r'"id": "([a-zA-Z0-9_-]+)"', d)
-            cat_m = re.search(r'"category": "([a-zA-Z0-9_-]+)"', d)
-            name_m = re.search(r'"name": "([^"]+)"', d)
-            desc_m = re.search(r'"desc": "([^"]+)"', d)
-            if id_m and cat_m:
-                cat = cat_m.group(1)
-                if cat not in skill_categories:
-                    skill_categories[cat] = {"name": cat, "display_name": cat.replace("-", " ").title(), "skills": [], "count": 0}
-                skill_categories[cat]["skills"].append({
-                    "id": id_m.group(1),
-                    "name": name_m.group(1) if name_m else id_m.group(1),
-                    "desc": desc_m.group(1) if desc_m else "",
-                })
-                skill_categories[cat]["count"] += 1
-            idx = be
-
-    # Extract BUILTIN_TOOLSETS section
-    tools_start = policy_content.find("BUILTIN_TOOLSETS = [")
-    tools_end = policy_content.find("DEFAULT_GOVERNANCE_POLICY")
-    # Go back 2 chars to exclude the newlines before it
-    if tools_end > 2:
-        tools_end -= 2
-    tools_section = policy_content[tools_start:tools_end] if tools_start >= 0 else ""
-
-    tool_categories = {}
-    if tools_section:
-        idx = 0
-        while idx < len(tools_section):
-            bs = tools_section.find("{", idx)
-            if bs == -1: break
-            depth = 1; be = bs + 1
-            while depth > 0 and be < len(tools_section):
-                if tools_section[be] == "{": depth += 1
-                elif tools_section[be] == "}": depth -= 1
-                be += 1
-            d = tools_section[bs:be]
-            id_m = re.search(r'"id": "([a-zA-Z0-9_-]+)"', d)
-            cat_m = re.search(r'"category": "([a-zA-Z0-9_-]+)"', d)
-            name_m = re.search(r'"name": "([^"]+)"', d)
-            if id_m and cat_m:
-                cat = cat_m.group(1)
-                if cat not in tool_categories:
-                    tool_categories[cat] = {"name": cat, "display_name": cat.replace("-", " ").title(), "tools": [], "count": 0}
-                tool_categories[cat]["tools"].append({
-                    "id": id_m.group(1),
-                    "name": name_m.group(1) if name_m else id_m.group(1),
-                })
-                tool_categories[cat]["count"] += 1
-            idx = be
+    # ── Tools: query from tool_categories DB table ──
+    tool_result = await db.execute(
+        text("SELECT id, name, display_name, icon FROM tool_categories WHERE is_active = true ORDER BY sort_order")
+    )
+    tool_rows = tool_result.fetchall()
+    tool_categories = []
+    for tid, tname, tdisplay, ticon in tool_rows:
+        tool_categories.append({
+            "name": tname,
+            "display_name": tdisplay or tname.replace("-", " ").title(),
+            "count": 1,
+            "icon": ticon or "",
+            "tools": [{"id": tname, "name": tdisplay or tname}],
+        })
 
     return {
-        "skill_categories": sorted(skill_categories.values(), key=lambda x: -x["count"]),
-        "tool_categories": sorted(tool_categories.values(), key=lambda x: -x["count"]),
+        "skill_categories": skill_categories,
+        "tool_categories": tool_categories,
     }
 
 
@@ -155,6 +107,8 @@ async def create_package(
         tool_category_ids=data.tool_category_ids,
         allowed_skill_categories=data.allowed_skill_categories,
         allowed_tool_categories=data.allowed_tool_categories,
+        enabled_skills=data.enabled_skills,
+        enabled_tools=data.enabled_tools,
         sort_order=data.sort_order,
         is_active=True,
         trial_days=data.trial_days,
@@ -323,6 +277,8 @@ def _pkg_to_dict(pkg: Package, admin: bool = False) -> dict:
         "tool_category_ids": pkg.tool_category_ids or [],
         "allowed_skill_categories": pkg.allowed_skill_categories or [],
         "allowed_tool_categories": pkg.allowed_tool_categories or [],
+        "enabled_skills": pkg.enabled_skills or [],
+        "enabled_tools": pkg.enabled_tools or [],
     }
     if admin:
         data.update({

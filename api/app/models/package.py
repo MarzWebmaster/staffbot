@@ -27,6 +27,8 @@ class Package(Base):
     tool_category_ids = Column(ARRAY(Integer), default=[])
     allowed_skill_categories = Column(JSON, default=list)
     allowed_tool_categories = Column(JSON, default=list)
+    enabled_skills = Column(JSON, default=list)
+    enabled_tools = Column(JSON, default=list)
     sort_order = Column(Integer, default=0)
     trial_days = Column(Integer, default=0)
     is_public = Column(Boolean, default=True)

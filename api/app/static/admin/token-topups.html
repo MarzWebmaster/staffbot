@@ -24,8 +24,8 @@
 
             <div class="grid-3" id="packagesContainer"><p style="color:var(--text-light)">Loading...</p></div>
 
-            <div class="card" style="margin-top:16px">
-                <div class="card-header"><h3>Top-Up History</h3></div>
+            <div class="card admin-card admin-card-green" style="margin-top:16px;border-radius:12px">
+                <div class="card-header"><h3>📜 Top-Up History</h3></div>
                 <div id="historyContainer"><p style="color:var(--text-light);padding:16px;text-align:center">No top-up transactions yet.</p></div>
             </div>
         </div>
@@ -75,7 +75,7 @@
                 return;
             }
             container.innerHTML = pkgs.map(p => `
-                <div class="card" style="${!p.is_active ? 'opacity:0.6' : ''}">
+                <div class="card admin-card admin-card-green" style="border-radius:12px;${!p.is_active ? 'opacity:0.6' : ''}">
                     <div style="font-size:32px;text-align:center;margin-bottom:8px">💰</div>
                     <h3 style="font-size:16px;text-align:center">${p.name}</h3>
                     <div style="font-size:28px;font-weight:700;text-align:center;margin:8px 0">RM${p.price_myr}</div>

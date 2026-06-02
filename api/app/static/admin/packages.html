@@ -5,21 +5,37 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Packages — StaffBot.my Admin</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="stylesheet" href="/static/css/app.css?v=1779798256">
+    <link rel="stylesheet" href="/static/css/app.css?v=1780388378">
     <style>
-        .cat-checkbox { display: flex; align-items: center; gap: 6px; padding: 8px 12px; border: 1px solid #d1d5db; border-radius: 8px; background: #f9fafb; cursor: pointer; font-size: 13px; color: #374151; transition: all 0.2s; }
-        .cat-checkbox:hover { border-color: #93c5fd; background: #dbeafe; }
-        .cat-checkbox.checked { border-color: #3b82f6; background: #bfdbfe; color: #1d4ed8; }
-        .cat-checkbox input { display: none; }
-        .cat-id-badge { font-size: 10px; color: #9ca3af; margin-left: 4px; }
-        .package-card { background: #1e293b; border: 1px solid rgba(255,255,255,0.08); border-radius: 16px; padding: 24px; position: relative; }
-        .package-card:hover { border-color: rgba(59,130,246,0.3); }
+        .package-card { background: linear-gradient(135deg,#f5f3ff,#ede9fe); border: 1px solid #ddd6fe; border-top:4px solid #8b5cf6; border-radius: 16px; padding: 24px; position: relative; }
+        .package-card:hover { border-color: #7c3aed; box-shadow: 0 4px 16px rgba(139,92,246,0.15); }
         .public-badge { font-size: 11px; padding: 3px 10px; border-radius: 12px; font-weight: 500; }
         .public-badge.public { background: rgba(34,197,94,0.15); color: #22c55e; }
         .public-badge.private { background: rgba(239,68,68,0.15); color: #ef4444; }
         .pkg-badge-tag { font-size: 11px; font-weight: 600; padding: 3px 10px; border-radius: 6px; text-transform: uppercase; letter-spacing: 0.5px; }
         .badge-popular { background: linear-gradient(135deg, #3b82f6, #8b5cf6); color: #fff; }
         .badge-best { background: linear-gradient(135deg, #f59e0b, #ef4444); color: #fff; }
+
+        /* Category toggle cards */
+        .cat-toggle { display: flex; align-items: center; padding: 10px 14px; border: 1px solid #e5e7eb; border-radius: 10px; background: #fff; cursor: pointer; transition: all 0.15s; gap: 10px; }
+        .cat-toggle:hover { border-color: #c4b5fd; }
+        .cat-toggle.selected { border-color: #c4b5fd; background: #faf5ff; }
+        .cat-toggle-info { flex: 1; min-width: 0; }
+        .cat-toggle-name { font-weight: 600; font-size: 13px; color: #374151; }
+        .cat-toggle-count { font-size: 11px; color: #9ca3af; }
+        .cat-toggle.selected .cat-toggle-name { color: #5b21b6; }
+        .cat-toggle.selected .cat-toggle-count { color: #7c3aed; }
+
+        /* Toggle switch */
+        .toggle-switch { position: relative; width: 36px; height: 20px; flex-shrink: 0; }
+        .toggle-switch input { display: none; }
+        .toggle-slider { position: absolute; inset: 0; background: #d1d5db; border-radius: 20px; transition: background 0.2s; cursor: pointer; }
+        .toggle-slider::after { content: ''; position: absolute; left: 2px; top: 2px; width: 16px; height: 16px; background: #fff; border-radius: 50%; transition: transform 0.2s; }
+        .toggle-switch input:checked + .toggle-slider { background: #7c3aed; }
+        .toggle-switch input:checked + .toggle-slider::after { transform: translateX(16px); }
+
+        .section-title { font-size: 12px; font-weight: 600; margin-bottom: 2px; color: var(--text-light); text-transform: uppercase; }
+        .section-sub { font-weight: 400; color: rgba(255,255,255,0.3); font-size: 11px; }
     </style>
 </head>
 <body>
@@ -37,6 +53,9 @@
                 <button class="btn btn-primary" onclick="showAddPackage()">+ Add Package</button>
             </div>
             <div id="packagesContainer"><p style="color:var(--text-light)">Loading...</p></div>
+            <div class="card admin-card admin-card-indigo" style="margin-top:16px;padding:16px;border-radius:12px;text-align:center;color:var(--text-light)">
+                <small>💡 Packages define subscription tiers. Add providers (LLM API keys) to each package in the <strong>LLM Providers</strong> page.</small>
+            </div>
         </div>
     </div>
 
@@ -46,24 +65,20 @@
             <h3 id="pkgModalTitle">Add Package</h3>
             <form onsubmit="return savePackage(event)">
                 <input type="hidden" id="pkgId">
-                
+
                 <div class="grid-3" style="margin-bottom:12px">
                     <div class="form-group"><label>Name (key)</label><input type="text" class="form-input" id="pkgName" placeholder="basic" required></div>
                     <div class="form-group"><label>Display Name</label><input type="text" class="form-input" id="pkgDisplay" placeholder="Basic" required></div>
                     <div class="form-group"><label>Monthly Price (RM)</label><input type="number" class="form-input" id="pkgPrice" step="0.01" required></div>
                 </div>
-                
+
                 <div style="border-top:1px solid var(--border);margin:12px 0;padding-top:12px">
                     <p style="font-size:12px;font-weight:600;margin-bottom:8px;color:var(--text-light);text-transform:uppercase">🏷️ Homepage Badge</p>
-                    <div style="display:flex;gap:16px;align-items:center">
-                        <div class="form-group" style="flex:1">
-                            <select class="form-input" id="pkgBadge">
-                                <option value="">— None —</option>
-                                <option value="most_popular">🌟 Most Popular</option>
-                                <option value="best_choice">🏆 Best Choice</option>
-                            </select>
-                        </div>
-                    </div>
+                    <select class="form-input" id="pkgBadge" style="max-width:300px">
+                        <option value="">— None —</option>
+                        <option value="most_popular">🌟 Most Popular</option>
+                        <option value="best_choice">🏆 Best Choice</option>
+                    </select>
                 </div>
 
                 <div style="border-top:1px solid var(--border);margin:12px 0;padding-top:12px">
@@ -98,16 +113,16 @@
                     </div>
                 </div>
 
-                <!-- Skills Categories -->
+                <!-- Skills Categories — Category-level toggle only -->
                 <div style="border-top:1px solid var(--border);margin:12px 0;padding-top:12px">
-                    <p style="font-size:12px;font-weight:600;margin-bottom:8px;color:var(--text-light);text-transform:uppercase">🧠 Skills Categories <span style="font-weight:400;color:rgba(255,255,255,0.3)">(enable/disable per package)</span></p>
-                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px" id="skillsCheckboxes"></div>
+                    <p class="section-title">🧠 Skills Categories <span class="section-sub">(enable/disable whole category — all skills inside follow)</span></p>
+                    <div id="skillsContainer" style="display:grid;grid-template-columns:1fr 1fr;gap:6px;max-height:400px;overflow-y:auto"></div>
                 </div>
 
-                <!-- Tools Categories -->
+                <!-- Tools — Category/integration-level toggle -->
                 <div style="border-top:1px solid var(--border);margin:12px 0;padding-top:12px">
-                    <p style="font-size:12px;font-weight:600;margin-bottom:8px;color:var(--text-light);text-transform:uppercase">🔧 Tools Categories <span style="font-weight:400;color:rgba(255,255,255,0.3)">(enable/disable per package)</span></p>
-                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px" id="toolsCheckboxes"></div>
+                    <p class="section-title">🔧 Tools & Integrations <span class="section-sub">(enable/disable whole tool)</span></p>
+                    <div id="toolsContainer" style="display:grid;grid-template-columns:1fr 1fr;gap:6px;max-height:300px;overflow-y:auto"></div>
                 </div>
 
                 <div class="form-group"><label>Description</label><textarea class="form-input" id="pkgDesc" rows="2"></textarea></div>
@@ -127,8 +142,8 @@
     <script>
     let skillCategories = [];
     let toolCategories = [];
-    let selectedSkills = [];
-    let selectedTools = [];
+    let selectedSkillCats = [];  // category names
+    let selectedToolCats = [];   // tool names
 
     async function init() {
         const user = await checkAdminAuth('/admin/login.html');
@@ -144,41 +159,48 @@
             const sc = await api('/admin/packages/categories');
             skillCategories = sc.skill_categories || [];
             toolCategories = sc.tool_categories || [];
-        } catch(e) {
-            console.log('Failed to load categories:', e);
-        }
+        } catch(e) { console.log('Failed to load categories:', e); }
     }
 
-    function renderCategoryCheckboxes() {
-        document.getElementById('skillsCheckboxes').innerHTML = skillCategories.map(c => {
-            const checked = selectedSkills.includes(c.name);
-            return '<label class="cat-checkbox' + (checked ? ' checked' : '') + '" onclick="toggleSkill(&#39;' + c.name + '&#39;, this)">' +
-                '<input type="checkbox" value="' + c.name + '"' + (checked ? ' checked' : '') + '>' +
-                c.display_name +
-                '<span class="cat-id-badge">(' + c.count + ' skills)</span>' +
-            '</label>';
+    function toggleSkillCat(name) {
+        const idx = selectedSkillCats.indexOf(name);
+        if (idx >= 0) selectedSkillCats.splice(idx, 1);
+        else selectedSkillCats.push(name);
+        renderSkills();
+    }
+
+    function toggleToolCat(name) {
+        const idx = selectedToolCats.indexOf(name);
+        if (idx >= 0) selectedToolCats.splice(idx, 1);
+        else selectedToolCats.push(name);
+        renderTools();
+    }
+
+    function renderSkills() {
+        document.getElementById('skillsContainer').innerHTML = skillCategories.map(c => {
+            const checked = selectedSkillCats.includes(c.name);
+            return '<div class="cat-toggle' + (checked ? ' selected' : '') + '" onclick="toggleSkillCat(\'' + c.name + '\')">' +
+                '<div class="cat-toggle-info">' +
+                    '<div class="cat-toggle-name">' + c.display_name + '</div>' +
+                    '<div class="cat-toggle-count">' + c.count + ' skills</div>' +
+                '</div>' +
+                '<label class="toggle-switch" onclick="event.stopPropagation()"><input type="checkbox"' + (checked ? ' checked' : '') + ' onchange="toggleSkillCat(\'' + c.name + '\')"><span class="toggle-slider"></span></label>' +
+            '</div>';
         }).join('');
+    }
 
-        document.getElementById('toolsCheckboxes').innerHTML = toolCategories.map(c => {
-            const checked = selectedTools.includes(c.name);
-            return '<label class="cat-checkbox' + (checked ? ' checked' : '') + '" onclick="toggleTool(&#39;' + c.name + '&#39;, this)">' +
-                '<input type="checkbox" value="' + c.name + '"' + (checked ? ' checked' : '') + '>' +
-                c.display_name +
-                '<span class="cat-id-badge">(' + c.count + ' tools)</span>' +
-            '</label>';
+    function renderTools() {
+        document.getElementById('toolsContainer').innerHTML = toolCategories.map(tc => {
+            const tname = (tc.tools && tc.tools.length > 0) ? tc.tools[0].id : tc.name;
+            const tdisplay = (tc.tools && tc.tools.length > 0) ? tc.tools[0].name : tc.display_name;
+            const icon = tc.icon || '🔌';
+            const checked = selectedToolCats.includes(tname);
+            return '<div class="cat-toggle' + (checked ? ' selected' : '') + '" onclick="toggleToolCat(\'' + tname + '\')">' +
+                '<span style="font-size:18px">' + icon + '</span>' +
+                '<div class="cat-toggle-info"><div class="cat-toggle-name">' + tdisplay + '</div></div>' +
+                '<label class="toggle-switch" onclick="event.stopPropagation()"><input type="checkbox"' + (checked ? ' checked' : '') + ' onchange="toggleToolCat(\'' + tname + '\')"><span class="toggle-slider"></span></label>' +
+            '</div>';
         }).join('');
-    }
-
-    function toggleSkill(id, el) {
-        const idx = selectedSkills.indexOf(id);
-        if (idx >= 0) { selectedSkills.splice(idx, 1); el.classList.remove('checked'); }
-        else { selectedSkills.push(id); el.classList.add('checked'); }
-    }
-
-    function toggleTool(id, el) {
-        const idx = selectedTools.indexOf(id);
-        if (idx >= 0) { selectedTools.splice(idx, 1); el.classList.remove('checked'); }
-        else { selectedTools.push(id); el.classList.add('checked'); }
     }
 
     function showAddPackage() {
@@ -199,9 +221,10 @@
         document.getElementById('pkgDesc').value = '';
         document.getElementById('pkgFeatures').value = '';
         document.getElementById('pkgSort').value = '0';
-        selectedSkills = [];
-        selectedTools = [];
-        renderCategoryCheckboxes();
+        selectedSkillCats = [];
+        selectedToolCats = [];
+        renderSkills();
+        renderTools();
         document.getElementById('savePkgBtn').textContent = 'Add Package';
         openModal('packageModal');
     }
@@ -224,9 +247,10 @@
         document.getElementById('pkgDesc').value = pkg.description || '';
         document.getElementById('pkgFeatures').value = (pkg.features || []).join('\n');
         document.getElementById('pkgSort').value = pkg.sort_order || 0;
-        selectedSkills = pkg.allowed_skill_categories || pkg.skill_category_ids || [];
-        selectedTools = pkg.allowed_tool_categories || pkg.tool_category_ids || [];
-        renderCategoryCheckboxes();
+        selectedSkillCats = pkg.allowed_skill_categories || pkg.skill_category_ids || [];
+        selectedToolCats = pkg.allowed_tool_categories || pkg.tool_category_ids || [];
+        renderSkills();
+        renderTools();
         document.getElementById('savePkgBtn').textContent = 'Save Changes';
         openModal('packageModal');
     }
@@ -249,10 +273,12 @@
             badge: document.getElementById('pkgBadge').value || null,
             description: document.getElementById('pkgDesc').value,
             features: document.getElementById('pkgFeatures').value.split('\n').filter(f => f.trim()),
-            allowed_skill_categories: selectedSkills,
-            allowed_tool_categories: selectedTools,
-            skill_category_ids: selectedSkills,
-            tool_category_ids: selectedTools,
+            allowed_skill_categories: selectedSkillCats,
+            allowed_tool_categories: selectedToolCats,
+            skill_category_ids: [],
+            tool_category_ids: [],
+            enabled_skills: [],
+            enabled_tools: [],
             sort_order: parseInt(document.getElementById('pkgSort').value) || 0,
         };
 
@@ -266,9 +292,7 @@
             }
             closeModal('packageModal');
             loadPackages();
-        } catch(e) {
-            showToast(e.message || 'Failed to save', 'error');
-        }
+        } catch(e) { showToast(e.message || 'Failed to save', 'error'); }
         return false;
     }
 
@@ -285,9 +309,11 @@
                 document.getElementById('packagesContainer').innerHTML = '<p style="color:var(--text-light);text-align:center;padding:40px">No packages yet. Click "+ Add Package" to create one.</p>';
                 return;
             }
-            document.getElementById('packagesContainer').innerHTML = 
+            document.getElementById('packagesContainer').innerHTML =
                 '<div class="grid-3">' + pkgs.map(p => {
                     const esc = JSON.stringify(p).replace(/'/g, "&#39;");
+                    const skillCount = (p.allowed_skill_categories || []).length;
+                    const toolCount = (p.allowed_tool_categories || []).length;
                     return '<div class="package-card" style="' + (!p.is_active ? 'opacity:0.6' : '') + '">' +
                         '<div style="display:flex;justify-content:space-between;align-items:start;margin-bottom:12px">' +
                             '<div>' +
@@ -300,7 +326,7 @@
                                 (p.trial_days > 0 ? '<span style="font-size:11px;background:rgba(168,85,247,0.15);color:#a855f7;padding:3px 10px;border-radius:12px">' + p.trial_days + 'd trial</span>' : '') +
                             '</div>' +
                         '</div>' +
-                        '<div style="font-size:24px;font-weight:700;margin-bottom:12px">RM' + (p.price_monthly || 0) + '<span style="font-size:14px;font-weight:400;color:var(--text-light)">/month</span></div>' +
+                        '<div style="font-size:28px;font-weight:700;margin-bottom:12px;color:#5b21b6">RM' + (p.price_monthly || 0) + '<span style="font-size:14px;font-weight:400;color:#8b5cf6">/month</span></div>' +
                         '<div style="font-size:13px;color:var(--text-light);line-height:1.7;margin-bottom:12px">' +
                             '<div>🤖 ' + p.bot_limit + ' bot(s) · 👥 ' + (p.sub_ejen_limit || 0) + ' sub ejen</div>' +
                             '<div>🔑 ' + (p.managed_tokens || 0).toLocaleString() + ' tokens</div>' +
@@ -309,8 +335,8 @@
                                 '<span style="display:inline-block;background:#FEF3C7;color:#92400E;padding:2px 8px;border-radius:4px;margin:2px">💾 ' + (p.memory_limit_mb || 512) + 'MB</span>' +
                                 '<span style="display:inline-block;background:#D1FAE5;color:#065F46;padding:2px 8px;border-radius:4px;margin:2px">📦 ' + (p.storage_limit_gb || 10) + 'GB</span>' +
                             '</div>' +
-                            ((p.allowed_skill_categories || p.skill_category_ids || []).length > 0 ? '<div style="font-size:11px;color:rgba(255,255,255,0.4);margin-top:4px">🧠 ' + (p.allowed_skill_categories || p.skill_category_ids || []).length + ' skill categories</div>' : '') +
-                            ((p.allowed_tool_categories || p.tool_category_ids || []).length > 0 ? '<div style="font-size:11px;color:rgba(255,255,255,0.4)">🔧 ' + (p.allowed_tool_categories || p.tool_category_ids || []).length + ' tool categories</div>' : '') +
+                            (skillCount > 0 ? '<div style="font-size:11px;color:#7c3aed;margin-top:4px">🧠 ' + skillCount + ' skill categories</div>' : '') +
+                            (toolCount > 0 ? '<div style="font-size:11px;color:#7c3aed">🔧 ' + toolCount + ' tools enabled</div>' : '') +
                         '</div>' +
                         (p.description ? '<div style="font-size:12px;color:var(--text-light);margin-bottom:12px;font-style:italic">' + p.description + '</div>' : '') +
                         '<div style="display:flex;gap:8px;margin-top:auto">' +
@@ -321,7 +347,7 @@
                     '</div>';
                 }).join('') + '</div>';
         } catch(e) {
-            document.getElementById('packagesContainer').innerHTML = '<p style="color:#ef4444">Failed to load packages: ' + (e.message || 'Unknown error') + '</p>';
+            document.getElementById('packagesContainer').innerHTML = '<p style="color:#ef4444">Failed to load: ' + (e.message || 'Unknown error') + '</p>';
         }
     }
 
@@ -331,9 +357,7 @@
             await api('/admin/packages/' + id, { method: 'DELETE' });
             showToast('Package deleted', 'success');
             loadPackages();
-        } catch(e) {
-            showToast(e.message || 'Failed to delete', 'error');
-        }
+        } catch(e) { showToast(e.message || 'Failed to delete', 'error'); }
     }
 
     async function togglePackageActive(id, activate) {

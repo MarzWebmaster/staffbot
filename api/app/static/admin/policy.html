@@ -22,7 +22,7 @@
         }
     </style>
     <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="stylesheet" href="/static/css/app.css?v=1779798256">
+    <link rel="stylesheet" href="/static/css/app.css?v=1780388378">
 </head>
 <body>
     <button class="sidebar-toggle" onclick="toggleSidebar()">☰</button>
@@ -100,11 +100,17 @@
 
             <!-- Tab: Tools -->
             <div id="tab-tools" class="tab-content" style="display:none">
-                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
-                    <p style="font-size:13px;color:var(--text-light)">Toggle toolsets. High-risk tools require additional approval.</p>
-                    <button class="btn btn-sm" onclick="enableAllTools()" style="background:var(--primary);color:white;border:none;padding:8px 14px;border-radius:6px;cursor:pointer;font-weight:600;font-size:12px">✅ Enable All</button>
-                    <button class="btn btn-sm" onclick="disableAllTools()" style="background:#64748b;color:white;border:none;padding:8px 14px;border-radius:6px;cursor:pointer;font-weight:600;font-size:12px">⬜ Disable All</button>
-                    <button class="btn btn-sm" onclick="saveTools()" style="background:var(--success);color:white;border:none;padding:8px 20px;border-radius:6px;cursor:pointer;font-weight:600">💾 Save Tools</button>
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:8px">
+                    <p style="font-size:13px;color:var(--text-light);margin:0">Toggle toolsets. High-risk tools require additional approval.</p>
+                    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+                        <input type="text" id="tools-search" placeholder="🔍 Search tools..." oninput="onToolSearch()" style="width:200px;padding:8px 12px;border:1px solid var(--border);border-radius:8px;font-size:13px;background:#1e293b;color:#e2e8f0">
+                        <button class="btn btn-sm" onclick="enableAllTools()" style="background:var(--primary);color:white;border:none;padding:8px 14px;border-radius:6px;cursor:pointer;font-weight:600;font-size:12px">✅ Enable All</button>
+                        <button class="btn btn-sm" onclick="disableAllTools()" style="background:#64748b;color:white;border:none;padding:8px 14px;border-radius:6px;cursor:pointer;font-weight:600;font-size:12px">⬜ Disable All</button>
+                        <button class="btn btn-sm" onclick="saveTools()" style="background:var(--success);color:white;border:none;padding:8px 20px;border-radius:6px;cursor:pointer;font-weight:600">💾 Save Tools</button>
+                    </div>
+                </div>
+                <div style="margin-bottom:12px;display:flex;flex-wrap:wrap;gap:4px;max-height:80px;overflow-y:auto" id="tool-categories">
+                    <button class="cat-filter active" data-cat="all" onclick="filterTools('all')" style="padding:4px 14px;border-radius:14px;border:1px solid var(--border);background:var(--primary);color:white;cursor:pointer;font-size:12px">All</button>
                 </div>
                 <div style="margin-bottom:12px;background:rgba(255,255,255,0.03);padding:10px 14px;border-radius:8px;border:1px solid var(--border)">
                     <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:8px">
@@ -189,7 +195,7 @@
             skillsData = data.skills;
             document.getElementById('skills-count').textContent = data.enabled;
             const catCounts = {};
-            skillsData.forEach(s => { catCounts[s.category] = (catCounts[s.category] || 0) + 1; });
+            skillsData.forEach(s => { const dc = s.display_category || s.category || 'Other'; catCounts[dc] = (catCounts[dc] || 0) + 1; });
             const sortedCats = Object.entries(catCounts).sort((a, b) => b[1] - a[1]);
             const catContainer = document.getElementById('skill-categories');
             catContainer.innerHTML = '<button class="cat-filter active" data-cat="all" onclick="filterSkills(\'all\')" style="padding:4px 14px;border-radius:14px;border:1px solid var(--border);background:var(--primary);color:white;cursor:pointer;font-size:12px">All</button>';
@@ -198,7 +204,7 @@
                 btn.className = 'cat-filter';
                 btn.dataset.cat = cat;
                 btn.onclick = () => filterSkills(cat);
-                btn.textContent = cat.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase()) + ' (' + count + ')';
+                btn.textContent = cat + ' (' + count + ')';
                 btn.style.cssText = 'padding:4px 14px;border-radius:14px;border:1px solid var(--border);cursor:pointer;font-size:12px;margin:2px';
                 catContainer.appendChild(btn);
             });
@@ -216,10 +222,10 @@
 
     function applyFilters() {
         filteredSkills = skillsData;
-        if (activeCategory !== 'all') filteredSkills = skillsData.filter(s => s.category === activeCategory);
+        if (activeCategory !== 'all') filteredSkills = skillsData.filter(s => (s.display_category || s.category || 'Other') === activeCategory);
         if (searchQuery) {
             const q = searchQuery.toLowerCase();
-            filteredSkills = filteredSkills.filter(s => s.name.toLowerCase().includes(q) || s.desc.toLowerCase().includes(q) || s.category.toLowerCase().includes(q));
+            filteredSkills = filteredSkills.filter(s => s.name.toLowerCase().includes(q) || s.desc.toLowerCase().includes(q) || (s.display_category || s.category || '').toLowerCase().includes(q));
         }
     }
 
@@ -236,7 +242,7 @@
                 '<div style="flex:1">' +
                     '<div style="font-weight:600;font-size:13px;margin-bottom:4px;color:#e2e8f0">' + esc(s.name) + '</div>' +
                     '<div style="font-size:11px;color:var(--text-light);margin-bottom:4px">' + esc(s.desc) + '</div>' +
-                    '<div style="font-size:10px;background:rgba(255,255,255,0.05);display:inline-block;padding:2px 8px;border-radius:4px;color:var(--text-light)">' + esc(s.category) + '</div>' +
+                    '<div style="font-size:10px;background:rgba(255,255,255,0.05);display:inline-block;padding:2px 8px;border-radius:4px;color:var(--text-light)">' + esc(s.display_category || s.category) + '</div>' +
                     '<span style="font-size:10px;color:' + (s.enabled ? 'var(--success)' : 'var(--text-light)') + ';margin-left:6px">' + (s.enabled ? 'Enabled' : 'Disabled') + '</span>' +
                     (s.src === 'custom' ? ' <button onclick="removeSkill(\'' + s.id + '\')" style="background:none;border:none;color:#ef4444;cursor:pointer;font-size:14px;margin-left:8px" title="Remove custom skill">🗑️</button>' : '') +
                 '</div>' +
@@ -350,24 +356,65 @@
     }
 
     // ── Tools ──────────────────────────────────────────────────
+    let filteredTools = [];
+    let activeToolCat = 'all';
+    let toolSearchQuery = '';
+
     async function loadTools() {
         try {
             const data = await api('/admin/policy/tools');
             toolsData = data.toolsets;
             document.getElementById('tools-count').textContent = data.enabled;
+            const catCounts = {};
+            toolsData.forEach(t => { const tc = t.category || 'Other'; catCounts[tc] = (catCounts[tc] || 0) + 1; });
+            const sortedCats = Object.entries(catCounts).sort((a, b) => b[1] - a[1]);
+            const catContainer = document.getElementById('tool-categories');
+            catContainer.innerHTML = '<button class="cat-filter active" data-cat="all" onclick="filterTools(\'all\')" style="padding:4px 14px;border-radius:14px;border:1px solid var(--border);background:var(--primary);color:white;cursor:pointer;font-size:12px">All</button>';
+            sortedCats.forEach(([cat, count]) => {
+                const btn = document.createElement('button');
+                btn.className = 'cat-filter';
+                btn.dataset.cat = cat;
+                btn.onclick = () => filterTools(cat);
+                btn.textContent = cat.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase()) + ' (' + count + ')';
+                btn.style.cssText = 'padding:4px 14px;border-radius:14px;border:1px solid var(--border);cursor:pointer;font-size:12px;margin:2px';
+                catContainer.appendChild(btn);
+            });
+            applyToolFilters();
             renderTools();
         } catch (e) { document.getElementById('tools-grid').innerHTML = '<p style="color:var(--danger);grid-column:1/-1">Error: ' + e.message + '</p>'; }
     }
 
+    function applyToolFilters() {
+        filteredTools = toolsData;
+        if (activeToolCat !== 'all') filteredTools = filteredTools.filter(t => (t.category || 'Other') === activeToolCat);
+        if (toolSearchQuery) {
+            const q = toolSearchQuery.toLowerCase();
+            filteredTools = filteredTools.filter(t => t.name.toLowerCase().includes(q) || t.desc.toLowerCase().includes(q) || (t.category || '').toLowerCase().includes(q));
+        }
+    }
+
+    function filterTools(cat) {
+        activeToolCat = cat;
+        document.querySelectorAll('#tool-categories .cat-filter').forEach(b => {
+            b.style.background = b.dataset.cat === cat ? 'var(--primary)' : 'var(--bg-sidebar)';
+            b.style.color = b.dataset.cat === cat ? 'white' : 'var(--text-light)';
+        });
+        applyToolFilters();
+        renderTools();
+    }
+
+    function onToolSearch() { toolSearchQuery = document.getElementById('tools-search').value; applyToolFilters(); renderTools(); }
+
     function renderTools() {
         const grid = document.getElementById('tools-grid');
-        grid.innerHTML = toolsData.map(t =>
+        grid.innerHTML = filteredTools.map(t =>
             '<div style="border:1px solid var(--border);border-radius:8px;padding:14px;background:#1e293b;display:flex;justify-content:space-between;align-items:flex-start">' +
                 '<div style="flex:1">' +
                     '<div style="font-weight:600;font-size:13px;margin-bottom:4px;color:#e2e8f0">' + esc(t.name) + '</div>' +
                     '<div style="font-size:11px;color:var(--text-light);margin-bottom:4px">' + esc(t.desc) + '</div>' +
                     (t.content ? '<div style="font-size:10px;color:var(--text-light);margin-bottom:4px;font-family:monospace;background:rgba(0,0,0,0.2);padding:4px 6px;border-radius:4px;max-height:40px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + esc(t.content.substring(0, 80)) + (t.content.length > 80 ? '...' : '') + '</div>' : '') +
-                    '<div style="display:flex;gap:6px;align-items:center">' +
+                    '<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">' +
+                        '<span style="font-size:10px;background:rgba(255,255,255,0.05);padding:2px 8px;border-radius:4px;color:var(--text-light)">' + esc(t.category || 'Other') + '</span>' +
                         '<span style="font-size:10px;padding:2px 8px;border-radius:4px;border:1px solid ' + (t.risk === 'high' ? '#FCA5A5' : t.risk === 'medium' ? '#FCD34D' : '#6EE7B7') + ';background:' + (t.risk === 'high' ? '#FEE2E2' : t.risk === 'medium' ? '#FEF3C7' : '#D1FAE5') + ';color:' + (t.risk === 'high' ? '#DC2626' : t.risk === 'medium' ? '#D97706' : '#059669') + '">' + t.risk.toUpperCase() + ' RISK</span>' +
                         '<span style="font-size:10px;color:' + (t.enabled ? 'var(--success)' : 'var(--text-light)') + '">' + (t.enabled ? 'Active' : 'Inactive') + '</span>' +
                         (t.src === 'custom' ? ' <button onclick="removeTool(\'' + t.id + '\')" style="background:none;border:none;color:#ef4444;cursor:pointer;font-size:14px;margin-left:4px" title="Remove custom tool">🗑️</button>' : '') +
@@ -414,6 +461,7 @@
         toolsData.unshift({ id, name, desc, risk, content, enabled: true, src: 'custom' });
         ['new-tool-name', 'new-tool-id', 'new-tool-desc', 'new-tool-content'].forEach(f => { document.getElementById(f).value = ''; });
         document.getElementById('tools-count').textContent = toolsData.filter(t => t.enabled).length;
+        applyToolFilters();
         renderTools();
         showToast('✅ Tool added — click 💾 Save Tools to persist', 'success');
     }
@@ -421,6 +469,7 @@
     function removeTool(id) {
         toolsData = toolsData.filter(t => t.id !== id);
         document.getElementById('tools-count').textContent = toolsData.filter(t => t.enabled).length;
+        applyToolFilters();
         renderTools();
     }
 
@@ -548,11 +597,13 @@
     function enableAllTools() {
         toolsData.forEach(t => t.enabled = true);
         document.getElementById('tools-count').textContent = toolsData.length;
+        applyToolFilters();
         renderTools();
     }
     function disableAllTools() {
         toolsData.forEach(t => t.enabled = false);
         document.getElementById('tools-count').textContent = 0;
+        applyToolFilters();
         renderTools();
     }
 

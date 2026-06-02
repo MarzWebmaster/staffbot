@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Payment Gateway — StaffBot.my</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="stylesheet" href="/static/css/app.css?v=1779798256">
+    <link rel="stylesheet" href="/static/css/app.css?v=1780388378">
 </head>
 <body>
     <button class="sidebar-toggle" onclick="toggleSidebar()">☰</button>
@@ -20,14 +20,14 @@
             <div class="topbar"><h1>💳 Payment Gateway</h1></div>
 
             <!-- Stripe Status -->
-            <div class="card" id="stripeStatusCard">
-                <div class="card-header"><h3>Stripe Connection</h3></div>
+            <div class="card admin-card admin-card-indigo" id="stripeStatusCard" style="border-radius:12px;margin-bottom:16px">
+                <div class="card-header"><h3>🔌 Stripe Connection</h3></div>
                 <div id="stripeStatus"><p style="color:var(--text-light)">Checking...</p></div>
             </div>
 
             <!-- Stripe Keys Configuration -->
-            <div class="card">
-                <div class="card-header"><h3>Stripe Keys</h3></div>
+            <div class="card admin-card admin-card-blue" style="border-radius:12px;margin-top:16px">
+                <div class="card-header"><h3>🔑 Stripe Keys</h3></div>
                 <form onsubmit="return saveStripeKeys(event)">
                     <div class="grid-2">
                         <div class="form-group"><label>Secret Key</label><input type="password" class="form-input" id="stripe_key" placeholder="sk_live_..."></div>
@@ -38,14 +38,14 @@
             </div>
 
             <!-- Recent Transactions -->
-            <div class="card">
-                <div class="card-header"><h3>Recent Transactions</h3></div>
+            <div class="card admin-card admin-card-green" style="border-radius:12px;margin-top:16px">
+                <div class="card-header"><h3>📄 Recent Transactions</h3></div>
                 <div id="transactionList"><p style="color:var(--text-light);padding:16px">No transactions yet.</p></div>
             </div>
 
             <!-- Quick Actions -->
-            <div class="card">
-                <div class="card-header"><h3>Quick Actions</h3></div>
+            <div class="card admin-card admin-card-amber" style="border-radius:12px;margin-top:16px">
+                <div class="card-header"><h3>⚡ Quick Actions</h3></div>
                 <div style="display:flex;gap:12px;flex-wrap:wrap">
                     <a href="https://dashboard.stripe.com/" target="_blank" class="btn btn-outline">📊 Stripe Dashboard</a>
                 </div>

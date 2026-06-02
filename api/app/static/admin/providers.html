@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>LLM Providers — StaffBot.my</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="stylesheet" href="/static/css/app.css?v=1779798256">
+    <link rel="stylesheet" href="/static/css/app.css?v=1780388378">
 </head>
 <body>
     <button class="sidebar-toggle" onclick="toggleSidebar()">☰</button>
@@ -24,8 +24,8 @@
             </div>
 
             <!-- Provider List -->
-            <div class="card">
-                <div class="card-header"><h3>Provider List</h3></div>
+            <div class="card admin-card admin-card-indigo" style="border-radius:12px">
+                <div class="card-header"><h3>🔌 Provider List</h3></div>
                 <div style="overflow-x:auto">
                     <table class="data-table" id="providersTable">
                         <thead><tr><th>Name</th><th>Base URL</th><th>Models</th><th>API Key</th><th>Status</th><th>Actions</th></tr></thead>
@@ -35,8 +35,8 @@
             </div>
 
             <!-- Package Assignments -->
-            <div class="card">
-                <div class="card-header"><h3>Per-Provider Package Assignment</h3><button class="btn btn-primary btn-sm" onclick="openAssignModal()">+ Assign</button></div>
+            <div class="card admin-card admin-card-purple" style="border-radius:12px;margin-top:16px">
+                <div class="card-header"><h3>📋 Per-Provider Package Assignment</h3><button class="btn btn-primary btn-sm" onclick="openAssignModal()">+ Assign</button></div>
                 <div style="overflow-x:auto">
                     <table class="data-table" id="assignTable">
                         <thead><tr><th>Provider</th><th>Package</th><th>Token Quota</th><th>Available</th><th>Actions</th></tr></thead>

@@ -27,7 +27,7 @@ services:
       - "8000:8000"
     environment:
       - STAFFBOT_DATABASE_URL=postgresql://staffbot:DB_PASS_REDACTED@db:5432/staffbot_db
-      - STAFFBOT_CORS_ORIGINS=["*"]
+      - STAFFBOT_CORS_ORIGINS=["https://staffbot.my","https://api.staffbot.my","https://admin.staffbot.my","http://localhost:3000","http://localhost:8000"]
       - STAFFBOT_DOMAIN=staffbot.my
       - STAFFBOT_LANDING_PAGE_URL=https://staffbot.my
       - STAFFBOT_ADMIN_EMAIL=admin@staffbot.my

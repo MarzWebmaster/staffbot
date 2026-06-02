@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Affiliates — StaffBot.my</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="stylesheet" href="/static/css/app.css?v=1779798256">
+    <link rel="stylesheet" href="/static/css/app.css?v=1780388378">
 </head>
 <body>
     <button class="sidebar-toggle" onclick="toggleSidebar()">☰</button>
@@ -27,17 +27,17 @@
 
             <!-- Stats Overview -->
             <div class="grid-4" id="affiliateStats">
-                <div class="card stat-card"><div class="stat-label">Active Affiliates</div><div class="stat-value" id="stat-active">-</div></div>
-                <div class="card stat-card"><div class="stat-label">Total Paid</div><div class="stat-value" id="stat-paid">-</div></div>
-                <div class="card stat-card"><div class="stat-label">Pending Earnings</div><div class="stat-value" id="stat-pending">-</div></div>
-                <div class="card stat-card"><div class="stat-label">Pending Payouts</div><div class="stat-value" id="stat-payouts">-</div></div>
+                <div class="card stat-card admin-stat admin-stat-green"><div class="stat-label">✅ Active Affiliates</div><div class="stat-value" id="stat-active">-</div></div>
+                <div class="card stat-card admin-stat admin-stat-blue"><div class="stat-label">💵 Total Paid</div><div class="stat-value" id="stat-paid">-</div></div>
+                <div class="card stat-card admin-stat admin-stat-amber"><div class="stat-label">⏳ Pending Earnings</div><div class="stat-value" id="stat-pending">-</div></div>
+                <div class="card stat-card admin-stat admin-stat-purple"><div class="stat-label">📤 Pending Payouts</div><div class="stat-value" id="stat-payouts">-</div></div>
             </div>
 
             <!-- Affiliate List -->
             <div id="affiliate-list"></div>
-            <div class="card">
+            <div class="card admin-card admin-card-indigo" style="border-radius:12px">
                 <div class="card-header">
-                    <h3>Senarai Affiliates</h3>
+                    <h3>📋 Senarai Affiliates</h3>
                     <div style="display:flex;gap:8px">
                         <select id="statusFilter" class="form-control" style="width:auto" onchange="loadAffiliates()">
                             <option value="">Semua Status</option>
@@ -57,8 +57,8 @@
 
             <!-- Pending Payouts -->
             <div id="payout-requests"></div>
-            <div class="card">
-                <div class="card-header"><h3>Payout Requests</h3></div>
+            <div class="card admin-card admin-card-amber" style="border-radius:12px;margin-top:16px">
+                <div class="card-header"><h3>💰 Payout Requests</h3></div>
                 <div style="overflow-x:auto">
                     <table class="data-table" id="payoutsTable">
                         <thead><tr><th>Affiliate ID</th><th>Amount</th><th>Method</th><th>Status</th><th>Date</th><th>Tindakan</th></tr></thead>
@@ -69,7 +69,7 @@
 
             <!-- Leaderboard -->
             <div id="leaderboard"></div>
-            <div class="card">
+            <div class="card admin-card admin-card-amber" style="border-radius:12px;margin-top:16px">
                 <div class="card-header"><h3>🏆 Leaderboard</h3></div>
                 <div style="overflow-x:auto">
                     <table class="data-table" id="leaderboardTable">

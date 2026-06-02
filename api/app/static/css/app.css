@@ -94,6 +94,32 @@ tr:hover td { background: #F1F5F9; }
 .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 20px; }
 .grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; }
 
+/* ========================================
+   ADMIN COLORFUL CARD THEME (global)
+   ======================================== */
+/* Colored stat cards */
+.admin-stat { border-radius: 10px; padding: 20px; text-align: center; }
+.admin-stat .stat-label { font-size: 13px; color: #64748b; margin-bottom: 4px; }
+.admin-stat .stat-value { font-size: 28px; font-weight: 700; }
+.admin-stat-blue { border-left: 4px solid #3b82f6; background: linear-gradient(135deg,#eff6ff,#dbeafe); }
+.admin-stat-blue .stat-value { color: #2563eb; }
+.admin-stat-green { border-left: 4px solid #22c55e; background: linear-gradient(135deg,#f0fdf4,#dcfce7); }
+.admin-stat-green .stat-value { color: #16a34a; }
+.admin-stat-purple { border-left: 4px solid #8b5cf6; background: linear-gradient(135deg,#f5f3ff,#ede9fe); }
+.admin-stat-purple .stat-value { color: #7c3aed; }
+.admin-stat-amber { border-left: 4px solid #f59e0b; background: linear-gradient(135deg,#fffbeb,#fef3c7); }
+.admin-stat-amber .stat-value { color: #d97706; }
+.admin-stat-red { border-left: 4px solid #ef4444; background: linear-gradient(135deg,#fef2f2,#fee2e2); }
+.admin-stat-red .stat-value { color: #dc2626; }
+/* Colored card sections */
+.admin-card { border-radius: 12px; }
+.admin-card-indigo { border-top: 3px solid #6366f1; }
+.admin-card-green { border-top: 3px solid #22c55e; }
+.admin-card-cyan { border-top: 3px solid #06b6d4; }
+.admin-card-amber { border-top: 3px solid #f59e0b; }
+.admin-card-blue { border-top: 3px solid #3b82f6; }
+.admin-card-purple { border-top: 3px solid #8b5cf6; }
+
 /* Modal */
 .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 1000; align-items: center; justify-content: center; }
 .modal-overlay.active { display: flex; }

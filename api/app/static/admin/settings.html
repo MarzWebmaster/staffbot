@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Settings — StaffBot.my Admin</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="stylesheet" href="/static/css/app.css?v=1779798256">
+    <link rel="stylesheet" href="/static/css/app.css?v=1780388378">
 </head>
 <body>
     <button class="sidebar-toggle" onclick="toggleSidebar()">☰</button>
@@ -21,23 +21,23 @@
             <div class="topbar"><h1>System Settings</h1></div>
 
             <form onsubmit="return saveSettings(event)">
-                <h2 style="font-size:18px;font-weight:700;margin:24px 0 12px;color:#fff">General</h2>
-                <div class="card">
-                    <div class="card-header"><h3>Cloudflare</h3></div>
+                <h2 style="font-size:18px;font-weight:700;margin:24px 0 12px">⚙️ General</h2>
+                <div class="card admin-card admin-card-blue">
+                    <div class="card-header"><h3>☁️ Cloudflare</h3></div>
                     <div class="grid-2">
                         <div class="form-group"><label>API Token</label><input type="password" class="form-input" id="cf_token"></div>
                         <div class="form-group"><label>Zone ID</label><input type="text" class="form-input" id="cf_zone"></div>
                     </div>
                 </div>
-                <div class="card">
-                    <div class="card-header"><h3>Server B (Internal)</h3></div>
+                <div class="card admin-card admin-card-green" style="margin-top:16px">
+                    <div class="card-header"><h3>🖥️ Server B (Internal)</h3></div>
                     <div class="grid-2">
                         <div class="form-group"><label>API URL</label><input type="text" class="form-input" id="sb_url" placeholder="http://10.0.0.2:8080"></div>
                         <div class="form-group"><label>API Key</label><input type="password" class="form-input" id="sb_key"></div>
                     </div>
                 </div>
-                <div class="card">
-                    <div class="card-header"><h3>SMTP / Email</h3></div>
+                <div class="card admin-card admin-card-amber" style="margin-top:16px">
+                    <div class="card-header"><h3>📧 SMTP / Email</h3></div>
                     <div class="grid-3">
                         <div class="form-group"><label>Host</label><input type="text" class="form-input" id="smtp_host"></div>
                         <div class="form-group"><label>Port</label><input type="number" class="form-input" id="smtp_port" value="587"></div>
@@ -46,8 +46,8 @@
                         <div class="form-group"><label>From</label><input type="email" class="form-input" id="smtp_from" value="noreply@staffbot.my"></div>
                     </div>
                 </div>
-                <div class="card">
-                    <div class="card-header"><h3>Admin Notification</h3></div>
+                <div class="card admin-card admin-card-purple" style="margin-top:16px">
+                    <div class="card-header"><h3>🔔 Admin Notification</h3></div>
                     <div class="grid-3">
                         <div class="form-group"><label>WhatsApp Admin</label><input type="text" class="form-input" id="admin_wa"></div>
                         <div class="form-group"><label>Email Admin</label><input type="email" class="form-input" id="admin_email"></div>
