@@ -176,3 +176,25 @@ async def delete_user(
     await db.commit()
 
     return {"message": f"User {user_id} deleted successfully"}
+
+
+@router.get("/containers/list")
+async def list_user_containers(
+    client_id: int,
+    admin: Client = Depends(get_current_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """List containers for a specific client."""
+    result = await db.execute(
+        select(Container).where(Container.client_id == client_id).order_by(Container.created_at.desc())
+    )
+    containers = result.scalars().all()
+    return [{
+        "id": c.id,
+        "name": c.name,
+        "container_name": c.container_name,
+        "image": c.image,
+        "port": c.port,
+        "status": c.status,
+        "created_at": c.created_at.isoformat() if c.created_at else None,
+    } for c in containers]

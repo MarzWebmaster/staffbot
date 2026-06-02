@@ -11,13 +11,17 @@ Coordinates the full deployment flow when a new client subscribes:
 """
 import re
 import secrets
+import asyncio
 from typing import Optional
+import httpx
 from app.services.cloudflare_service import CloudflareService
 from app.services.server_b_service import ServerBService
 from app.services.notification_service import NotificationService
 from app.config import get_settings
 
 settings = get_settings()
+
+logger = __import__('logging').getLogger(__name__)
 
 
 class DeploymentService:
@@ -40,7 +44,11 @@ class DeploymentService:
         """Full deployment pipeline."""
         client_id = client_data["id"]
         company = client_data.get("company", "")
-        subdomain = DeploymentService.generate_subdomain(company, client_id)
+
+        # Use pre-reserved subdomain if available, otherwise auto-generate
+        subdomain = client_data.get("subdomain")
+        if not subdomain:
+            subdomain = DeploymentService.generate_subdomain(company, client_id)
 
         # 1. Create DNS record
         dns_result = await CloudflareService.create_dns_record(
@@ -101,6 +109,83 @@ class DeploymentService:
             "container_id": container_id,
             "dns": dns_result,
             "container": container_result,
+        }
+
+    @staticmethod
+    async def verify_deployment(subdomain_raw: str, port: int, container_id: str, warmup_delay: int = 15) -> dict:
+        """
+        Post-deployment verification: check container, port, and subdomain are actually live.
+
+        Args:
+            warmup_delay: seconds to wait before checking (containers need time to start)
+        """
+        checks = {}
+        errors = []
+
+        # ── Wait for container warmup ─────────────────────────────
+        logger.info(f"Waiting {warmup_delay}s for container warmup before verifying {subdomain_raw}...")
+        await asyncio.sleep(warmup_delay)
+
+        full_subdomain = f"{subdomain_raw}.{settings.DOMAIN}"
+
+        # ── Check 1: DNS resolution ──────────────────────────────
+        try:
+            import socket
+            socket.gethostbyname(full_subdomain)
+            checks["dns"] = True
+        except Exception as e:
+            checks["dns"] = False
+            errors.append(f"DNS: {full_subdomain} not resolving — {str(e)[:80]}")
+
+        # ── Check 2: Port accessible on Server A ─────────────────
+        try:
+            import socket
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            sock.settimeout(5)
+            result = sock.connect_ex(('127.0.0.1', port))
+            sock.close()
+            checks["port"] = (result == 0)
+            if result != 0:
+                errors.append(f"Port: {port} not listening on Server A")
+        except Exception as e:
+            checks["port"] = False
+            errors.append(f"Port check failed: {str(e)[:80]}")
+
+        # ── Check 3: HTTP response from subdomain ────────────────
+        try:
+            async with httpx.AsyncClient(timeout=15.0) as client:
+                resp = await client.get(f"https://{full_subdomain}/", follow_redirects=True)
+                checks["http"] = resp.status_code in (200, 302, 301, 307, 308)
+                checks["http_status"] = resp.status_code
+                if not checks["http"]:
+                    errors.append(f"HTTP: {full_subdomain} returned {resp.status_code}")
+        except Exception as e:
+            checks["http"] = False
+            checks["http_status"] = None
+            errors.append(f"HTTP: {full_subdomain} unreachable — {str(e)[:80]}")
+
+        # ── Check 4: Container health via Server B ───────────────
+        try:
+            health = await ServerBService.health_check()
+            checks["container"] = health.get("status") == "ok"
+            if not checks["container"]:
+                errors.append(f"Container: health check failed — {health}")
+        except Exception as e:
+            checks["container"] = False
+            errors.append(f"Container: health check error — {str(e)[:80]}")
+
+        ok = len(errors) == 0
+        summary = "✅ All checks passed" if ok else f"⚠️ {len(errors)}/{len(checks)} checks failed"
+
+        logger.info(f"Deployment verification for {full_subdomain}: {summary}")
+        if errors:
+            logger.warning(f"Verification errors: {'; '.join(errors)}")
+
+        return {
+            "ok": ok,
+            "summary": summary,
+            "checks": checks,
+            "errors": errors,
         }
 
     @staticmethod

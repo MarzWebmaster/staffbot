@@ -447,6 +447,7 @@
             <div class="form-group"><label>Full Name</label><input type="text" id="regName" required placeholder="e.g. Ahmad bin Ismail"></div>
             <div class="form-group"><label>Email Address</label><input type="email" id="regEmail" required placeholder="you@company.com"></div>
             <div class="form-group"><label>Company Name</label><input type="text" id="regCompany" placeholder="Your Company Sdn Bhd"></div>
+            <div class="form-group"><label>Your Subdomain</label><div style="display:flex;align-items:center"><input type="text" id="regSubdomain" required placeholder="mybusiness" pattern="[a-z0-9][a-z0-9\-]*[a-z0-9]" minlength="3" maxlength="40" style="flex:1;border-radius:8px 0 0 8px"><span style="background:var(--border);padding:10px 14px;border-radius:0 8px 8px 0;font-size:14px;color:var(--muted);white-space:nowrap">.staffbot.my</span></div><div class="hint">Lowercase letters, numbers & hyphens only. e.g. mybusiness → mybusiness.staffbot.my</div></div>
             <div class="form-group"><label>Phone (WhatsApp)</label><input type="tel" id="regPhone" placeholder="e.g. 60123456789"><div class="hint">We'll send login details here</div></div>
             <div class="form-group"><label>Choose Plan</label><select id="regPlan"><option value="">Loading plans...</option></select></div>
             <div class="form-group"><label>Password</label><input type="password" id="regPassword" required placeholder="Min 8 chars, uppercase + special" minlength="8"></div>
@@ -551,6 +552,8 @@ document.getElementById('registerForm').addEventListener('submit', async functio
         company: document.getElementById('regCompany').value || '',
         phone: document.getElementById('regPhone').value || '',
         password: document.getElementById('regPassword').value,
+        package: document.getElementById('regPlan').value,
+        subdomain: document.getElementById('regSubdomain').value.trim().toLowerCase(),
     };
     try {
         const res = await fetch('/api/v1/auth/register', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) });

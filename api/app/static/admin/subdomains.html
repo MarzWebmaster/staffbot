@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Subdomains — StaffBot.my Admin</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="/static/css/app.css?v=1780388378">
+    <style>
+        .status-badge { padding: 3px 10px; border-radius: 12px; font-size: 12px; font-weight: 500; display: inline-block; }
+        .status-badge.available { background: rgba(34,197,94,0.15); color: #22c55e; }
+        .status-badge.assigned { background: rgba(99,102,241,0.15); color: #818cf8; }
+        .status-badge.active { background: rgba(6,182,212,0.15); color: #06b6d4; }
+        .stats-row { display: flex; flex-wrap: wrap; gap: 12px; }
+        .stat-card-item { flex: 1; min-width: 120px; }
+        @media (max-width: 768px) { .stats-row { flex-direction: column; } .stat-card-item { max-width: 400px; } }
+        .table-responsive { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+        .table-responsive table { min-width: 700px; }
+        @media (max-width: 768px) {
+            .table-responsive { overflow-x: visible; }
+            .table-responsive table, .table-responsive thead, .table-responsive tbody,
+            .table-responsive th, .table-responsive td, .table-responsive tr { display: block; }
+            .table-responsive thead { display: none; }
+            .table-responsive tr { margin-bottom: 12px; background: rgba(255,255,255,0.03); border-radius: 10px; border: 1px solid rgba(255,255,255,0.08); padding: 10px; }
+            .table-responsive td { display: flex; align-items: center; padding: 8px 12px; border-bottom: none; font-size: 13px; gap: 10px; }
+            .table-responsive td::before { content: attr(data-label); font-weight: 600; font-size: 11px; color: rgba(255,255,255,0.5); text-transform: uppercase; letter-spacing: 0.4px; flex-shrink: 0; min-width: 70px; }
+            .table-responsive table { min-width: unset; }
+        }
+        .domain-suffix { color: rgba(255,255,255,0.3); font-size: 14px; }
+        .btn-action { background: none; border: 1px solid rgba(255,255,255,0.15); color: #fff; padding: 4px 10px; border-radius: 5px; cursor: pointer; font-size: 11px; }
+        .btn-action:hover { background: rgba(255,255,255,0.1); }
+        .btn-action.danger { color: #ef4444; border-color: rgba(239,68,68,0.3); }
+        .btn-action.danger:hover { background: rgba(239,68,68,0.15); }
+    </style>
+</head>
+<body>
+    <button class="sidebar-toggle" onclick="toggleSidebar()">☰</button>
+    <div class="sidebar-overlay" onclick="toggleSidebar()"></div>
+    <div class="app-layout">
+        <div class="sidebar" style="background:#111827">
+            <div class="sidebar-brand"><h2>StaffBot.my</h2><span>Admin Panel</span></div>
+            <nav class="sidebar-nav" id="sidebar-nav"></nav>
+            <div id="sidebar-user" style="padding:16px 20px;border-top:1px solid rgba(255,255,255,0.1);margin-top:auto"></div>
+        </div>
+        <div class="main-content">
+            <div class="topbar">
+                <h1>🌐 Subdomains</h1>
+                <button class="btn btn-primary" onclick="showAdd()">+ Add Subdomain</button>
+            </div>
+
+            <!-- Stats -->
+            <div class="stats-row" style="margin-bottom:20px">
+                <div class="card stat-card-item" style="padding:16px;text-align:center;border-left:4px solid #06b6d4;background:linear-gradient(135deg,#ecfeff,#cffafe);border-radius:10px">
+                    <div style="font-size:28px;font-weight:700;color:#0891b2" id="statTotal">0</div>
+                    <div style="font-size:13px;color:#64748b;margin-top:4px">🌐 Total</div>
+                </div>
+                <div class="card stat-card-item" style="padding:16px;text-align:center;border-left:4px solid #22c55e;background:linear-gradient(135deg,#f0fdf4,#dcfce7);border-radius:10px">
+                    <div style="font-size:28px;font-weight:700;color:#16a34a" id="statAvailable">0</div>
+                    <div style="font-size:13px;color:#64748b;margin-top:4px">✅ Available</div>
+                </div>
+                <div class="card stat-card-item" style="padding:16px;text-align:center;border-left:4px solid #8b5cf6;background:linear-gradient(135deg,#f5f3ff,#ede9fe);border-radius:10px">
+                    <div style="font-size:28px;font-weight:700;color:#7c3aed" id="statAssigned">0</div>
+                    <div style="font-size:13px;color:#64748b;margin-top:4px">📌 Assigned</div>
+                </div>
+            </div>
+
+            <!-- Table -->
+            <div class="card" style="border-top:3px solid #06b6d4;border-radius:12px">
+                <div class="card-header"><h3>📋 Subdomain List</h3></div>
+                <div class="table-responsive">
+                <table class="data-table" style="width:100%;border-collapse:collapse">
+                    <thead>
+                        <tr style="text-align:left;border-bottom:1px solid rgba(255,255,255,0.1)">
+                            <th style="padding:12px 16px;font-size:13px;color:rgba(255,255,255,0.6)">Subdomain</th>
+                            <th style="padding:12px 16px;font-size:13px;color:rgba(255,255,255,0.6)">Assigned To</th>
+                            <th style="padding:12px 16px;font-size:13px;color:rgba(255,255,255,0.6)">Status</th>
+                            <th style="padding:12px 16px;font-size:13px;color:rgba(255,255,255,0.6)">Created</th>
+                            <th style="padding:12px 16px;font-size:13px;color:rgba(255,255,255,0.6)">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tableBody"></tbody>
+                </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add/Edit Modal -->
+    <div class="modal-overlay" id="subdomainModal" style="display:none">
+        <div class="modal" style="width:520px;max-height:85vh;overflow-y:auto">
+            <h3 id="modalTitle">Add Subdomain</h3>
+            <form onsubmit="return save(event)">
+                <input type="hidden" id="editId">
+                <div class="form-group">
+                    <label>Subdomain</label>
+                    <div style="display:flex;align-items:center;gap:0">
+                        <input type="text" class="form-input" id="subdomainPrefix" placeholder="companyname" required style="border-radius:6px 0 0 6px;flex:1">
+                        <span style="padding:8px 14px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.15);border-left:none;border-radius:0 6px 6px 0;color:rgba(255,255,255,0.4);font-size:14px">.staffbot.my</span>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Assign to User</label>
+                    <select class="form-input" id="subdomainClient">
+                        <option value="">— Unassigned —</option>
+                    </select>
+                </div>
+                <div class="form-group"><label>Notes</label><input type="text" class="form-input" id="subdomainNotes" placeholder="Optional notes"></div>
+                <div class="modal-actions">
+                    <button type="button" class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+                    <button type="submit" class="btn btn-primary" id="saveBtn">Save</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div id="toast-container" class="toast-container"></div>
+    <script src="/static/js/app.js?v=1779798256"></script>
+    <script>
+    let allSubdomains = [];
+    let userList = [];
+
+    function $(id) { return document.getElementById(id); }
+    function closeModal() { $('subdomainModal').style.display = 'none'; }
+
+    async function init() {
+        const user = await checkAdminAuth('/admin/login.html');
+        if (!user) return;
+        renderSidebarUser(user);
+        renderSidebar('subdomains');
+        await loadUsers();
+        await loadSubdomains();
+    }
+
+    async function loadUsers() {
+        try {
+            const data = await api('/admin/users?limit=200');
+            userList = data.items || data || [];
+        } catch(e) { console.log('Failed to load users'); }
+    }
+
+    async function loadSubdomains() {
+        try {
+            allSubdomains = await api('/admin/subdomains');
+            renderTable();
+        } catch(e) {
+            $('tableBody').innerHTML = '<tr><td colspan="5" style="text-align:center;padding:30px;color:var(--text-light)">Failed to load</td></tr>';
+        }
+    }
+
+    function renderTable() {
+        const avail = allSubdomains.filter(s => s.status === 'available').length;
+        const assigned = allSubdomains.filter(s => s.status === 'assigned').length;
+        $('statTotal').textContent = allSubdomains.length;
+        $('statAvailable').textContent = avail;
+        $('statAssigned').textContent = assigned;
+
+        if (!allSubdomains.length) {
+            $('tableBody').innerHTML = '<tr><td colspan="5" style="text-align:center;padding:30px;color:var(--text-light)">No subdomains yet</td></tr>';
+            return;
+        }
+
+        $('tableBody').innerHTML = allSubdomains.map(s => {
+            return '<tr style="border-bottom:1px solid rgba(255,255,255,0.05)">' +
+                '<td data-label="Subdomain" style="padding:12px 16px"><strong style="color:#06b6d4">' + s.subdomain + '</strong></td>' +
+                '<td data-label="Assigned To" style="padding:12px 16px;font-size:13px;color:var(--text-light)">' + (s.client_name || '<span style="color:rgba(255,255,255,0.3)">—</span>') + '</td>' +
+                '<td data-label="Status" style="padding:12px 16px"><span class="status-badge ' + s.status + '">' + s.status.charAt(0).toUpperCase() + s.status.slice(1) + '</span></td>' +
+                '<td data-label="Created" style="padding:12px 16px;font-size:12px;color:var(--text-light)">' + fmtDate(s.created_at) + '</td>' +
+                '<td data-label="Action" style="padding:12px 16px">' +
+                    '<button class="btn-action" onclick="showEdit(' + s.id + ')">✏️</button> ' +
+                    '<button class="btn-action danger" onclick="deleteSubdomain(' + s.id + ')">🗑️</button>' +
+                '</td>' +
+                '</tr>';
+        }).join('');
+    }
+
+    function fmtDate(d) {
+        if (!d) return '-';
+        try { return new Date(d).toLocaleDateString('en-MY', { day:'2-digit', month:'short', year:'numeric' }); } catch(e) { return d; }
+    }
+
+    function showAdd() {
+        $('modalTitle').textContent = 'Add Subdomain';
+        $('editId').value = '';
+        $('subdomainPrefix').value = '';
+        $('subdomainNotes').value = '';
+        populateUserSelect(null);
+        $('saveBtn').textContent = 'Create';
+        $('subdomainModal').style.display = 'flex';
+    }
+
+    function showEdit(id) {
+        const s = allSubdomains.find(x => x.id === id);
+        if (!s) return;
+        $('modalTitle').textContent = 'Edit Subdomain';
+        $('editId').value = s.id;
+        $('subdomainPrefix').value = s.subdomain.replace('.staffbot.my', '');
+        $('subdomainNotes').value = s.notes || '';
+        populateUserSelect(s.client_id);
+        $('saveBtn').textContent = 'Save Changes';
+        $('subdomainModal').style.display = 'flex';
+    }
+
+    function populateUserSelect(selectedId) {
+        const sel = $('subdomainClient');
+        sel.innerHTML = '<option value="">— Unassigned —</option>' +
+            userList.map(u => '<option value="' + u.id + '"' + (u.id === selectedId ? ' selected' : '') + '>' + (u.name || u.email) + ' (' + (u.company || '-') + ')</option>').join('');
+    }
+
+    async function save(e) {
+        e.preventDefault();
+        const id = $('editId').value;
+        const prefix = $('subdomainPrefix').value.trim().toLowerCase().replace(/[^a-z0-9-]/g, '');
+        if (!prefix) { showToast('Enter a valid subdomain prefix', 'error'); return false; }
+
+        const body = {
+            subdomain: prefix + '.staffbot.my',
+            client_id: $('subdomainClient').value ? parseInt($('subdomainClient').value) : null,
+            notes: $('subdomainNotes').value || null,
+        };
+
+        const btn = $('saveBtn');
+        btn.textContent = 'Saving...'; btn.disabled = true;
+        try {
+            if (id) {
+                await api('/admin/subdomains/' + id, { method: 'PUT', body: JSON.stringify(body) });
+                showToast('Subdomain updated!', 'success');
+            } else {
+                await api('/admin/subdomains', { method: 'POST', body: JSON.stringify(body) });
+                showToast('Subdomain created!', 'success');
+            }
+            closeModal();
+            loadSubdomains();
+        } catch(e) { showToast(e.message || 'Failed to save', 'error'); }
+        finally { btn.textContent = 'Save'; btn.disabled = false; }
+        return false;
+    }
+
+    async function deleteSubdomain(id) {
+        const s = allSubdomains.find(x => x.id === id);
+        if (!confirm('Delete subdomain "' + (s ? s.subdomain : id) + '"? This is permanent.')) return;
+        try {
+            await api('/admin/subdomains/' + id, { method: 'DELETE' });
+            showToast('Subdomain deleted', 'success');
+            loadSubdomains();
+        } catch(e) { showToast(e.message || 'Failed to delete', 'error'); }
+    }
+
+    init();
+    </script>
+</body>
+</html>

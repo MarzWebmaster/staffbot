@@ -108,10 +108,6 @@
                         <span class="detail-value" id="v-subdomain">N/A</span>
                     </div>
                     <div class="detail-row">
-                        <span class="detail-label">Container Port</span>
-                        <span class="detail-value" id="v-port">N/A</span>
-                    </div>
-                    <div class="detail-row">
                         <span class="detail-label">Registered</span>
                         <span class="detail-value" id="v-created">-</span>
                     </div>
@@ -119,6 +115,12 @@
                         <span class="detail-label">Last Updated</span>
                         <span class="detail-value" id="v-updated">-</span>
                     </div>
+                </div>
+
+                <!-- Containers Card -->
+                <div class="detail-card" id="containersCard" style="border-left:4px solid #06b6d4">
+                    <h3>📦 Containers</h3>
+                    <div id="containersInfo"><span style="color:rgba(255,255,255,0.3);font-size:13px">No containers deployed</span></div>
                 </div>
             </div>
         </div>
@@ -194,10 +196,42 @@
             $('loading').style.display = 'none';
             $('content').style.display = 'block';
             populateFields();
+            await loadUserSubdomains(userId);
+            await loadUserContainers(userId);
             applyMode();
         } catch(e) {
             $('loading').innerHTML = '<p style="color:#ef4444">Failed to load user: ' + (e.message || 'Unknown error') + '</p>';
         }
+    }
+
+    async function loadUserSubdomains(userId) {
+        try {
+            const all = await api('/admin/subdomains');
+            const userSubs = all.filter(s => s.client_id === parseInt(userId));
+            if (userSubs.length > 0) {
+                const sub = userSubs[0];
+                $('v-subdomain').textContent = sub.subdomain;
+            }
+        } catch(e) { console.log('Subdomain fetch skipped'); }
+    }
+
+    async function loadUserContainers(userId) {
+        try {
+            const containers = await api('/admin/users/containers/list?client_id=' + userId);
+            if (containers.length > 0) {
+                $('containersInfo').innerHTML = containers.map(c => {
+                    const statusColors = { running: '#22c55e', pending: '#eab308', stopped: '#ef4444', error: '#ef4444' };
+                    const color = statusColors[c.status] || '#9ca3af';
+                    return '<div class="detail-row">' +
+                        '<span class="detail-label">' + (c.name || c.container_name || 'Container #' + c.id) + '</span>' +
+                        '<span class="detail-value">' +
+                            '<span style="color:' + color + ';font-size:12px">● ' + (c.status || 'unknown') + '</span>' +
+                            (c.port ? ' <span style="font-size:11px;color:rgba(255,255,255,0.3)">:' + c.port + '</span>' : '') +
+                        '</span>' +
+                    '</div>';
+                }).join('');
+            }
+        } catch(e) { console.log('Container fetch skipped'); }
     }
 
     function populateFields() {
@@ -207,8 +241,6 @@
         $('v-email').textContent = u.email || '-';
         $('v-company').textContent = u.company || '-';
         $('v-phone').textContent = u.phone || '-';
-        $('v-subdomain').textContent = u.subdomain || 'N/A';
-        $('v-port').textContent = u.container_port || 'N/A';
         $('v-created').textContent = formatDate(u.created_at);
         $('v-updated').textContent = formatDate(u.updated_at);
         $('v-package').textContent = u.package || 'basic';

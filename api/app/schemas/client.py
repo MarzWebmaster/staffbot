@@ -13,6 +13,8 @@ class ClientBase(BaseModel):
 
 class ClientCreate(ClientBase):
     password: str = Field(..., min_length=8)
+    package: Optional[str] = "basic"
+    subdomain: Optional[str] = None
 
     @field_validator("password")
     @classmethod

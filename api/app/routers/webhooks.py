@@ -22,6 +22,9 @@ from app.config import get_settings
 router = APIRouter()
 settings = get_settings()
 
+import logging
+logger = logging.getLogger(__name__)
+
 
 @router.post("/stripe")
 async def stripe_webhook(
@@ -94,6 +97,8 @@ async def stripe_webhook(
                 "name": client.name,
                 "email": client.email,
                 "company": client.company or "",
+                "subdomain": client.subdomain,  # Use pre-reserved subdomain from registration
+                "package": client.package,
             })
 
             # Update client with deployment info
@@ -102,6 +107,47 @@ async def stripe_webhook(
             client.container_id = deploy_result["container_id"]
             client.status = "active"
             await db.commit()
+
+            # Update subdomain status from reserved → active
+            if deploy_result.get("subdomain_raw"):
+                from app.models.subdomain import Subdomain
+                sub_result = await db.execute(
+                    select(Subdomain).where(Subdomain.subdomain == deploy_result["subdomain_raw"])
+                )
+                subdomain_record = sub_result.scalar_one_or_none()
+                if subdomain_record:
+                    subdomain_record.status = "active"
+                    subdomain_record.notes = f"Activated via Stripe payment by {client.name}"
+                    await db.commit()
+
+            # ── Post-deployment verification ──────────────────────
+            verify_result = await DeploymentService.verify_deployment(
+                subdomain_raw=deploy_result["subdomain_raw"],
+                port=deploy_result["port"],
+                container_id=deploy_result["container_id"],
+            )
+
+            if not verify_result["ok"]:
+                logger.warning(
+                    f"⚠️ Deployment verification FAILED for {client.name}: "
+                    f"{verify_result['summary']} — {verify_result['errors']}"
+                )
+                await NotificationService.notify_admin(
+                    subject="⚠️ Deployment Verification Failed",
+                    body=(
+                        f"Deployment completed but verification FAILED:\n"
+                        f"• Client: {client.name} ({client.email})\n"
+                        f"• Subdomain: {deploy_result['subdomain']}\n"
+                        f"• Port: {deploy_result['port']}\n"
+                        f"• Container: {deploy_result['container_id']}\n"
+                        f"• Summary: {verify_result['summary']}\n"
+                        f"• Errors: {chr(10).join(verify_result['errors'])}"
+                    ),
+                )
+                # Still set active — verification is advisory; container may need time
+                # Don't block the client; admin will investigate
+            else:
+                logger.info(f"✅ Deployment verified OK for {client.name} — {verify_result['summary']}")
 
             # Send notifications
             await DeploymentService.send_deployment_notifications(

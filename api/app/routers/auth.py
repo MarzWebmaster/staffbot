@@ -35,6 +35,36 @@ async def register(client_data: ClientCreate, db: AsyncSession = Depends(get_db)
             detail="Email already registered",
         )
 
+    # Validate subdomain if provided
+    subdomain_name = None
+    if client_data.subdomain:
+        subdomain_name = client_data.subdomain.strip().lower()
+        # Validate format
+        import re
+        if not re.match(r'^[a-z0-9][a-z0-9\-]{1,38}[a-z0-9]$', subdomain_name):
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Subdomain must be 3-40 chars, lowercase letters/numbers/hyphens only, cannot start or end with hyphen",
+            )
+        # Check uniqueness in subdomains table
+        from app.models.subdomain import Subdomain
+        sub_result = await db.execute(select(Subdomain).where(Subdomain.subdomain == subdomain_name))
+        if sub_result.scalar_one_or_none():
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"Subdomain '{subdomain_name}.staffbot.my' is already taken. Please choose another.",
+            )
+        # Also check clients.subdomain column
+        client_sub_result = await db.execute(select(Client).where(Client.subdomain == subdomain_name))
+        if client_sub_result.scalar_one_or_none():
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"Subdomain '{subdomain_name}.staffbot.my' is already taken. Please choose another.",
+            )
+
+    # Determine package
+    package_name = client_data.package or "basic"
+
     # Create client
     client = Client(
         name=client_data.name,
@@ -42,16 +72,28 @@ async def register(client_data: ClientCreate, db: AsyncSession = Depends(get_db)
         password_hash=hash_password(client_data.password),
         company=client_data.company,
         phone=client_data.phone,
-        package="basic",
+        package=package_name,
+        subdomain=subdomain_name,
         status="pending",
     )
     db.add(client)
     await db.flush()
 
+    # Lock subdomain if provided
+    if subdomain_name:
+        from app.models.subdomain import Subdomain
+        subdomain = Subdomain(
+            subdomain=subdomain_name,
+            client_id=client.id,
+            status="reserved",
+            notes=f"Reserved during registration by {client_data.name}",
+        )
+        db.add(subdomain)
+
     # Create pending subscription
     sub = Subscription(
         client_id=client.id,
-        package="basic",
+        package=package_name,
         status="pending",
         managed_token_quota=0,
         start_date=datetime.now(),
@@ -60,6 +102,7 @@ async def register(client_data: ClientCreate, db: AsyncSession = Depends(get_db)
     await db.flush()
 
     # Notify admin about new registration
+    subdomain_info = f"\n• Subdomain: {subdomain_name}.staffbot.my" if subdomain_name else ""
     await NotificationService.notify_admin(
         subject="📝 New Registration — StaffBot.my",
         body=(
@@ -68,6 +111,7 @@ async def register(client_data: ClientCreate, db: AsyncSession = Depends(get_db)
             f"• Email: {client.email}\n"
             f"• Syarikat: {client.company or '-'}\n"
             f"• Pakej: {client.package.title()}"
+            f"{subdomain_info}"
         ),
     )
 

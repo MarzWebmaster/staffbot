@@ -149,7 +149,7 @@ async def health_check():
 from app.routers import auth, clients, subscriptions, containers, webhooks, notifications
 from app.routers.billing import router as billing_router
 from app.routers.llm_providers import router as user_llm_providers_router
-from app.routers.admin import dashboard, packages, users, settings as admin_settings, policy as admin_policy
+from app.routers.admin import dashboard, packages, users, settings as admin_settings, policy as admin_policy, subdomains as admin_subdomains
 from app.routers.admin.packages import public_router as packages_public_router
 from app.routers.admin.llm_providers import router as admin_llm_providers_router
 from app.routers.affiliates import router as user_affiliates_router
@@ -168,6 +168,7 @@ app.include_router(dashboard.router, prefix="/api/v1/admin", tags=["Admin"])
 app.include_router(packages.router, prefix="/api/v1/admin/packages", tags=["Admin Packages"])
 app.include_router(packages_public_router, prefix="/api/v1/packages", tags=["Public Packages"])
 app.include_router(users.router, prefix="/api/v1/admin/users", tags=["Admin Users"])
+app.include_router(admin_subdomains.router, prefix="/api/v1/admin/subdomains", tags=["Admin Subdomains"])
 app.include_router(admin_settings.router, prefix="/api/v1/admin/settings", tags=["Admin Settings"])
 app.include_router(admin_llm_providers_router, prefix="/api/v1/admin/providers", tags=["Admin LLM Providers"])
 app.include_router(user_llm_providers_router, prefix="/api/v1/providers", tags=["LLM Providers"])
