@@ -31,7 +31,7 @@ PACKAGE_LIMITS = {
             "video_gen", "tts", "image_gen",
         ],
         "disabled_skills": [],
-        "enabled_toolsets": ["web", "file", "terminal", "memory", "search"],
+        "enabled_toolsets": ["web", "file", "terminal", "memory", "search", "staffbot"],
     },
     "basic": {
         "max_turns": 20,
@@ -47,7 +47,7 @@ PACKAGE_LIMITS = {
         ],
         "disabled_skills": [],
         "enabled_toolsets": ["web", "file", "terminal", "memory", "search", "skills",
-                             "session_search", "messaging", "clarify"],
+                             "session_search", "messaging", "clarify", "staffbot"],
     },
     "pro": {
         "max_turns": 30,

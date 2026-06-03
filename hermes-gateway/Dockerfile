@@ -45,6 +45,12 @@ RUN ln -s /opt/hermes-agent /opt/hermes
 RUN python3 -m venv /opt/hermes/.venv && \
     /opt/hermes/.venv/bin/pip install --no-cache-dir -e /opt/hermes-agent
 
+# ── StaffBot toolset registration (permanent) ──────────────────────────
+# Register staffbot toolset in Hermes Agent source so tools are discoverable
+COPY docker/patch_hermes_toolsets.py /tmp/patch_hermes_toolsets.py
+RUN python3 /tmp/patch_hermes_toolsets.py && rm /tmp/patch_hermes_toolsets.py
+
+
 # ── StaffBot-specific dependencies ─────────────────────────────────────
 RUN pip install --no-cache-dir \
     asyncpg \
