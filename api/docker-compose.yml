@@ -34,6 +34,8 @@ services:
       - STAFFBOT_CORE_IMAGE=staffbot-core:latest
       - STAFFBOT_SERVER_B_API_URL=http://staffbot-gateway:8080
       - STAFFBOT_SERVER_B_API_KEY=AUTH_KEY_REDACTED
+      - HERMES_GATEWAY_URL=http://staffbot-gateway:8642
+      - HERMES_API_KEY=sk-hermes-gateway-2026-secure
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - /root/staffbot/containers:/root/staffbot/containers

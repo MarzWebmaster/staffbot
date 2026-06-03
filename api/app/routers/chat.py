@@ -51,6 +51,8 @@ logger = logging.getLogger(__name__)
 
 GATEWAY_URL = os.environ.get("STAFFBOT_SERVER_B_API_URL", "http://staffbot-gateway:8080")
 GATEWAY_KEY = os.environ.get("STAFFBOT_SERVER_B_API_KEY", "")
+HERMES_URL = os.environ.get("HERMES_GATEWAY_URL", "http://staffbot-gateway:8642")
+HERMES_KEY = os.environ.get("HERMES_API_KEY", "")
 
 
 class ChatSendRequest(BaseModel):
@@ -172,25 +174,31 @@ async def chat_send(
     )
     await db.commit()
 
-    # ── 5. Proxy to Gateway ──────────────────────────────────────
+    # ── 5. Call Hermes Native Gateway (OpenAI-compatible) ─────────
     headers = {
         "Content-Type": "application/json",
-        "x-api-key": GATEWAY_KEY,
+        "Authorization": f"Bearer {HERMES_KEY}",
     }
 
     try:
         async with httpx.AsyncClient(timeout=120) as client:
             resp = await client.post(
-                f"{GATEWAY_URL}/api/chat/send",
+                f"{HERMES_URL}/v1/chat/completions",
                 json={
-                    "client_id": client_id,
-                    "container_id": data.container_id,
-                    "content": data.content,
-                    "provider": data.provider,
-                    "model": data.model,
-                    "api_key": data.api_key,
-                    "system_context": json.dumps(system_context),
-                    "auth_token": auth_token,
+                    "model": data.model or "deepseek-v4-flash",
+                    "messages": [
+                        {
+                            "role": "system",
+                            "content": (
+                                f"You are an AI Staff agent for {current_user.name or 'Client'} "
+                                f"({current_user.company or 'StaffBot'}). "
+                                f"Client ID: {client_id}. "
+                                "Be helpful, professional, and concise."
+                            ),
+                        },
+                        {"role": "user", "content": data.content},
+                    ],
+                    "max_tokens": 2000,
                 },
                 headers=headers,
             )
@@ -201,7 +209,7 @@ async def chat_send(
         await db.commit()
         return {"success": False, "error": "timeout", "message": "Request timed out. Please try again."}
     except Exception as e:
-        logger.error(f"Gateway error for client #{client_id}: {e}")
+        logger.error(f"Hermes error for client #{client_id}: {e}")
         await _save_message(db=db, client_id=client_id, role="assistant",
                            content=f"[Error: AI service unavailable]", provider=data.provider)
         await db.commit()
@@ -213,7 +221,17 @@ async def chat_send(
         await db.commit()
         return {"success": False, "error": "gateway_error", "message": f"Gateway error: {resp.status_code}"}
 
-    result = resp.json()
+    hermes_data = resp.json()
+    choices = hermes_data.get("choices", [])
+    assistant_content = choices[0].get("message", {}).get("content", "") if choices else ""
+    
+    result = {
+        "success": True,
+        "content": assistant_content,
+        "model": hermes_data.get("model", data.model or "deepseek-v4-flash"),
+        "provider": data.provider or "deepseek",
+        "tokens_used": hermes_data.get("usage", {}).get("total_tokens", 0),
+    }
 
     # ── 6. Save assistant response ────────────────────────────────
     if result.get("success") and result.get("content"):
