@@ -36,6 +36,8 @@ services:
       - STAFFBOT_SERVER_B_API_KEY=AUTH_KEY_REDACTED
       - HERMES_GATEWAY_URL=http://staffbot-gateway:8642
       - HERMES_API_KEY=sk-hermes-gateway-2026-secure
+      - MIMO_API_KEY=sk-jemaah-mimo-key-2024-prod
+      - MIMO_BASE_URL=https://jemaahapi.tail5cfbb9.ts.net/v1
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - /root/staffbot/containers:/root/staffbot/containers

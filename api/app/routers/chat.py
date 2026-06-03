@@ -51,6 +51,8 @@ logger = logging.getLogger(__name__)
 
 GATEWAY_URL = os.environ.get("STAFFBOT_SERVER_B_API_URL", "http://staffbot-gateway:8080")
 GATEWAY_KEY = os.environ.get("STAFFBOT_SERVER_B_API_KEY", "")
+MIMO_URL = os.environ.get("MIMO_BASE_URL", "https://jemaahapi.tail5cfbb9.ts.net/v1")
+MIMO_KEY = os.environ.get("MIMO_API_KEY", "")
 HERMES_URL = os.environ.get("HERMES_GATEWAY_URL", "http://staffbot-gateway:8642")
 HERMES_KEY = os.environ.get("HERMES_API_KEY", "")
 
@@ -61,6 +63,7 @@ class ChatSendRequest(BaseModel):
     provider: str = "mimo"
     model: Optional[str] = None
     api_key: Optional[str] = None
+    image_base64: Optional[str] = None
 
 
 async def _save_message(db: AsyncSession, client_id: int, role: str, content: str,
@@ -174,34 +177,50 @@ async def chat_send(
     )
     await db.commit()
 
-    # ── 5. Call Hermes Native Gateway (OpenAI-compatible) ─────────
-    headers = {
-        "Content-Type": "application/json",
-        "Authorization": f"Bearer {HERMES_KEY}",
-    }
+    # ── 5. Route: Vision → Gateway :8080 (Mimo Omni) | Text → Hermes :8642 ─
+    has_image = bool(data.image_base64)
+
+    if has_image:
+        # Vision route — use Mimo Omni via custom gateway
+        target_url = f"{GATEWAY_URL}/api/chat/send"
+        req_headers = {"Content-Type": "application/json", "x-api-key": GATEWAY_KEY}
+        payload = {
+            "client_id": client_id,
+            "container_id": data.container_id,
+            "content": data.content,
+            "provider": "mimo",
+            "model": "mimo/mimo-v2-omni",
+            "api_key": data.api_key,
+            "image_base64": data.image_base64,
+            "system_context": system_context,
+        }
+    else:
+        # Text route — Hermes Native with DeepSeek + tools
+        target_url = f"{HERMES_URL}/v1/chat/completions"
+        req_headers = {
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {HERMES_KEY}",
+        }
+        payload = {
+            "model": data.model or "deepseek-v4-flash",
+            "messages": [
+                {
+                    "role": "system",
+                    "content": (
+                        f"You are an AI Staff agent for {current_user.name or 'Client'} "
+                        f"({current_user.company or 'StaffBot'}). "
+                        f"Client ID: {client_id}. "
+                        "Be helpful, professional, and concise."
+                    ),
+                },
+                {"role": "user", "content": data.content},
+            ],
+            "max_tokens": 2000,
+        }
 
     try:
         async with httpx.AsyncClient(timeout=120) as client:
-            resp = await client.post(
-                f"{HERMES_URL}/v1/chat/completions",
-                json={
-                    "model": data.model or "deepseek-v4-flash",
-                    "messages": [
-                        {
-                            "role": "system",
-                            "content": (
-                                f"You are an AI Staff agent for {current_user.name or 'Client'} "
-                                f"({current_user.company or 'StaffBot'}). "
-                                f"Client ID: {client_id}. "
-                                "Be helpful, professional, and concise."
-                            ),
-                        },
-                        {"role": "user", "content": data.content},
-                    ],
-                    "max_tokens": 2000,
-                },
-                headers=headers,
-            )
+            resp = await client.post(target_url, json=payload, headers=req_headers)
     except httpx.TimeoutException:
         # Save error as assistant message
         await _save_message(db=db, client_id=client_id, role="assistant",
