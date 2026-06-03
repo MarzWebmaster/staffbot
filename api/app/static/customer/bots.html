@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>My AI Staff — StaffBot.my</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="stylesheet" href="/static/css/app.css?v=1779798256">
+    <link rel="stylesheet" href="/static/css/app.css?v=1780497829">
 </head>
 <body>
     <button class="sidebar-toggle" onclick="toggleSidebar()">☰</button>
@@ -101,7 +101,7 @@
             const container = document.getElementById('bots-container');
             if (!containers.length) {
                 container.innerHTML = `
-                    <div class="card" style="text-align:center;padding:60px">
+                    <div class="card" style="text-align:center;padding:32px">
                         <div style="font-size:48px;margin-bottom:16px">🤖</div>
                         <h3 style="margin-bottom:8px">No AI Staff Yet</h3>
                         <p style="color:var(--text-light);margin-bottom:24px">Klik "Tambah Staff" untuk cipta staff AI pertama anda.</p>
@@ -112,12 +112,12 @@
             }
             container.innerHTML = `<div class="grid-2">${containers.map(c => `
                 <div class="card">
-                    <div style="display:flex;justify-content:space-between;align-items:start;margin-bottom:12px">
+                    <div style="display:flex;justify-content:space-between;align-items:start;margin-bottom:12px;flex-wrap:wrap;gap:8px">
                         <div>
                             <h3 style="font-size:16px;margin-bottom:4px">${c.name}</h3>
                             <div>${statusBadge(c.status)}</div>
                         </div>
-                        <div style="display:flex;gap:8px">
+                        <div class="bot-card-actions" style="display:flex;gap:8px;flex-wrap:wrap">
                             <button class="btn btn-outline btn-sm" onclick="window.location.href='chat.html?bot=${c.id}'">💬 Chat</button>
                             <button class="btn btn-danger btn-sm" onclick="showDeleteModal(${c.id},'${c.name}')">🗑</button>
                         </div>

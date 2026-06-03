@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Tasks — StaffBot.my</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="stylesheet" href="/static/css/app.css?v=1779798256">
+    <link rel="stylesheet" href="/static/css/app.css?v=1780497829">
 </head>
 <body>
     <button class="sidebar-toggle" onclick="toggleSidebar()">☰</button>
@@ -29,8 +29,8 @@
         <div class="main-content">
             <div class="topbar">
                 <h1>📋 Tasks</h1>
-                <div style="display:flex;gap:12px">
-                    <select class="form-input" id="statusFilter" style="width:140px" onchange="loadTasks()">
+                <div style="display:flex;gap:12px;flex-wrap:wrap">
+                    <select class="form-input" id="statusFilter" style="min-width:120px;max-width:200px;width:auto" onchange="loadTasks()">
                         <option value="">All Status</option>
                         <option value="pending">Pending</option>
                         <option value="in_progress">In Progress</option>

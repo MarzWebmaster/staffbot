@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Settings — StaffBot.my</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="stylesheet" href="/static/css/app.css?v=1779798256">
+    <link rel="stylesheet" href="/static/css/app.css?v=1780497829">
 </head>
 <body>
     <button class="sidebar-toggle" onclick="toggleSidebar()">☰</button>
@@ -69,12 +69,12 @@
                     Choose which token source your Staff AI should use first.
                 </p>
                 <div style="display:flex;gap:16px;flex-wrap:wrap">
-                    <label class="radio-card" onclick="setPriority('managed')" id="priorityManaged" style="cursor:pointer;flex:1;min-width:200px;padding:20px;border:2px solid var(--border);border-radius:12px;text-align:center;transition:all 0.2s">
+                    <label class="radio-card" onclick="setPriority('managed')" id="priorityManaged" style="cursor:pointer;flex:1;min-width:140px;padding:16px;border:2px solid var(--border);border-radius:12px;text-align:center;transition:all 0.2s">
                         <div style="font-size:32px;margin-bottom:8px">⚙️</div>
                         <div style="font-weight:600;font-size:15px">Package Tokens First</div>
                         <div style="font-size:12px;color:var(--text-light);margin-top:4px">Use tokens from your subscription</div>
                     </label>
-                    <label class="radio-card" onclick="setPriority('byok')" id="priorityByok" style="cursor:pointer;flex:1;min-width:200px;padding:20px;border:2px solid var(--border);border-radius:12px;text-align:center;transition:all 0.2s">
+                    <label class="radio-card" onclick="setPriority('byok')" id="priorityByok" style="cursor:pointer;flex:1;min-width:140px;padding:16px;border:2px solid var(--border);border-radius:12px;text-align:center;transition:all 0.2s">
                         <div style="font-size:32px;margin-bottom:8px">🔑</div>
                         <div style="font-weight:600;font-size:15px">BYOK First</div>
                         <div style="font-size:12px;color:var(--text-light);margin-top:4px">Use your own API key first</div>
@@ -205,7 +205,7 @@
 
         document.getElementById('byokTabContent').innerHTML = `
             <div style="padding:20px;border:1px solid var(--border);border-radius:12px">
-                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:8px">
                     <div>
                         <div style="font-size:18px;font-weight:600">${p.icon} ${p.display}</div>
                         <div style="font-size:13px;color:var(--text-light);margin-top:2px">
@@ -332,7 +332,7 @@
             const channels = await api('/notifications/channels');
             document.getElementById('channels-list').innerHTML = channels.length
                 ? channels.map(c => `
-                    <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border)">
+                    <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;flex-wrap:wrap;gap:4px;border-bottom:1px solid var(--border)">
                         <div><strong>${c.channel}</strong>: ${c.value}</div>
                         <div style="display:flex;gap:8px">
                             <span class="status-badge ${c.is_active ? 'status-active' : 'status-error'}">${c.is_active ? 'Active' : 'Inactive'}</span>

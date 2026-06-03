@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Chat — StaffBot.my</title>
-    <link rel="stylesheet" href="/static/css/app.css?v=1748883000">
+    <link rel="stylesheet" href="/static/css/app.css?v=1780497829">
     <style>
         .chat-layout { display:flex; flex-direction:column; height:calc(100vh - 120px); max-width:900px; margin:0 auto; }
         .chat-header { display:flex; align-items:center; justify-content:space-between; padding:12px 0; border-bottom:1px solid var(--border); }
@@ -13,7 +13,7 @@
         .chat-msg { max-width:80%; padding:12px 16px; border-radius:12px; line-height:1.5; font-size:14px; }
         .chat-user { align-self:flex-end; background:var(--accent); color:#fff; border-bottom-right-radius:4px; }
         .chat-bot { align-self:flex-start; background:var(--card-bg); border:1px solid var(--border); border-bottom-left-radius:4px; }
-        .msg-sender { font-size:11px; color:var(--muted); margin-bottom:4px; font-weight:600; }
+        .msg-sender { font-size:12px; color:var(--muted); margin-bottom:4px; font-weight:600; }
         .msg-attachments { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:8px; }
         .msg-attachment { display:flex; align-items:center; gap:6px; padding:4px 10px; background:var(--bg); border-radius:6px; font-size:12px; border:1px solid var(--border); }
         .msg-attachment .remove-attach { cursor:pointer; color:var(--danger); font-weight:bold; font-size:14px; }
@@ -37,8 +37,8 @@
         .drop-zone-inner p { margin-top:8px; font-size:16px; }
         .loading { display:inline-block; width:20px; height:20px; border:2px solid var(--muted); border-top-color:var(--accent); border-radius:50%; animation:spin .6s linear infinite; margin-right:8px; }
         @keyframes spin { to { transform:rotate(360deg); } }
-        .link-badge { display:inline-flex; align-items:center; gap:4px; padding:3px 8px; background:var(--accent); color:#fff; border-radius:12px; font-size:11px; }
-        .file-badge { display:inline-flex; align-items:center; gap:4px; padding:3px 8px; background:#5865f2; color:#fff; border-radius:12px; font-size:11px; }
+        .link-badge { display:inline-flex; align-items:center; gap:4px; padding:3px 8px; background:var(--accent); color:#fff; border-radius:12px; font-size:12px; }
+        .file-badge { display:inline-flex; align-items:center; gap:4px; padding:3px 8px; background:#5865f2; color:#fff; border-radius:12px; font-size:12px; }
         .chat-input-wrapper { position:relative; }
     </style>
 </head>
@@ -72,7 +72,7 @@
                         🔗 Link
                     </button>
                     <input type="file" id="fileInput" style="display:none" accept=".pdf,.docx,.doc,.txt,.md,.csv,.json,.png,.jpg,.jpeg,.gif,.webp" onchange="handleFileUpload(event)" multiple>
-                    <span style="font-size:11px;color:var(--muted);margin-left:auto;" id="tokenBadge">
+                    <span style="font-size:12px;color:var(--muted);margin-left:auto;" id="tokenBadge">
                         Tokens: <span id="tokenBadgeText">...</span>
                     </span>
                 </div>
