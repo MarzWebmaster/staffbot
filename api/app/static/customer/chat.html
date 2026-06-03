@@ -3,6 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self' https://cdn.tailwindcss.com; script-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com; style-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com; img-src 'self' data: https:; connect-src 'self'; font-src 'self' data:;">
     <title>Chat — StaffBot.my</title>
     <link rel="stylesheet" href="/static/css/app.css?v=1780497829">
     <style>
@@ -103,7 +104,7 @@
     </main>
 </div>
 
-<script src="/static/js/app.js?v=1748883000"></script>
+<script src="/static/js/app.js?v=1780499744"></script>
 <script>
 // ── State ──────────────────────────────────────────
 let currentBotId = null;
@@ -140,7 +141,7 @@ async function loadBots() {
     try {
         const bots = await api('/containers/list');
         const sel = document.getElementById('botSelector');
-        sel.innerHTML = bots.map(b => `<option value="${b.id}">${b.agent_name || b.name || 'Bot ' + b.id}</option>`).join('');
+        sel.innerHTML = bots.map(b => `<option value="${b.id}">${escapeHtml(b.agent_name || b.name || 'Bot ' + b.id)}</option>`).join('');
         const params = new URLSearchParams(location.search);
         if (params.get('bot')) sel.value = params.get('bot');
         switchBot();
@@ -290,7 +291,7 @@ function removeAttachment(i) {
 function appendSystemMessage(text) {
     const msgs = document.getElementById('chatMessages');
     const id = 'sys-' + Date.now();
-    msgs.innerHTML += `<div class="chat-msg chat-bot" id="${id}" style="font-size:12px;opacity:0.8;">${text}</div>`;
+    msgs.innerHTML += `<div class="chat-msg chat-bot" id="${id}" style="font-size:12px;opacity:0.8;">${escapeHtml(text)}</div>`;
     msgs.scrollTop = msgs.scrollHeight;
     return id;
 }
@@ -348,7 +349,7 @@ data:${a.mime_type};base64,${a.image_base64}`;
     // Show typing
     const msgs = document.getElementById('chatMessages');
     const typingId = 'typing-' + Date.now();
-    msgs.innerHTML += `<div class="chat-msg chat-bot" id="${typingId}"><div class="msg-sender">${currentAgentName}</div><div class="loading"></div> Thinking...</div>`;
+    msgs.innerHTML += `<div class="chat-msg chat-bot" id="${typingId}"><div class="msg-sender">${escapeHtml(currentAgentName)}</div><div class="loading"></div> Thinking...</div>`;
     msgs.scrollTop = msgs.scrollHeight;
 
     try {

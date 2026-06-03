@@ -3,6 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self' https://cdn.tailwindcss.com; script-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com; style-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com; img-src 'self' data: https:; connect-src 'self'; font-src 'self' data:;">
     <title>My AI Staff — StaffBot.my</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="/static/css/app.css?v=1780497829">
@@ -84,7 +85,7 @@
 
     <div id="toast-container" class="toast-container"></div>
 
-    <script src="/static/js/app.js?v=1779798256"></script>
+    <script src="/static/js/app.js?v=1780499744"></script>
     <script>
     let deleteTargetId = null;
 
@@ -114,7 +115,7 @@
                 <div class="card">
                     <div style="display:flex;justify-content:space-between;align-items:start;margin-bottom:12px;flex-wrap:wrap;gap:8px">
                         <div>
-                            <h3 style="font-size:16px;margin-bottom:4px">${c.name}</h3>
+                            <h3 style="font-size:16px;margin-bottom:4px">${escapeHtml(c.name)}</h3>
                             <div>${statusBadge(c.status)}</div>
                         </div>
                         <div class="bot-card-actions" style="display:flex;gap:8px;flex-wrap:wrap">
@@ -136,7 +137,7 @@
     }
 
     function showAddBotModal() { openModal('addBotModal'); document.getElementById('botName').value = ''; document.getElementById('agentName').value = ''; }
-    function showDeleteModal(id, name) { deleteTargetId = id; document.getElementById('deleteBotName').textContent = name; openModal('deleteBotModal'); }
+    function showDeleteModal(id, name) { deleteTargetId = id; document.getElementById('deleteBotName').textContent = escapeHtml(name); openModal('deleteBotModal'); }
 
     async function createBot(e) {
         e.preventDefault();

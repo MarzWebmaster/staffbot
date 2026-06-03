@@ -253,3 +253,18 @@ document.addEventListener('click', function(e) {
 document.addEventListener('DOMContentLoaded', function() {
     if (AUTH_TOKEN) loadProfile().then(function(u) { if (u) renderSidebarUser(u); });
 });
+
+// HTML escape — prevent XSS in innerHTML
+function escapeHtml(str) {
+    if (!str) return "";
+    const div = document.createElement("div");
+    div.appendChild(document.createTextNode(str));
+    return div.innerHTML;
+}
+
+// Safe innerHTML setter
+function safeInnerHTML(el, html) {
+    if (typeof el === "string") el = document.getElementById(el);
+    if (!el) return;
+    el.innerHTML = html;
+}
