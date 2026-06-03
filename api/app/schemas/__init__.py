@@ -35,3 +35,4 @@ from app.schemas.affiliate import (
     AffiliateClickResponse, AffiliateDashboardResponse,
 )
 from app.schemas.webhook import StripeWebhookEvent, StripeCheckoutSession
+from app.schemas.task import TaskCreate, TaskUpdate, TaskResponse

@@ -1,7 +1,7 @@
 """Chat router — proxies to Gateway with token tracking + BYOK + message history."""
 import os, httpx, json, logging
 from datetime import datetime, timezone
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Header
 from pydantic import BaseModel
 from typing import Optional, List
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -50,11 +50,14 @@ async def _save_message(db: AsyncSession, client_id: int, role: str, content: st
 @router.post("/send")
 async def chat_send(
     data: ChatSendRequest,
+    request: Request,
     current_user: Client = Depends(get_current_client),
     db: AsyncSession = Depends(get_db),
 ):
     """Send a chat message with token tracking + BYOK + message persistence."""
     client_id = current_user.id
+    auth_token = request.headers.get("authorization", "").replace("Bearer ", "")
+
 
     # ── 1. Determine token source ────────────────────────────────
     is_byok = bool(data.api_key)
@@ -155,6 +158,7 @@ async def chat_send(
                     "model": data.model,
                     "api_key": data.api_key,
                     "system_context": json.dumps(system_context),
+                    "auth_token": auth_token,
                 },
                 headers=headers,
             )

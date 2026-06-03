@@ -1,80 +1,138 @@
-"""Tasks router — proxies to Gateway (same server)."""
-import os, httpx
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select, update, delete, func
 from typing import Optional, List
-from app.middleware.auth import get_current_client
+from app.database import get_db
+from app.models.task import Task
 from app.models.client import Client
+from app.schemas.task import TaskCreate, TaskUpdate, TaskResponse
+from app.middleware.auth import get_current_client
 
 router = APIRouter()
-GATEWAY_URL = os.environ.get("STAFFBOT_SERVER_B_API_URL", "http://staffbot-gateway:8080")
-GATEWAY_KEY = os.environ.get("STAFFBOT_SERVER_B_API_KEY", "")
-HEADERS = {"Content-Type": "application/json", "x-api-key": GATEWAY_KEY}
 
-class TaskCreateRequest(BaseModel):
-    title: str
-    description: Optional[str] = ""
-    priority: str = "normal"
-    assigned_to: Optional[str] = None
 
-class TaskUpdateRequest(BaseModel):
-    status: Optional[str] = None
-    description: Optional[str] = None
-
-@router.post("/create")
-async def create_task(
-    data: TaskCreateRequest,
-    current_user: Client = Depends(get_current_client),
-):
-    async with httpx.AsyncClient(timeout=30) as client:
-        resp = await client.post(
-            f"{GATEWAY_URL}/api/tasks/create",
-            json={
-                "client_id": current_user.id,
-                "title": data.title,
-                "description": data.description,
-                "priority": data.priority,
-                "assigned_to": data.assigned_to,
-            },
-            headers=HEADERS,
-        )
-    if resp.status_code != 200:
-        raise HTTPException(status_code=resp.status_code, detail=resp.text[:500])
-    return resp.json()
-
-@router.get("/list")
+@router.get("/list", response_model=List[TaskResponse])
 async def list_tasks(
-    status: Optional[str] = None,
+    status: Optional[str] = Query(None),
+    priority: Optional[str] = Query(None),
+    assigned_to: Optional[str] = Query(None),
+    db: AsyncSession = Depends(get_db),
     current_user: Client = Depends(get_current_client),
 ):
-    params = {"client_id": current_user.id}
+    """List all tasks for the current user."""
+    query = select(Task).where(Task.client_id == current_user.id)
+    
     if status:
-        params["status"] = status
-    async with httpx.AsyncClient(timeout=30) as client:
-        resp = await client.get(
-            f"{GATEWAY_URL}/api/tasks/list",
-            params=params,
-            headers=HEADERS,
-        )
-    if resp.status_code != 200:
-        raise HTTPException(status_code=resp.status_code, detail=resp.text[:500])
-    return resp.json()
+        query = query.where(Task.status == status)
+    if priority:
+        query = query.where(Task.priority == priority)
+    if assigned_to:
+        query = query.where(Task.assigned_to == assigned_to)
+    
+    query = query.order_by(Task.created_at.desc())
+    result = await db.execute(query)
+    tasks = result.scalars().all()
+    return tasks
 
-@router.put("/{task_id}")
+
+@router.post("/create", response_model=TaskResponse)
+async def create_task(
+    task_data: TaskCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: Client = Depends(get_current_client),
+):
+    """Create a new task."""
+    task = Task(
+        client_id=current_user.id,
+        title=task_data.title,
+        description=task_data.description,
+        priority=task_data.priority,
+        assigned_to=task_data.assigned_to,
+        container_id=task_data.container_id,
+        created_by_agent=task_data.created_by_agent,
+    )
+    db.add(task)
+    await db.flush()
+    await db.refresh(task)
+    return task
+
+
+@router.get("/{task_id}", response_model=TaskResponse)
+async def get_task(
+    task_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: Client = Depends(get_current_client),
+):
+    """Get a specific task."""
+    result = await db.execute(
+        select(Task).where(Task.id == task_id, Task.client_id == current_user.id)
+    )
+    task = result.scalar_one_or_none()
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+    return task
+
+
+@router.put("/{task_id}", response_model=TaskResponse)
 async def update_task(
     task_id: int,
-    data: TaskUpdateRequest,
+    task_data: TaskUpdate,
+    db: AsyncSession = Depends(get_db),
     current_user: Client = Depends(get_current_client),
 ):
-    payload = {}
-    if data.status: payload["status"] = data.status
-    if data.description is not None: payload["description"] = data.description
-    async with httpx.AsyncClient(timeout=30) as client:
-        resp = await client.put(
-            f"{GATEWAY_URL}/api/tasks/{task_id}",
-            json=payload,
-            headers=HEADERS,
-        )
-    if resp.status_code != 200:
-        raise HTTPException(status_code=resp.status_code, detail=resp.text[:500])
-    return resp.json()
+    """Update a task."""
+    result = await db.execute(
+        select(Task).where(Task.id == task_id, Task.client_id == current_user.id)
+    )
+    task = result.scalar_one_or_none()
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+    
+    update_data = task_data.model_dump(exclude_unset=True)
+    for field, value in update_data.items():
+        setattr(task, field, value)
+    
+    await db.flush()
+    await db.refresh(task)
+    return task
+
+
+@router.delete("/{task_id}")
+async def delete_task(
+    task_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: Client = Depends(get_current_client),
+):
+    """Delete a task."""
+    result = await db.execute(
+        select(Task).where(Task.id == task_id, Task.client_id == current_user.id)
+    )
+    task = result.scalar_one_or_none()
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+    
+    await db.delete(task)
+    return {"success": True, "message": "Task deleted"}
+
+
+@router.get("/stats/summary")
+async def task_stats(
+    db: AsyncSession = Depends(get_db),
+    current_user: Client = Depends(get_current_client),
+):
+    """Get task statistics."""
+    result = await db.execute(
+        select(
+            func.count(Task.id).label("total"),
+            func.count(Task.id).filter(Task.status == "pending").label("pending"),
+            func.count(Task.id).filter(Task.status == "in_progress").label("in_progress"),
+            func.count(Task.id).filter(Task.status == "completed").label("completed"),
+        ).where(Task.client_id == current_user.id)
+    )
+    row = result.one()
+    return {
+        "total": row.total,
+        "pending": row.pending,
+        "in_progress": row.in_progress,
+        "completed": row.completed,
+    }

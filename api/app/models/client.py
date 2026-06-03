@@ -35,3 +35,4 @@ class Client(Base):
     api_keys = relationship("ApiKey", back_populates="client")
     notification_channels = relationship("NotificationChannel", back_populates="client")
     notifications_log = relationship("NotificationLog", back_populates="client")
+    tasks = relationship("Task", back_populates="client")

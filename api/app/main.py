@@ -157,6 +157,7 @@ from app.routers.affiliates import router as user_affiliates_router
 from app.routers.admin.affiliates import router as admin_affiliates_router
 from app.routers.admin.payments import router as admin_payments_router
 from app.routers.admin.token_topups import router as admin_topups_router
+from app.routers.tasks import router as tasks_router
 
 app.include_router(auth.router, prefix="/api/v1/auth", tags=["Authentication"])
 app.include_router(billing_router, prefix="/api/v1/billing", tags=["Billing"])
@@ -178,4 +179,5 @@ app.include_router(chat_router, prefix="/api/v1/chat", tags=["Chat"])
 app.include_router(admin_payments_router, prefix="/api/v1/admin", tags=["Admin Payments"])
 app.include_router(admin_topups_router, prefix="/api/v1/admin/topup-packages", tags=["Admin Top-Up"])
 app.include_router(admin_policy.router, prefix="/api/v1/admin/policy", tags=["Admin Policy"])
+app.include_router(tasks_router, prefix="/api/v1/tasks", tags=["Tasks"])
 app.include_router(user_affiliates_router, prefix="/api/v1/affiliates", tags=["Affiliates"])
