@@ -177,46 +177,42 @@ async def chat_send(
     )
     await db.commit()
 
-    # ── 5. Route: Vision → Gateway :8080 (Mimo Omni) | Text → Hermes :8642 ─
+    # ── 5. Route ALL traffic to Hermes Native :8642 (text + vision) ─
     has_image = bool(data.image_base64)
 
     if has_image:
-        # Vision route — use Mimo Omni via custom gateway
-        target_url = f"{GATEWAY_URL}/api/chat/send"
-        req_headers = {"Content-Type": "application/json", "x-api-key": GATEWAY_KEY}
-        payload = {
-            "client_id": client_id,
-            "container_id": data.container_id,
-            "content": data.content,
-            "provider": "mimo",
-            "model": "mimo/mimo-v2-omni",
-            "api_key": data.api_key,
-            "image_base64": data.image_base64,
-            "system_context": system_context,
-        }
+        # Vision — use Mimo Omni via Hermes custom_providers
+        user_content = [
+            {"type": "text", "text": data.content},
+            {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{data.image_base64}"}},
+        ]
+        model_name = "mimo/mimo-v2-omni"
     else:
-        # Text route — Hermes Native with DeepSeek + tools
-        target_url = f"{HERMES_URL}/v1/chat/completions"
-        req_headers = {
-            "Content-Type": "application/json",
-            "Authorization": f"Bearer {HERMES_KEY}",
-        }
-        payload = {
-            "model": data.model or "deepseek-v4-flash",
-            "messages": [
-                {
-                    "role": "system",
-                    "content": (
-                        f"You are an AI Staff agent for {current_user.name or 'Client'} "
-                        f"({current_user.company or 'StaffBot'}). "
-                        f"Client ID: {client_id}. "
-                        "Be helpful, professional, and concise."
-                    ),
-                },
-                {"role": "user", "content": data.content},
-            ],
-            "max_tokens": 2000,
-        }
+        # Text — use default model with tools
+        user_content = data.content
+        model_name = data.model or "deepseek-v4-flash"
+
+    target_url = f"{HERMES_URL}/v1/chat/completions"
+    req_headers = {
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer {HERMES_KEY}",
+    }
+    payload = {
+        "model": model_name,
+        "messages": [
+            {
+                "role": "system",
+                "content": (
+                    f"You are an AI Staff agent for {current_user.name or 'Client'} "
+                    f"({current_user.company or 'StaffBot'}). "
+                    f"Client ID: {client_id}. "
+                    "Be helpful, professional, and concise."
+                ),
+            },
+            {"role": "user", "content": user_content},
+        ],
+        "max_tokens": 2000,
+    }
 
     try:
         async with httpx.AsyncClient(timeout=120) as client:
