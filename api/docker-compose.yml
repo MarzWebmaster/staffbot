@@ -10,7 +10,7 @@ services:
       - POSTGRES_PASSWORD=DB_PASS_REDACTED
       - POSTGRES_DB=staffbot_db
     ports:
-      - "5433:5432"
+      - "127.0.0.1:5433:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U staffbot -d staffbot_db"]
       interval: 5s
@@ -24,7 +24,7 @@ services:
     container_name: staffbot-api
     restart: unless-stopped
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8000:8000"
     environment:
       - STAFFBOT_DATABASE_URL=postgresql://staffbot:DB_PASS_REDACTED@db:5432/staffbot_db
       - STAFFBOT_CORS_ORIGINS=["https://staffbot.my","https://api.staffbot.my","https://admin.staffbot.my","http://localhost:3000","http://localhost:8000"]
