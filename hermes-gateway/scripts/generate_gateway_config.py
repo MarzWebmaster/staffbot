@@ -110,6 +110,9 @@ def generate_base_config() -> dict:
             "enabled": True,
             "profiles_dir": os.environ.get("STAFFBOT_PROFILES_DIR", "/app/data/profiles"),
         },
+        "platform_toolsets": {
+            "api_server": ["hermes-api-server", "staffbot"],
+        },
         "staffbot": {
             "version": "2.0.0",
             "mode": "multi-tenant-gateway",
