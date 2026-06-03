@@ -142,7 +142,7 @@ async def fetch_soul_async(db_url: str, client_id: int) -> dict | None:
 
 
 def create_profile(client_id: int, package: str, name: str = "", email: str = "",
-                   company: str = "", governance: dict = None, soul: dict = None):
+                   company: str = "", governance: dict = None, soul: dict = None, agent_name: str = None):
     """Create a Hermes profile for a client."""
     profile_dir = os.path.join(PROFILES_DIR, f"client_{client_id}")
 
@@ -160,7 +160,7 @@ def create_profile(client_id: int, package: str, name: str = "", email: str = ""
         yaml.dump(config, f, default_flow_style=False, allow_unicode=True)
 
     # 2. Generate SOUL.md
-    soul_content = _generate_soul_md(client_id, name, company, package, soul)
+    soul_content = _generate_soul_md(client_id, name, company, package, soul, agent_name)
     with open(os.path.join(profile_dir, "SOUL.md"), "w") as f:
         f.write(soul_content)
 
@@ -171,6 +171,7 @@ def create_profile(client_id: int, package: str, name: str = "", email: str = ""
         "name": name,
         "email": email,
         "company": company,
+        "agent_name": agent_name or "",
         "created_at": datetime.now(timezone.utc).isoformat(),
     }
     with open(os.path.join(profile_dir, "client.json"), "w") as f:
@@ -180,7 +181,7 @@ def create_profile(client_id: int, package: str, name: str = "", email: str = ""
     return profile_dir
 
 
-def _generate_soul_md(client_id: int, name: str, company: str, package: str, soul: dict = None) -> str:
+def _generate_soul_md(client_id: int, name: str, company: str, package: str, soul: dict = None, agent_name: str = None) -> str:
     """Generate SOUL.md for a client profile."""
     soul = soul or {}
 
@@ -193,7 +194,8 @@ def _generate_soul_md(client_id: int, name: str, company: str, package: str, sou
         f"**Company:** {company}",
         "",
         "## Identity",
-        f"You are an AI Digital Employee for **{company or name or 'this organization'}**.",
+        f"You are an AI Digital Employee named **{agent_name or 'AIDA (AI Dedicated Assistant)'}** for **{company or name or 'this organization'}**.",
+        f"Always introduce yourself as '{agent_name or 'AIDA (AI Dedicated Assistant)'}' when greeting users.",
         f"Always represent the company professionally and accurately.",
         "",
         "## Personality",
@@ -207,7 +209,7 @@ def _generate_soul_md(client_id: int, name: str, company: str, package: str, sou
         "- NEVER mention that you are a multi-tenant AI system",
         "- NEVER share information about other clients",
         "- Use the company's preferred language",
-        "- Refer to yourself as 'Digital Employee' or 'AI Assistant'",
+        f"- Refer to yourself as '{agent_name or 'AIDA (AI Dedicated Assistant)'}'",
         "",
     ]
 
@@ -268,6 +270,19 @@ def update_profile(client_id: int, package: str = None, governance: dict = None)
 
     with open(os.path.join(profile_dir, "config.yaml"), "w") as f:
         yaml.dump(config, f, default_flow_style=False, allow_unicode=True)
+
+    # Regenerate SOUL.md with agent_name from metadata
+    agent_name = metadata.get("agent_name", "")
+    soul_content = _generate_soul_md(
+        client_id,
+        metadata.get("name", ""),
+        metadata.get("company", ""),
+        package or metadata.get("package", "basic"),
+        soul=None,
+        agent_name=agent_name
+    )
+    with open(os.path.join(profile_dir, "SOUL.md"), "w") as f:
+        f.write(soul_content)
 
     metadata["updated_at"] = datetime.now(timezone.utc).isoformat()
     with open(metadata_path, "w") as f:

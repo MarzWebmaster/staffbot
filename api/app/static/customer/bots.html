@@ -50,6 +50,11 @@
                     <input type="text" class="form-input" id="botName" placeholder="e.g. Marketing Staff" required>
                 </div>
                 <div class="form-group">
+                    <label>Agent Display Name</label>
+                    <input type="text" class="form-input" id="agentName" placeholder="e.g. Sarah, Alex, Luna">
+                    <small style="color:var(--text-light)">The name your AI staff uses when chatting. Leave blank to use Staff Name.</small>
+                </div>
+                <div class="form-group">
                     <label>Skills (select)</label>
                     <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:8px">
                         <label style="font-size:13px"><input type="checkbox" value="chat" checked disabled> Chat</label>
@@ -130,7 +135,7 @@
         } catch { /* handled by api helper */ }
     }
 
-    function showAddBotModal() { openModal('addBotModal'); document.getElementById('botName').value = ''; }
+    function showAddBotModal() { openModal('addBotModal'); document.getElementById('botName').value = ''; document.getElementById('agentName').value = ''; }
     function showDeleteModal(id, name) { deleteTargetId = id; document.getElementById('deleteBotName').textContent = name; openModal('deleteBotModal'); }
 
     async function createBot(e) {
@@ -138,7 +143,7 @@
         const btn = document.getElementById('createBotBtn');
         btn.disabled = true; btn.textContent = 'Creating...';
         try {
-            await api('/containers', { method: 'POST', body: JSON.stringify({ name: document.getElementById('botName').value }) });
+            await api('/containers', { method: 'POST', body: JSON.stringify({ name: document.getElementById('botName').value, agent_name: document.getElementById('agentName').value || null }) });
             showToast('AI Staff created successfully!', 'success');
             closeModal('addBotModal');
             await loadBots();

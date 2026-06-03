@@ -14,6 +14,7 @@ class Container(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     client_id = Column(Integer, ForeignKey("clients.id"), nullable=False)
     name = Column(String(255), default="StaffBot 1")
+    agent_name = Column(String(100), nullable=True)
     container_name = Column(String(255), nullable=True)
     image = Column(String(255), default="staffbot-core:latest")
     port = Column(Integer, nullable=True)

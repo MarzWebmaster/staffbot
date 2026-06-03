@@ -9,11 +9,13 @@ class ContainerBase(BaseModel):
 
 class ContainerCreate(ContainerBase):
     name: str = "StaffBot 1"
+    agent_name: Optional[str] = None
     skills: Optional[List[str]] = None
 
 
 class ContainerUpdate(BaseModel):
     name: Optional[str] = None
+    agent_name: Optional[str] = None
     skills: Optional[List[str]] = None
     status: Optional[str] = None
 
@@ -22,6 +24,7 @@ class ContainerResponse(BaseModel):
     id: int
     client_id: int
     name: str
+    agent_name: Optional[str] = None
     container_name: Optional[str] = None
     image: str
     port: Optional[int] = None

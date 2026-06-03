@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Chat — StaffBot.my</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="stylesheet" href="/static/css/app.css?v=1748882000">
+    <link rel="stylesheet" href="/static/css/app.css?v=1748883000">
 </head>
 <body>
     <button class="sidebar-toggle" onclick="toggleSidebar()">☰</button>
@@ -26,7 +26,7 @@
         </div>
         <div class="main-content">
             <div class="topbar">
-                <h1>Chat with AI Staff</h1>
+                <h1 id="chatTitle">Chat with AI Staff</h1>
                 <div style="display:flex;align-items:center;gap:12px">
                     <select class="form-input" id="botSelector" style="width:200px" onchange="switchBot()">
                         <option value="">Select Staff...</option>
@@ -53,9 +53,12 @@
         </div>
     </div>
     <div id="toast-container" class="toast-container"></div>
-    <script src="/static/js/app.js?v=1748882000"></script>
+    <script src="/static/js/app.js?v=1748883000"></script>
     <script>
     let currentBotId = null;
+    let currentBotName = 'AI Staff';
+    let currentAgentName = 'AI Assistant';
+    let botContainers = [];
     let tokenQuotaExceeded = false;
     let historyLoaded = false;
     const params = new URLSearchParams(window.location.search);
@@ -70,9 +73,9 @@
 
     async function loadBots() {
         try {
-            const containers = await api('/containers/');
+            botContainers = await api('/containers/');
             const sel = document.getElementById('botSelector');
-            sel.innerHTML = '<option value="">Select Staff...</option>' + containers.map(c =>
+            sel.innerHTML = '<option value="">Select Staff...</option>' + botContainers.map(c =>
                 `<option value="${c.id}">${c.name} (${c.status})</option>`
             ).join('');
         } catch {}
@@ -123,6 +126,14 @@
         return n.toString();
     }
 
+    function getAgentName() {
+        // Find current bot in containers list
+        const bot = botContainers.find(c => String(c.id) === String(currentBotId));
+        if (bot && bot.agent_name) return bot.agent_name;
+        if (bot) return bot.name;
+        return 'AI Assistant';
+    }
+
     async function switchBot() {
         currentBotId = document.getElementById('botSelector').value;
         const input = document.getElementById('chatInput');
@@ -130,12 +141,23 @@
         const msgs = document.getElementById('chatMessages');
 
         if (currentBotId) {
-            input.disabled = false; btn.disabled = false; input.focus();
+            // Get agent name from containers list
+            const bot = botContainers.find(c => String(c.id) === String(currentBotId));
+            currentBotName = bot ? bot.name : 'AI Staff';
+            currentAgentName = (bot && bot.agent_name) ? bot.agent_name : currentBotName;
+
+            // Update title
+            document.getElementById('chatTitle').textContent = `Chat with ${currentAgentName}`;
+
+            input.disabled = false; btn.disabled = false; input.placeholder = `Message ${currentAgentName}...`; input.focus();
             // Load chat history from DB
             msgs.innerHTML = `<div class="chat-msg chat-bot"><div class="loading"></div> Loading history...</div>`;
             await loadHistory(parseInt(currentBotId));
         } else {
-            input.disabled = true; btn.disabled = true;
+            currentBotName = 'AI Staff';
+            currentAgentName = 'AI Assistant';
+            document.getElementById('chatTitle').textContent = 'Chat with AI Staff';
+            input.disabled = true; btn.disabled = true; input.placeholder = 'Type a message...';
             msgs.innerHTML = `<div class="chat-msg chat-bot">Select an AI staff above to start chatting.<div class="msg-time">Now</div></div>`;
         }
     }
@@ -147,7 +169,7 @@
             const messages = resp.messages || [];
 
             if (messages.length === 0) {
-                msgs.innerHTML = `<div class="chat-msg chat-bot">AI Staff is ready to help. Type your message.<div class="msg-time">${new Date().toLocaleTimeString()}</div></div>`;
+                msgs.innerHTML = `<div class="chat-msg chat-bot"><div class="msg-sender">${currentAgentName}</div>Hi! I'm ${currentAgentName}. How can I help you today?<div class="msg-time">${new Date().toLocaleTimeString()}</div></div>`;
             } else {
                 msgs.innerHTML = '';
                 for (const m of messages) {
@@ -159,16 +181,17 @@
                 msgs.scrollTop = msgs.scrollHeight;
             }
         } catch (e) {
-            msgs.innerHTML = `<div class="chat-msg chat-bot">AI Staff is ready to help. Type your message.<div class="msg-time">${new Date().toLocaleTimeString()}</div></div>`;
+            msgs.innerHTML = `<div class="chat-msg chat-bot"><div class="msg-sender">${currentAgentName}</div>Hi! I'm ${currentAgentName}. How can I help you today?<div class="msg-time">${new Date().toLocaleTimeString()}</div></div>`;
         }
         historyLoaded = true;
     }
 
     function appendMessageRaw(text, sender, extra, time) {
         const msgs = document.getElementById('chatMessages');
+        const senderLabel = sender === 'bot' ? `<div class="msg-sender">${currentAgentName}</div>` : '';
         const extraHtml = extra ? `<div style="font-size:11px;color:var(--text-light);margin-top:4px">${extra}</div>` : '';
         const timeStr = time || new Date().toLocaleTimeString();
-        msgs.innerHTML += `<div class="chat-msg chat-${sender}">${text}${extraHtml}<div class="msg-time">${timeStr}</div></div>`;
+        msgs.innerHTML += `<div class="chat-msg chat-${sender}">${senderLabel}${text}${extraHtml}<div class="msg-time">${timeStr}</div></div>`;
     }
 
     function appendMessage(text, sender, extra) {
@@ -201,7 +224,7 @@
         // Show typing indicator
         const msgs = document.getElementById('chatMessages');
         const typingId = 'typing-' + Date.now();
-        msgs.innerHTML += `<div class="chat-msg chat-bot" id="${typingId}"><div class="loading"></div> Thinking...</div>`;
+        msgs.innerHTML += `<div class="chat-msg chat-bot" id="${typingId}"><div class="msg-sender">${currentAgentName}</div><div class="loading"></div> Thinking...</div>`;
         msgs.scrollTop = msgs.scrollHeight;
 
         try {
@@ -271,5 +294,15 @@
 
     init();
     </script>
+    <style>
+    .msg-sender {
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--accent, #6366f1);
+        margin-bottom: 4px;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+    </style>
 </body>
 </html>

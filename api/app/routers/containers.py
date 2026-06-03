@@ -11,7 +11,7 @@ Deployment flow:
   1. Create DB record → status="provisioning"
   2. Fetch Package for resource limits (CPU, RAM)
   3. Generate subdomain/container_name
-  4. Call DockerService.deploy_container() — tries Gateway → local → simulated
+  4. Call DockerService.deploy_client_container() — tries Gateway → local → simulated
   5. Update record with results
      - Success → status="running", save container_name/port/image
      - Failure → status="error", save error message
@@ -141,6 +141,7 @@ async def create_container(
     container = Container(
         client_id=current_user.id,
         name=name,
+        agent_name=data.agent_name,
         container_name="",
         status="provisioning",
         skills=skills,
@@ -173,15 +174,16 @@ async def create_container(
 
     # ── Step 4: Deploy container ─────────────────────────────────
     try:
-        deploy_result = await DockerService.deploy_container(
+        deploy_result = DockerService.deploy_client_container(
             client_id=current_user.id,
-            name=container_name,
+            client_name=container_name,
             subdomain=container_name,
-            skills=skills,
-            env_vars=env_vars,
+            package="basic",
             cpu_limit=cpu_limit,
             memory_limit_mb=memory_limit_mb,
             storage_limit_gb=storage_limit_gb,
+            skill_categories=None,
+            tool_categories=None,
         )
 
         # ── Step 5: Update record with results ───────────────────
