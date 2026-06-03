@@ -12,6 +12,7 @@ from datetime import datetime, timezone
 from typing import Optional
 
 from app.database import get_db
+from app.services.gateway_config_service import sync_client_quota
 from app.models.client import Client
 from app.models.subscription import Subscription
 from app.services.stripe_service import StripeService
@@ -72,6 +73,7 @@ async def stripe_webhook(
             sub = sub_result.scalar_one_or_none()
             if sub:
                 sub.managed_token_quota = (sub.managed_token_quota or 0) + tokens
+                await sync_client_quota(db, sub.client_id)
                 sub.status = "active"
             else:
                 # No subscription yet — create one

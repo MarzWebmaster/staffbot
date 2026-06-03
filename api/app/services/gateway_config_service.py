@@ -114,3 +114,35 @@ async def push_config_to_gateway(config: dict) -> bool:
             return resp.status_code == 200
     except Exception:
         return False
+
+
+async def sync_client_quota(db: AsyncSession, client_id: int) -> bool:
+    """Sync subscription quota → client's Hermes profile config."""
+    from app.models.subscription import Subscription
+    
+    q_result = await db.execute(
+        select(Subscription).where(Subscription.client_id == client_id)
+    )
+    sub = q_result.scalar_one_or_none()
+    if not sub:
+        return False
+
+    updates = {
+        "rate_limit": {
+            "daily_token_quota": sub.managed_token_quota or 10000,
+        }
+    }
+
+    gw_url = os.environ.get("STAFFBOT_SERVER_B_API_URL", "http://staffbot-gateway:8080")
+    gw_key = os.environ.get("STAFFBOT_SERVER_B_API_KEY", "")
+
+    try:
+        async with httpx.AsyncClient(timeout=15) as client:
+            resp = await client.patch(
+                f"{gw_url}/admin/client-profile/{client_id}",
+                json=updates,
+                headers={"x-api-key": gw_key},
+            )
+            return resp.status_code == 200
+    except Exception:
+        return False

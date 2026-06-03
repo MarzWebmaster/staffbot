@@ -6,6 +6,7 @@ from typing import Optional
 
 import os
 from app.database import get_db
+from app.services.gateway_config_service import sync_client_quota
 from app.models.client import Client
 from app.models.package import Package
 from app.models.llm_provider import PackageProvider
@@ -153,6 +154,7 @@ async def update_package(
             sqla_update(Subscription)
             .where(Subscription.package == pkg.name)
             .values(managed_token_quota=update_data['managed_tokens'])
+
         )
         synced = result.rowcount
         logger.info(f"Package '{pkg.name}' token quota changed: {old_tokens} → {update_data['managed_tokens']} — synced {synced} subscriptions")

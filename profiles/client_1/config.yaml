@@ -13,7 +13,7 @@ model:
   provider: openrouter
 rate_limit:
   burst: 10
-  daily_token_quota: 10000
+  daily_token_quota: 5999998.0
   max_concurrent_llm: 2
   requests_per_second: 5
 skills:
