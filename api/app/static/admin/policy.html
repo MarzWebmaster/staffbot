@@ -2,6 +2,8 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
+    <link rel="dns-prefetch" href="https://cdn.tailwindcss.com">
+    <link rel="preconnect" href="https://cdn.tailwindcss.com" crossorigin>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Policy — StaffBot.my</title>
     <style>
@@ -21,8 +23,8 @@
             .btn { padding: 12px 20px !important; min-height: 44px !important; }
         }
     </style>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="stylesheet" href="/static/css/app.css?v=1780499994">
+    <script src="https://cdn.tailwindcss.com" defer></script>
+    <link rel="stylesheet" href="/static/css/app.css?v=1780500227">
 </head>
 <body>
     <button class="sidebar-toggle" onclick="toggleSidebar()">☰</button>
@@ -157,7 +159,7 @@
     </div>
 
     <div id="toast-container" class="toast-container"></div>
-    <script src="/static/js/app.js?v=1780499994"></script>
+    <script src="/static/js/app.js?v=1780500227" defer></script>
     <script>
     const PAGE_SIZE = 50;
     let skillsData = [];
@@ -173,8 +175,8 @@
         if (!user) return;
         renderSidebar('policy');
         renderSidebarUser(user);
-        await loadSkills();
-        Promise.all([loadTools(), loadPolicy()]);
+        // All 3 load in parallel
+        await Promise.all([loadSkills(), loadTools(), loadPolicy()]);
         setTimeout(loadGenerateProviders, 500);
         setTimeout(loadToolGenerateProviders, 600);
     }

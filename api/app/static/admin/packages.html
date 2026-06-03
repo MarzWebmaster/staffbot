@@ -2,10 +2,12 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
+    <link rel="dns-prefetch" href="https://cdn.tailwindcss.com">
+    <link rel="preconnect" href="https://cdn.tailwindcss.com" crossorigin>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Packages — StaffBot.my Admin</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="stylesheet" href="/static/css/app.css?v=1780499994">
+    <script src="https://cdn.tailwindcss.com" defer></script>
+    <link rel="stylesheet" href="/static/css/app.css?v=1780500227">
     <style>
         .package-card { background: linear-gradient(135deg,#f5f3ff,#ede9fe); border: 1px solid #ddd6fe; border-top:4px solid #8b5cf6; border-radius: 16px; padding: 24px; position: relative; }
         .package-card:hover { border-color: #7c3aed; box-shadow: 0 4px 16px rgba(139,92,246,0.15); }
@@ -138,7 +140,7 @@
     </div>
 
     <div id="toast-container" class="toast-container"></div>
-    <script src="/static/js/app.js?v=1780499994"></script>
+    <script src="/static/js/app.js?v=1780500227" defer></script>
     <script>
     let skillCategories = [];
     let toolCategories = [];
@@ -150,8 +152,9 @@
         if (!user) return;
         renderSidebar('packages');
         renderSidebarUser(user);
+        // Categories must load first (packages use category names), then packages
         await loadCategories();
-        loadPackages();
+        await loadPackages();
     }
 
     async function loadCategories() {

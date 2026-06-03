@@ -2,9 +2,11 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
+    <link rel="dns-prefetch" href="https://cdn.tailwindcss.com">
+    <link rel="preconnect" href="https://cdn.tailwindcss.com" crossorigin>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Token Top-Up — StaffBot.my Admin</title>
-    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.tailwindcss.com" defer></script>
     <link rel="stylesheet" href="/static/css/app.css">
 </head>
 <body>
@@ -53,7 +55,7 @@
     </div>
 
     <div id="toast-container" class="toast-container"></div>
-    <script src="/static/js/app.js"></script>
+    <script src="/static/js/app.js" defer></script>
     <script>
     const TOPUP_BASE = '/admin/topup-packages/';
 
@@ -62,8 +64,7 @@
         if (!user) return;
         renderSidebar('settings');
         renderSidebarUser(user);
-        loadPackages();
-        loadHistory();
+        await Promise.all([loadPackages(), loadHistory()]);
     }
 
     async function loadPackages() {

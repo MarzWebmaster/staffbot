@@ -2,11 +2,15 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
+    <link rel="dns-prefetch" href="https://cdn.tailwindcss.com">
+    <link rel="preconnect" href="https://cdn.tailwindcss.com" crossorigin>
+    <link rel="dns-prefetch" href="https://cdn.jsdelivr.net">
+    <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Admin Dashboard — StaffBot.my</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <link rel="stylesheet" href="/static/css/app.css?v=1780499994">
+    <script src="https://cdn.tailwindcss.com" defer></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js" defer></script>
+    <link rel="stylesheet" href="/static/css/app.css?v=1780500227">
 </head>
 <body>
     <button class="sidebar-toggle" onclick="toggleSidebar()">☰</button>
@@ -61,7 +65,7 @@
         </div>
     </div>
     <div id="toast-container" class="toast-container"></div>
-    <script src="/static/js/app.js?v=1780499994"></script>
+    <script src="/static/js/app.js?v=1780500227" defer></script>
     <script>
     let tokenChart, revenueChart;
 
@@ -80,7 +84,7 @@
             document.getElementById('stat-pending').textContent = stats.pending_deployments;
         } catch {}
 
-        // Health
+        // Health — load in parallel with stats
         try {
             const health = await api('/admin/health');
             document.getElementById('systemHealth').innerHTML = `
