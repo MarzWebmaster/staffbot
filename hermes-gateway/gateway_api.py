@@ -348,6 +348,32 @@ async def reload_profile(req: ReloadProfileRequest):
     stats = limits.stats if limits else {}
     return {"success": True, "client_id": cid, "package": package, "limits": stats}
 
+
+@app.post("/admin/regenerate-config")
+async def regenerate_config(config: dict, x_api_key: str = Header(None, alias="x-api-key")):
+    """Receive config from API and apply it + reload Hermes."""
+    if x_api_key != GATEWAY_AUTH:
+        raise HTTPException(status_code=401)
+    import os as _os, signal as _signal
+    try:
+        _os.makedirs(_os.path.dirname("/app/data/config.yaml") or ".", exist_ok=True)
+        with open("/app/data/config.yaml", "w") as f:
+            yaml.dump(config, f, default_flow_style=False, allow_unicode=True)
+        # SIGHUP Hermes server
+        for pid in _os.listdir("/proc"):
+            if pid.isdigit():
+                try:
+                    with open(f"/proc/{pid}/cmdline") as pf:
+                        cmd = pf.read()
+                    if "hermes" in cmd and "server" in cmd:
+                        _os.kill(int(pid), _signal.SIGHUP)
+                        break
+                except:
+                    pass
+        return {"success": True, "message": "Config applied and Hermes reloaded"}
+    except Exception as e:
+        return {"success": False, "error": str(e)[:200]}
+
 @app.put("/admin/reload-profile/batch")
 async def reload_profiles_batch(client_ids: list[int]):
     results = []

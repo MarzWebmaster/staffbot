@@ -33,7 +33,7 @@ services:
       - STAFFBOT_ADMIN_EMAIL=admin@staffbot.my
       - STAFFBOT_CORE_IMAGE=staffbot-core:latest
       - STAFFBOT_SERVER_B_API_URL=http://staffbot-gateway:8080
-      - STAFFBOT_SERVER_B_API_KEY=AUTH_KEY_REDACTED
+      - STAFFBOT_SERVER_B_API_KEY=SERVER_B_API_KEY_REDACTED
       - HERMES_GATEWAY_URL=http://staffbot-gateway:8642
       - HERMES_API_KEY=sk-hermes-gateway-2026-secure
       - MIMO_API_KEY=sk-jemaah-mimo-key-2024-prod
@@ -62,6 +62,7 @@ services:
       - STAFFBOT_PROFILES_DIR=/app/data/profiles
       - MIMO_BASE=https://jemaahapi.tail5cfbb9.ts.net/v1
       - MIMO_KEY=sk-jemaah-mimo-key-2024-prod
+      - SECRET_KEY=SECRET_KEY_REDACTED
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - /root/staffbot/containers:/root/staffbot/containers

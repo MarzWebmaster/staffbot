@@ -17,6 +17,15 @@ from app.middleware.auth import get_current_admin
 from app.utils.encryption import encrypt_value, decrypt_value
 
 router = APIRouter()
+async def _notify_gateway_regenerate(db):
+    """Build Hermes config from DB providers and push to gateway."""
+    from app.services.gateway_config_service import build_gateway_config, push_config_to_gateway
+    try:
+        config = await build_gateway_config(db)
+        await push_config_to_gateway(config)
+    except Exception:
+        pass  # Silent fail — gateway will pick up on restart
+
 
 
 # ── LLM Provider CRUD ──────────────────────────────────────────────
@@ -170,6 +179,7 @@ async def update_provider(
         setattr(p, key, value)
 
     await db.commit()
+    await _notify_gateway_regenerate(db)
     return {"message": f"Provider '{p.display_name}' updated"}
 
 
@@ -192,6 +202,7 @@ async def delete_provider(
     name = p.display_name
     await db.delete(p)
     await db.commit()
+    await _notify_gateway_regenerate(db)
     return {"message": f"Provider '{name}' permanently deleted"}
 
 
@@ -305,6 +316,7 @@ async def update_package_provider(
         setattr(pp, key, value)
 
     await db.commit()
+    await _notify_gateway_regenerate(db)
     return {"message": "Package-provider assignment updated"}
 
 
@@ -322,4 +334,5 @@ async def remove_provider_from_package(
 
     await db.delete(pp)
     await db.commit()
+    await _notify_gateway_regenerate(db)
     return {"message": "Provider removed from package"}
