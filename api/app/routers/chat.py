@@ -26,7 +26,7 @@ from typing import Optional, List
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, text
 from app.database import get_db
-from app.middleware.auth import get_current_client
+from app.middleware.auth import get_current_client, get_current_client_or_internal
 from app.models.client import Client
 from app.models.subscription import Subscription
 from app.models.api_key import ApiKey
@@ -351,7 +351,7 @@ except ImportError:
 @router.post("/upload")
 async def chat_upload(
     file: UploadFile = File(...),
-    current_user: Client = Depends(get_current_client),
+    current_user: Client = Depends(get_current_client_or_internal),
 ):
     """Upload a document and extract its text content for AI chat."""
     client_id = current_user.id
@@ -422,7 +422,7 @@ async def chat_upload(
 @router.post("/extract-link")
 async def chat_extract_link(
     data: LinkExtractRequest,
-    current_user: Client = Depends(get_current_client),
+    current_user: Client = Depends(get_current_client_or_internal),
 ):
     """Extract content from a URL for AI chat context."""
     url = data.url.strip()

@@ -58,6 +58,7 @@ COPY scripts/ /opt/staffbot/scripts/
 COPY templates/ /opt/staffbot/templates/
 COPY docker/ /opt/staffbot/docker/
 COPY gateway_api.py /opt/staffbot/gateway_api.py
+COPY tools/ /opt/hermes-agent/tools/
 RUN chmod +x /opt/staffbot/scripts/*.py /opt/staffbot/scripts/*.sh 2>/dev/null || true
 RUN chmod +x /opt/staffbot/docker/*.sh 2>/dev/null || true
 

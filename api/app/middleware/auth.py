@@ -1,4 +1,5 @@
-from fastapi import Depends, HTTPException, status
+import os
+from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
@@ -7,6 +8,9 @@ from app.models.client import Client
 from app.utils.security import decode_access_token
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login")
+oauth2_scheme_optional = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login", auto_error=False)
+
+GATEWAY_INTERNAL_KEY = os.getenv("GATEWAY_API_KEY", "hermes-gateway-key-2024-secure")
 
 
 async def get_current_client(
@@ -60,3 +64,39 @@ async def get_current_admin(
             detail="Admin access required",
         )
     return client
+
+
+async def get_current_client_or_internal(
+    request: Request,
+    token: str = Depends(oauth2_scheme_optional),
+    db: AsyncSession = Depends(get_db),
+) -> Client:
+    """
+    Authenticate via JWT (Bearer token) OR internal gateway key.
+
+    Internal gateway tools use:
+      - X-Internal-Key: the shared gateway secret
+      - X-Client-ID: the client ID to impersonate
+    """
+    # Try internal gateway auth first
+    internal_key = request.headers.get("X-Internal-Key")
+    client_id_str = request.headers.get("X-Client-ID")
+
+    if internal_key and internal_key == GATEWAY_INTERNAL_KEY and client_id_str:
+        try:
+            client_id = int(client_id_str)
+        except ValueError:
+            raise HTTPException(status_code=401, detail="Invalid X-Client-ID")
+
+        result = await db.execute(select(Client).where(Client.id == client_id))
+        client = result.scalar_one_or_none()
+        if client is None:
+            raise HTTPException(status_code=401, detail="Client not found")
+        if client.status == "suspended":
+            raise HTTPException(status_code=403, detail="Account suspended")
+        return client
+
+    # Fall back to JWT auth
+    if token:
+        return await get_current_client(token, db)
+    raise HTTPException(status_code=401, detail="Not authenticated")

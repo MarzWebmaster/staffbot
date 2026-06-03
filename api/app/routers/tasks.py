@@ -6,7 +6,7 @@ from app.database import get_db
 from app.models.task import Task
 from app.models.client import Client
 from app.schemas.task import TaskCreate, TaskUpdate, TaskResponse
-from app.middleware.auth import get_current_client
+from app.middleware.auth import get_current_client, get_current_client_or_internal
 
 router = APIRouter()
 
@@ -17,7 +17,7 @@ async def list_tasks(
     priority: Optional[str] = Query(None),
     assigned_to: Optional[str] = Query(None),
     db: AsyncSession = Depends(get_db),
-    current_user: Client = Depends(get_current_client),
+    current_user: Client = Depends(get_current_client_or_internal),
 ):
     """List all tasks for the current user."""
     query = select(Task).where(Task.client_id == current_user.id)
@@ -39,7 +39,7 @@ async def list_tasks(
 async def create_task(
     task_data: TaskCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: Client = Depends(get_current_client),
+    current_user: Client = Depends(get_current_client_or_internal),
 ):
     """Create a new task."""
     task = Task(
@@ -61,7 +61,7 @@ async def create_task(
 async def get_task(
     task_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: Client = Depends(get_current_client),
+    current_user: Client = Depends(get_current_client_or_internal),
 ):
     """Get a specific task."""
     result = await db.execute(
@@ -78,7 +78,7 @@ async def update_task(
     task_id: int,
     task_data: TaskUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user: Client = Depends(get_current_client),
+    current_user: Client = Depends(get_current_client_or_internal),
 ):
     """Update a task."""
     result = await db.execute(
@@ -101,7 +101,7 @@ async def update_task(
 async def delete_task(
     task_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: Client = Depends(get_current_client),
+    current_user: Client = Depends(get_current_client_or_internal),
 ):
     """Delete a task."""
     result = await db.execute(
@@ -118,7 +118,7 @@ async def delete_task(
 @router.get("/stats/summary")
 async def task_stats(
     db: AsyncSession = Depends(get_db),
-    current_user: Client = Depends(get_current_client),
+    current_user: Client = Depends(get_current_client_or_internal),
 ):
     """Get task statistics."""
     result = await db.execute(
