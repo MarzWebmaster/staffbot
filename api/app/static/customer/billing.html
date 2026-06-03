@@ -124,7 +124,7 @@
             document.getElementById('packagesList').innerHTML = `<div class="grid-1" style="padding:0 0 16px 0;">${pkgs.map(p => `
                 <div style="border:1px solid var(--border);border-radius:8px;padding:12px;text-align:center">
                     <h3 style="font-size:14px;margin-bottom:4px">${p.display_name}</h3>
-                    <div style="font-size:20px;font-weight:700">${formatCurrency(p.price_monthly)}<span style="font-size:11px;font-weight:400;color:var(--text-light)">/mo</span></div>
+                    <div style="font-size:20px;font-weight:700">${formatCurrency(p.price_monthly)}<span style="font-size:12px;font-weight:400;color:var(--text-light)">/mo</span></div>
                     <button class="btn btn-primary btn-sm" onclick="upgrade('${p.name}')" style="margin-top:8px">Upgrade</button>
                 </div>
             `).join('')}</div>`;
@@ -141,7 +141,7 @@
                     <div style="font-size:13px;font-weight:600;margin-bottom:4px">${p.name}</div>
                     <div style="font-size:22px;font-weight:700">RM${p.price_myr}</div>
                     <div style="font-size:12px;color:var(--text-light);margin-bottom:8px">${(p.tokens/1000000).toFixed(0)}M tokens</div>
-                    ${p.description ? `<div style="font-size:11px;color:var(--text-light);margin-bottom:8px">${p.description}</div>` : ''}
+                    ${p.description ? `<div style="font-size:12px;color:var(--text-light);margin-bottom:8px">${p.description}</div>` : ''}
                     <button class="btn btn-primary btn-sm" onclick="buyTopup(${p.id})" style="width:100%">Top-Up</button>
                 </div>
             `).join('');
