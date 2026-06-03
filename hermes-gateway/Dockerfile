@@ -75,7 +75,7 @@ ENV STAFFBOT_PROFILES_DIR=/app/data/profiles
 RUN mkdir -p /app/data/{cron,sessions,logs,hooks,memories,skills,skins,plans,workspace,home,profiles}
 
 # ── Expose ports ───────────────────────────────────────────────────────
-EXPOSE 8080 8653 8654
+EXPOSE 8080 8653 8654 8642
 
 ENTRYPOINT ["/entrypoint.sh"]
 CMD ["gateway"]
