@@ -2,10 +2,12 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
+    <link rel="dns-prefetch" href="https://cdn.tailwindcss.com">
+    <link rel="preconnect" href="https://cdn.tailwindcss.com" crossorigin>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta http-equiv="Content-Security-Policy" content="default-src 'self' https://cdn.tailwindcss.com; script-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com; style-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com; img-src 'self' data: https:; connect-src 'self'; font-src 'self' data:;">
     <title>Chat — StaffBot.my</title>
-    <link rel="stylesheet" href="/static/css/app.css?v=1780497829">
+    <link rel="stylesheet" href="/static/css/app.css?v=1780499994">
     <style>
         .chat-layout { display:flex; flex-direction:column; height:calc(100vh - 120px); max-width:900px; margin:0 auto; }
         .chat-header { display:flex; align-items:center; justify-content:space-between; padding:12px 0; border-bottom:1px solid var(--border); }
@@ -104,7 +106,7 @@
     </main>
 </div>
 
-<script src="/static/js/app.js?v=1780499744"></script>
+<script defer src="/static/js/app.js?v=1780499994"></script>
 <script>
 // ── State ──────────────────────────────────────────
 let currentBotId = null;

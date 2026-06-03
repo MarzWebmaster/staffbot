@@ -254,6 +254,69 @@ document.addEventListener('DOMContentLoaded', function() {
     if (AUTH_TOKEN) loadProfile().then(function(u) { if (u) renderSidebarUser(u); });
 });
 
+
+// ========================================
+// PERFORMANCE OPTIMIZATIONS
+// ========================================
+
+// API cache — sessionStorage with 5-min TTL
+const apiCache = {
+    set(key, data, ttl = 300000) {
+        try {
+            sessionStorage.setItem("cache_" + key, JSON.stringify({ data, expires: Date.now() + ttl }));
+        } catch(e) { /* quota exceeded, skip */ }
+    },
+    get(key) {
+        try {
+            const raw = sessionStorage.getItem("cache_" + key);
+            if (!raw) return null;
+            const entry = JSON.parse(raw);
+            if (Date.now() > entry.expires) { sessionStorage.removeItem("cache_" + key); return null; }
+            return entry.data;
+        } catch(e) { return null; }
+    },
+    clear() {
+        Object.keys(sessionStorage).filter(k => k.startsWith("cache_")).forEach(k => sessionStorage.removeItem(k));
+    }
+};
+
+// API with cache
+async function apiCached(path, options = {}, ttl = 300000) {
+    const cacheKey = path + JSON.stringify(options);
+    const cached = apiCache.get(cacheKey);
+    if (cached) return cached;
+    const data = await api(path, options);
+    apiCache.set(cacheKey, data, ttl);
+    return data;
+}
+
+// Parallel API calls — resolve all or fail fast
+async function apiAll(...calls) {
+    const results = await Promise.allSettled(calls);
+    return results.map((r, i) => {
+        if (r.status === 'fulfilled') return r.value;
+        console.warn('API call ' + i + ' failed:', r.reason);
+        return null;
+    });
+}
+
+// Skeleton loader
+function showSkeleton(containerId, count = 3) {
+    const el = document.getElementById(containerId);
+    if (!el) return;
+    el.innerHTML = Array(count).fill('<div class="skeleton-card"><div class="skeleton-line w-60"></div><div class="skeleton-line w-80"></div><div class="skeleton-line w-40"></div></div>').join('');
+}
+
+// Debounce
+function debounce(fn, delay = 300) {
+    let timer;
+    return function(...args) {
+        clearTimeout(timer);
+        timer = setTimeout(() => fn.apply(this, args), delay);
+    };
+}
+
+
 // HTML escape — prevent XSS in innerHTML
 function escapeHtml(str) {
     if (!str) return "";

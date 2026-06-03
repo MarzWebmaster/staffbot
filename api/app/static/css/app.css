@@ -410,3 +410,34 @@ img, video, iframe { max-width: 100%; height: auto; }
     .main-content { margin-left: 0 !important; padding: 0 !important; }
     .card { break-inside: avoid; border: 1px solid #ccc; }
 }
+
+/* ========================================
+   SKELETON LOADING
+   ======================================== */
+.skeleton-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+    margin-bottom: 12px;
+    animation: pulse 1.5s ease-in-out infinite;
+}
+.skeleton-line {
+    height: 14px;
+    background: linear-gradient(90deg, #e2e8f0 25%, #f1f5f9 50%, #e2e8f0 75%);
+    background-size: 200% 100%;
+    border-radius: 6px;
+    margin-bottom: 10px;
+    animation: shimmer 1.5s ease-in-out infinite;
+}
+.skeleton-line.w-60 { width: 60%; }
+.skeleton-line.w-80 { width: 80%; }
+.skeleton-line.w-40 { width: 40%; }
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.6; }
+}
+@keyframes shimmer {
+    0% { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+}
