@@ -1,8 +1,27 @@
 """Chat router — proxies to Gateway with token tracking + BYOK + message history."""
 import os, httpx, json, logging
 from datetime import datetime, timezone
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, Header
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Header, UploadFile, File
 from pydantic import BaseModel
+import io, os as _os, base64, tempfile
+
+try:
+    import pymupdf
+    HAS_PYMUPDF = True
+except ImportError:
+    HAS_PYMUPDF = False
+
+try:
+    from docx import Document as DocxDocument
+    HAS_DOCX = True
+except ImportError:
+    HAS_DOCX = False
+
+try:
+    from bs4 import BeautifulSoup
+    HAS_BS4 = True
+except ImportError:
+    HAS_BS4 = False
 from typing import Optional, List
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, text
@@ -13,6 +32,19 @@ from app.models.subscription import Subscription
 from app.models.api_key import ApiKey
 from app.models.chat_message import ChatMessage
 from app.services.enforcement_service import EnforcementService
+
+
+
+class LinkExtractRequest(BaseModel):
+    url: str
+
+
+class AttachmentData(BaseModel):
+    filename: str = ""
+    text: str = ""
+    mime_type: str = ""
+    image_base64: str = None
+    pdf_base64: str = None
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -290,3 +322,181 @@ async def token_status(
         "percent_used": round((used / quota * 100), 1) if quota > 0 else 0,
         "provider_usage": sub.provider_token_usage or {},
     }
+
+# ── Document Upload & Link Extraction Endpoints ──────────────────
+
+import io
+import tempfile
+import os as _os
+
+try:
+    import pymupdf
+    HAS_PYMUPDF = True
+except ImportError:
+    HAS_PYMUPDF = False
+
+try:
+    from docx import Document as DocxDocument
+    HAS_DOCX = True
+except ImportError:
+    HAS_DOCX = False
+
+try:
+    from bs4 import BeautifulSoup
+    HAS_BS4 = True
+except ImportError:
+    HAS_BS4 = False
+
+
+@router.post("/upload")
+async def chat_upload(
+    file: UploadFile = File(...),
+    current_user: Client = Depends(get_current_client),
+):
+    """Upload a document and extract its text content for AI chat."""
+    client_id = current_user.id
+
+    # Validate file size (max 10MB)
+    content = await file.read()
+    if len(content) > 10 * 1024 * 1024:
+        raise HTTPException(status_code=413, detail="File too large. Max 10MB.")
+
+    filename = file.filename or "document"
+    ext = _os.path.splitext(filename)[1].lower()
+    text = ""
+
+    try:
+        if ext == ".pdf" and HAS_PYMUPDF:
+            doc = pymupdf.open(stream=content, filetype="pdf")
+            for page in doc:
+                text += page.get_text() + "\n"
+            doc.close()
+
+        elif ext in (".docx", ".doc") and HAS_DOCX:
+            doc = DocxDocument(io.BytesIO(content))
+            for para in doc.paragraphs:
+                text += para.text + "\n"
+
+        elif ext in (".txt", ".md", ".csv", ".json", ".xml", ".yaml", ".yml", ".py", ".js", ".html", ".css"):
+            text = content.decode("utf-8", errors="replace")
+
+        elif ext in (".png", ".jpg", ".jpeg", ".gif", ".webp"):
+            # Images — return as base64 for vision models
+            import base64
+            b64 = base64.b64encode(content).decode()
+            mime = {
+                ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg",
+                ".gif": "image/gif", ".webp": "image/webp"
+            }.get(ext, "image/png")
+            return {
+                "success": True,
+                "filename": filename,
+                "mime_type": mime,
+                "image_base64": b64,
+                "text": f"[Image: {filename}]",
+                "hint": "Include in message as vision context",
+            }
+
+        else:
+            raise HTTPException(status_code=400, detail=f"Unsupported file type: {ext}")
+
+    except Exception as e:
+        raise HTTPException(status_code=422, detail=f"Failed to extract text: {str(e)[:200]}")
+
+    if not text.strip():
+        raise HTTPException(status_code=422, detail="No text could be extracted from this file.")
+
+    # Truncate to reasonable size (50KB)
+    if len(text) > 50000:
+        text = text[:50000] + "\n\n[Content truncated at 50KB]"
+
+    return {
+        "success": True,
+        "filename": filename,
+        "ext": ext,
+        "text_length": len(text),
+        "text": text,
+    }
+
+
+@router.post("/extract-link")
+async def chat_extract_link(
+    data: LinkExtractRequest,
+    current_user: Client = Depends(get_current_client),
+):
+    """Extract content from a URL for AI chat context."""
+    url = data.url.strip()
+
+    if not url.startswith(("http://", "https://")):
+        raise HTTPException(status_code=400, detail="Invalid URL. Must start with http:// or https://")
+
+    try:
+        async with httpx.AsyncClient(timeout=30, follow_redirects=True) as client:
+            resp = await client.get(
+                url,
+                headers={"User-Agent": "StaffBot/1.0"},
+            )
+
+        if resp.status_code != 200:
+            raise HTTPException(status_code=422, detail=f"Failed to fetch URL: HTTP {resp.status_code}")
+
+        content_type = resp.headers.get("content-type", "").lower()
+        text = ""
+
+        if "application/pdf" in content_type:
+            if HAS_PYMUPDF:
+                doc = pymupdf.open(stream=resp.content, filetype="pdf")
+                for page in doc:
+                    text += page.get_text() + "\n"
+                doc.close()
+            else:
+                # Return PDF as base64
+                import base64
+                return {
+                    "success": True,
+                    "url": url,
+                    "mime_type": "application/pdf",
+                    "pdf_base64": base64.b64encode(resp.content).decode(),
+                    "text": f"[PDF: {url}]",
+                    "hint": "Include PDF content for AI analysis",
+                }
+
+        elif "text/html" in content_type and HAS_BS4:
+            soup = BeautifulSoup(resp.text, "html.parser")
+            # Remove scripts and styles
+            for tag in soup(["script", "style", "nav", "footer", "header"]):
+                tag.decompose()
+            text = soup.get_text(separator="\n", strip=True)
+
+        elif "text/" in content_type or "application/json" in content_type:
+            text = resp.text
+
+        else:
+            return {
+                "success": True,
+                "url": url,
+                "content_type": content_type,
+                "text": f"[Binary content: {content_type}]",
+                "hint": f"URL returns {content_type}. AI cannot process this directly.",
+            }
+
+    except httpx.TimeoutException:
+        raise HTTPException(status_code=422, detail="Request timed out while fetching URL")
+    except Exception as e:
+        raise HTTPException(status_code=422, detail=f"Failed to extract content: {str(e)[:200]}")
+
+    if not text.strip():
+        raise HTTPException(status_code=422, detail="No text content found at this URL.")
+
+    # Truncate
+    if len(text) > 50000:
+        text = text[:50000] + "\n\n[Content truncated at 50KB]"
+
+    return {
+        "success": True,
+        "url": url,
+        "content_type": content_type,
+        "text_length": len(text),
+        "text": text,
+    }
+

@@ -4,305 +4,425 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Chat — StaffBot.my</title>
-    <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="/static/css/app.css?v=1748883000">
+    <style>
+        .chat-layout { display:flex; flex-direction:column; height:calc(100vh - 120px); max-width:900px; margin:0 auto; }
+        .chat-header { display:flex; align-items:center; justify-content:space-between; padding:12px 0; border-bottom:1px solid var(--border); }
+        .chat-header select { padding:6px 12px; border-radius:8px; border:1px solid var(--border); background:var(--bg); color:var(--text); font-size:14px; }
+        .chat-messages { flex:1; overflow-y:auto; padding:16px 0; display:flex; flex-direction:column; gap:16px; }
+        .chat-msg { max-width:80%; padding:12px 16px; border-radius:12px; line-height:1.5; font-size:14px; }
+        .chat-user { align-self:flex-end; background:var(--accent); color:#fff; border-bottom-right-radius:4px; }
+        .chat-bot { align-self:flex-start; background:var(--card-bg); border:1px solid var(--border); border-bottom-left-radius:4px; }
+        .msg-sender { font-size:11px; color:var(--muted); margin-bottom:4px; font-weight:600; }
+        .msg-attachments { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:8px; }
+        .msg-attachment { display:flex; align-items:center; gap:6px; padding:4px 10px; background:var(--bg); border-radius:6px; font-size:12px; border:1px solid var(--border); }
+        .msg-attachment .remove-attach { cursor:pointer; color:var(--danger); font-weight:bold; font-size:14px; }
+        .chat-input-area { padding:12px 0; border-top:1px solid var(--border); }
+        .input-row { display:flex; gap:8px; align-items:center; }
+        .input-row input[type="text"] { flex:1; padding:10px 14px; border-radius:24px; border:1px solid var(--border); background:var(--bg); color:var(--text); font-size:14px; }
+        .input-row input[type="text"]:focus { outline:none; border-color:var(--accent); }
+        .input-row button { padding:10px 20px; border-radius:24px; border:none; background:var(--accent); color:#fff; font-size:14px; cursor:pointer; font-weight:600; }
+        .input-row button:disabled { opacity:0.5; cursor:not-allowed; }
+        .toolbar-row { display:flex; gap:8px; margin-bottom:8px; align-items:center; }
+        .tool-btn { padding:6px 14px; border-radius:20px; border:1px solid var(--border); background:var(--bg); color:var(--text); cursor:pointer; font-size:12px; display:flex; align-items:center; gap:5px; transition:all .2s; }
+        .tool-btn:hover { border-color:var(--accent); }
+        .tool-btn.active { background:var(--accent); color:#fff; border-color:var(--accent); }
+        .link-popup { display:none; position:absolute; bottom:60px; left:0; right:0; background:var(--card-bg); border:1px solid var(--border); border-radius:12px; padding:12px; z-index:10; }
+        .link-popup.show { display:block; }
+        .link-popup input { width:100%; margin-bottom:8px; }
+        .drop-zone { display:none; position:absolute; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.6); z-index:100; align-items:center; justify-content:center; border-radius:16px; border:3px dashed var(--accent); }
+        .drop-zone.show { display:flex; }
+        .drop-zone-inner { text-align:center; color:#fff; }
+        .drop-zone-inner span { font-size:40px; }
+        .drop-zone-inner p { margin-top:8px; font-size:16px; }
+        .loading { display:inline-block; width:20px; height:20px; border:2px solid var(--muted); border-top-color:var(--accent); border-radius:50%; animation:spin .6s linear infinite; margin-right:8px; }
+        @keyframes spin { to { transform:rotate(360deg); } }
+        .link-badge { display:inline-flex; align-items:center; gap:4px; padding:3px 8px; background:var(--accent); color:#fff; border-radius:12px; font-size:11px; }
+        .file-badge { display:inline-flex; align-items:center; gap:4px; padding:3px 8px; background:#5865f2; color:#fff; border-radius:12px; font-size:11px; }
+        .chat-input-wrapper { position:relative; }
+    </style>
 </head>
 <body>
-    <button class="sidebar-toggle" onclick="toggleSidebar()">☰</button>
-    <div class="sidebar-overlay" onclick="toggleSidebar()"></div>
-    <div class="app-layout">
-        <div class="sidebar">
-            <div class="sidebar-brand"><h2>StaffBot.my</h2><span>Customer Dashboard</span></div>
-            <nav class="sidebar-nav">
-                <a href="dashboard.html"><span>📊</span><span>Dashboard</span></a>
-                <a href="bots.html"><span>🤖</span><span>My AI Staff</span></a>
-                <a href="chat.html" class="active"><span>💬</span><span>Chat</span></a>
-                <a href="settings.html"><span>⚙️</span><span>Settings</span></a>
-                <a href="billing.html"><span>💰</span><span>Billing</span></a>
-                <a href="usage.html"><span>📈</span><span>Usage</span></a>
-                <a href="#" onclick="logout()" style="margin-top:20px;border-top:1px solid rgba(255,255,255,0.1);padding-top:20px"><span>🚪</span><span>Logout</span></a>
-            </nav>
-            <div id="sidebar-user" style="padding:16px 20px;border-top:1px solid rgba(255,255,255,0.1);margin-top:auto"></div>
-        </div>
-        <div class="main-content">
-            <div class="topbar">
-                <h1 id="chatTitle">Chat with AI Staff</h1>
-                <div style="display:flex;align-items:center;gap:12px">
-                    <select class="form-input" id="botSelector" style="width:200px" onchange="switchBot()">
-                        <option value="">Select Staff...</option>
-                    </select>
-                    <div id="tokenBadge" style="font-size:12px;padding:6px 12px;border-radius:20px;background:var(--bg-secondary);color:var(--text-light);white-space:nowrap;display:none">
-                        <span id="tokenBadgeText">Tokens: -</span>
-                    </div>
+<div class="dashboard-layout">
+    <aside class="sidebar" id="sidebar"></aside>
+    <main class="main-content">
+        <div class="chat-layout">
+            <div class="chat-header">
+                <h2 id="chatTitle">Chat with AI Staff</h2>
+                <select id="botSelector" onchange="switchBot()">
+                    <option value="">Loading...</option>
+                </select>
+            </div>
+            <div class="chat-messages" id="chatMessages">
+                <div style="text-align:center;color:var(--muted);padding:40px 0;">
+                    <span style="font-size:48px;">🤖</span>
+                    <p style="margin-top:12px;">Start a conversation with your AI Staff.<br>
+                    <small>Upload documents or paste links for AI to analyze.</small></p>
                 </div>
             </div>
-            <div class="card">
-                <div class="chat-container" id="chatContainer">
-                    <div class="chat-messages" id="chatMessages">
-                        <div class="chat-msg chat-bot">
-                            Hi! I'm StaffBot.ai. Select an AI staff above to start chatting.
-                            <div class="msg-time">Now</div>
-                        </div>
+            <div class="chat-input-area">
+                <!-- Attachments preview -->
+                <div class="msg-attachments" id="attachmentPreview"></div>
+                <!-- Toolbar -->
+                <div class="toolbar-row">
+                    <button class="tool-btn" onclick="document.getElementById('fileInput').click()" title="Upload document">
+                        📎 Upload
+                    </button>
+                    <button class="tool-btn" id="linkBtn" onclick="toggleLinkInput()" title="Paste URL">
+                        🔗 Link
+                    </button>
+                    <input type="file" id="fileInput" style="display:none" accept=".pdf,.docx,.doc,.txt,.md,.csv,.json,.png,.jpg,.jpeg,.gif,.webp" onchange="handleFileUpload(event)" multiple>
+                    <span style="font-size:11px;color:var(--muted);margin-left:auto;" id="tokenBadge">
+                        Tokens: <span id="tokenBadgeText">...</span>
+                    </span>
+                </div>
+                <!-- Link popup -->
+                <div class="link-popup" id="linkPopup">
+                    <input type="text" id="linkInput" placeholder="Paste URL (article, PDF, documentation...)" onkeypress="if(event.key==='Enter')extractLink()">
+                    <div style="display:flex;gap:6px;">
+                        <button class="tool-btn" onclick="extractLink()" style="background:var(--accent);color:#fff;">Extract Content</button>
+                        <button class="tool-btn" onclick="toggleLinkInput()">Cancel</button>
                     </div>
-                    <div class="chat-input-area">
-                        <input type="text" class="form-input" id="chatInput" placeholder="Type a message..." disabled onkeypress="if(event.key==='Enter')sendMessage()">
-                        <button class="btn btn-primary" id="sendBtn" onclick="sendMessage()" disabled>Send</button>
-                    </div>
+                    <small id="linkStatus" style="color:var(--muted);display:none;"></small>
+                </div>
+                <!-- Message input -->
+                <div class="input-row chat-input-wrapper">
+                    <input type="text" id="chatInput" placeholder="Type a message... or upload a document first" disabled onkeypress="if(event.key==='Enter')sendMessage()">
+                    <button id="sendBtn" onclick="sendMessage()" disabled>Send</button>
+                </div>
+            </div>
+            <!-- Drop zone -->
+            <div class="drop-zone" id="dropZone">
+                <div class="drop-zone-inner">
+                    <span>📤</span>
+                    <p>Drop documents here to upload</p>
+                    <small style="color:#aaa;">PDF, DOCX, TXT, images</small>
                 </div>
             </div>
         </div>
-    </div>
-    <div id="toast-container" class="toast-container"></div>
-    <script src="/static/js/app.js?v=1748883000"></script>
-    <script>
-    let currentBotId = null;
-    let currentBotName = 'AI Staff';
-    let currentAgentName = 'AI Assistant';
-    let botContainers = [];
-    let tokenQuotaExceeded = false;
-    let historyLoaded = false;
-    const params = new URLSearchParams(window.location.search);
+    </main>
+</div>
 
-    async function init() {
-        const user = await checkAuth();
-        if (!user) return;
-        renderSidebarUser(user);
-        await Promise.all([loadBots(), loadTokenStatus()]);
-        if (params.get('bot')) { document.getElementById('botSelector').value = params.get('bot'); switchBot(); }
+<script src="/static/js/app.js?v=1748883000"></script>
+<script>
+// ── State ──────────────────────────────────────────
+let currentBotId = null;
+let currentAgentName = 'AI Staff';
+let tokenQuotaExceeded = false;
+let pendingAttachments = []; // {filename, text, mime_type, image_base64, pdf_base64}
+
+// ── Init ───────────────────────────────────────────
+(async () => {
+    if (!AUTH_TOKEN) { location.href = '/customer/login.html'; return; }
+    await loadSidebar('sidebar');
+    await loadBots();
+    await loadTokenStatus();
+
+    // Drag & drop
+    const dropZone = document.getElementById('dropZone');
+    document.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('show'); });
+    document.addEventListener('dragleave', e => { if (!e.relatedTarget || e.relatedTarget === document.documentElement) dropZone.classList.remove('show'); });
+    dropZone.addEventListener('drop', e => {
+        e.preventDefault();
+        dropZone.classList.remove('show');
+        if (e.dataTransfer.files.length > 0) processFiles(e.dataTransfer.files);
+    });
+    document.addEventListener('paste', e => {
+        if (e.clipboardData.files.length > 0) {
+            e.preventDefault();
+            processFiles(e.clipboardData.files);
+        }
+    });
+})();
+
+// ── Bots ───────────────────────────────────────────
+async function loadBots() {
+    try {
+        const bots = await api('/containers/list');
+        const sel = document.getElementById('botSelector');
+        sel.innerHTML = bots.map(b => `<option value="${b.id}">${b.agent_name || b.name || 'Bot ' + b.id}</option>`).join('');
+        const params = new URLSearchParams(location.search);
+        if (params.get('bot')) sel.value = params.get('bot');
+        switchBot();
+    } catch (e) { console.error('loadBots:', e); }
+}
+
+function switchBot() {
+    currentBotId = document.getElementById('botSelector').value;
+    const input = document.getElementById('chatInput');
+    const btn = document.getElementById('sendBtn');
+    const msgs = document.getElementById('chatMessages');
+    const sel = document.getElementById('botSelector');
+
+    if (currentBotId) {
+        currentAgentName = sel.options[sel.selectedIndex].text;
+        document.getElementById('chatTitle').textContent = `Chat with ${currentAgentName}`;
+        input.disabled = false;
+        btn.disabled = tokenQuotaExceeded;
+        input.placeholder = 'Type a message... or upload a document first';
+    } else {
+        currentAgentName = 'AI Staff';
+        document.getElementById('chatTitle').textContent = 'Chat with AI Staff';
+        input.disabled = true;
+        btn.disabled = true;
     }
+    msgs.innerHTML = '';
+    pendingAttachments = [];
+    renderAttachments();
+}
 
-    async function loadBots() {
+// ── File Upload ────────────────────────────────────
+function handleFileUpload(e) {
+    if (e.target.files.length > 0) processFiles(e.target.files);
+    e.target.value = '';
+}
+
+async function processFiles(files) {
+    for (const file of files) {
         try {
-            botContainers = await api('/containers/');
-            const sel = document.getElementById('botSelector');
-            sel.innerHTML = '<option value="">Select Staff...</option>' + botContainers.map(c =>
-                `<option value="${c.id}">${c.name} (${c.status})</option>`
-            ).join('');
-        } catch {}
-    }
+            appendSystemMessage(`Uploading ${file.name}...`);
+            const formData = new FormData();
+            formData.append('file', file);
 
-    async function loadTokenStatus() {
-        try {
-            const status = await api('/chat/token-status');
-            const badge = document.getElementById('tokenBadge');
-            const badgeText = document.getElementById('tokenBadgeText');
-            badge.style.display = 'inline-block';
+            const resp = await fetch(`${API_BASE}/chat/upload`, {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${AUTH_TOKEN}` },
+                body: formData,
+            });
 
-            if (!status.has_subscription) {
-                badge.style.background = 'var(--danger)';
-                badge.style.color = 'white';
-                badgeText.textContent = 'No subscription';
-                return;
+            // Remove "Uploading..." message
+            removeSystemMessages();
+
+            if (!resp.ok) {
+                const err = await resp.json();
+                appendSystemMessage(`❌ ${file.name}: ${err.detail || 'Upload failed'}`);
+                continue;
             }
 
-            const remaining = status.remaining || 0;
-            const quota = status.quota || 0;
-            const pct = status.percent_used || 0;
+            const data = await resp.json();
 
-            if (quota > 0) {
-                if (remaining <= 0) {
-                    badge.style.background = 'var(--danger)';
-                    badge.style.color = 'white';
-                    badgeText.textContent = 'Tokens: EXHAUSTED';
-                    tokenQuotaExceeded = true;
-                } else if (pct >= 90) {
-                    badge.style.background = 'var(--warning, #f59e0b)';
-                    badge.style.color = 'white';
-                    badgeText.textContent = `Tokens: ${formatNum(remaining)} left (${Math.round(100 - pct)}%)`;
-                } else {
-                    badgeText.textContent = `Tokens: ${formatNum(remaining)} left`;
-                }
+            if (data.image_base64) {
+                // Show image preview in attachments
+                pendingAttachments.push({
+                    filename: data.filename,
+                    text: data.text,
+                    mime_type: data.mime_type,
+                    image_base64: data.image_base64,
+                });
+                renderAttachments();
+                appendSystemMessage(`📷 ${data.filename} added — AI can see this image`);
             } else {
-                badgeText.textContent = 'Unlimited tokens';
-            }
-        } catch {
-            // Silently fail — badge stays hidden
-        }
-    }
-
-    function formatNum(n) {
-        if (n >= 1000000) return (n / 1000000).toFixed(1) + 'M';
-        if (n >= 1000) return (n / 1000).toFixed(0) + 'K';
-        return n.toString();
-    }
-
-    function getAgentName() {
-        // Find current bot in containers list
-        const bot = botContainers.find(c => String(c.id) === String(currentBotId));
-        if (bot && bot.agent_name) return bot.agent_name;
-        if (bot) return bot.name;
-        return 'AI Assistant';
-    }
-
-    async function switchBot() {
-        currentBotId = document.getElementById('botSelector').value;
-        const input = document.getElementById('chatInput');
-        const btn = document.getElementById('sendBtn');
-        const msgs = document.getElementById('chatMessages');
-
-        if (currentBotId) {
-            // Get agent name from containers list
-            const bot = botContainers.find(c => String(c.id) === String(currentBotId));
-            currentBotName = bot ? bot.name : 'AI Staff';
-            currentAgentName = (bot && bot.agent_name) ? bot.agent_name : currentBotName;
-
-            // Update title
-            document.getElementById('chatTitle').textContent = `Chat with ${currentAgentName}`;
-
-            input.disabled = false; btn.disabled = false; input.placeholder = `Message ${currentAgentName}...`; input.focus();
-            // Load chat history from DB
-            msgs.innerHTML = `<div class="chat-msg chat-bot"><div class="loading"></div> Loading history...</div>`;
-            await loadHistory(parseInt(currentBotId));
-        } else {
-            currentBotName = 'AI Staff';
-            currentAgentName = 'AI Assistant';
-            document.getElementById('chatTitle').textContent = 'Chat with AI Staff';
-            input.disabled = true; btn.disabled = true; input.placeholder = 'Type a message...';
-            msgs.innerHTML = `<div class="chat-msg chat-bot">Select an AI staff above to start chatting.<div class="msg-time">Now</div></div>`;
-        }
-    }
-
-    async function loadHistory(containerId) {
-        const msgs = document.getElementById('chatMessages');
-        try {
-            const resp = await api(`/chat/history?container_id=${containerId}&limit=50`);
-            const messages = resp.messages || [];
-
-            if (messages.length === 0) {
-                msgs.innerHTML = `<div class="chat-msg chat-bot"><div class="msg-sender">${currentAgentName}</div>Hi! I'm ${currentAgentName}. How can I help you today?<div class="msg-time">${new Date().toLocaleTimeString()}</div></div>`;
-            } else {
-                msgs.innerHTML = '';
-                for (const m of messages) {
-                    const sender = m.role === 'user' ? 'user' : 'bot';
-                    const time = m.created_at ? new Date(m.created_at).toLocaleTimeString() : '';
-                    const extra = m.tokens_used > 0 ? `Tokens: ${formatNum(m.tokens_used)}` : '';
-                    appendMessageRaw(m.content, sender, extra, time);
-                }
-                msgs.scrollTop = msgs.scrollHeight;
+                pendingAttachments.push({
+                    filename: data.filename,
+                    text: data.text,
+                });
+                renderAttachments();
+                appendSystemMessage(`📄 ${data.filename} — ${data.text_length} chars extracted`);
             }
         } catch (e) {
-            msgs.innerHTML = `<div class="chat-msg chat-bot"><div class="msg-sender">${currentAgentName}</div>Hi! I'm ${currentAgentName}. How can I help you today?<div class="msg-time">${new Date().toLocaleTimeString()}</div></div>`;
+            removeSystemMessages();
+            appendSystemMessage(`❌ ${file.name}: ${e.message}`);
         }
-        historyLoaded = true;
     }
+}
 
-    function appendMessageRaw(text, sender, extra, time) {
-        const msgs = document.getElementById('chatMessages');
-        const senderLabel = sender === 'bot' ? `<div class="msg-sender">${currentAgentName}</div>` : '';
-        const extraHtml = extra ? `<div style="font-size:11px;color:var(--text-light);margin-top:4px">${extra}</div>` : '';
-        const timeStr = time || new Date().toLocaleTimeString();
-        msgs.innerHTML += `<div class="chat-msg chat-${sender}">${senderLabel}${text}${extraHtml}<div class="msg-time">${timeStr}</div></div>`;
+// ── Link Extraction ────────────────────────────────
+function toggleLinkInput() {
+    const popup = document.getElementById('linkPopup');
+    popup.classList.toggle('show');
+    if (popup.classList.contains('show')) {
+        document.getElementById('linkInput').focus();
+        document.getElementById('linkStatus').style.display = 'none';
     }
+}
 
-    function appendMessage(text, sender, extra) {
-        appendMessageRaw(text, sender, extra, null);
-        const msgs = document.getElementById('chatMessages');
-        msgs.scrollTop = msgs.scrollHeight;
-    }
+async function extractLink() {
+    const input = document.getElementById('linkInput');
+    const url = input.value.trim();
+    if (!url) return;
 
-    function setSending(disabled) {
-        document.getElementById('sendBtn').disabled = disabled;
-        document.getElementById('chatInput').disabled = disabled;
-        if (!disabled) document.getElementById('chatInput').focus();
-    }
+    const status = document.getElementById('linkStatus');
+    status.style.display = 'block';
+    status.textContent = 'Extracting...';
 
-    async function sendMessage() {
-        const input = document.getElementById('chatInput');
-        const msg = input.value.trim();
-        if (!msg || !currentBotId) return;
+    try {
+        const resp = await api('/chat/extract-link', {
+            method: 'POST',
+            body: JSON.stringify({ url }),
+        });
 
-        // Block if quota exceeded
-        if (tokenQuotaExceeded) {
-            appendMessage('⚠️ Your token limit has been reached. Please <a href="billing.html" style="color:var(--accent);text-decoration:underline">top up tokens</a> or upgrade your package to continue chatting.', 'bot', 'Token quota exceeded');
+        if (!resp.success) {
+            status.textContent = `❌ ${resp.detail || 'Failed'}`;
             return;
         }
 
+        pendingAttachments.push({
+            filename: url.substring(0, 60) + (url.length > 60 ? '...' : ''),
+            text: resp.text,
+            is_link: true,
+        });
+        renderAttachments();
+        status.textContent = `✅ ${resp.text_length} chars extracted`;
         input.value = '';
-        appendMessage(msg, 'user');
-        setSending(true);
+        setTimeout(() => { status.style.display = 'none'; toggleLinkInput(); }, 1500);
+    } catch (e) {
+        status.textContent = `❌ ${e.message}`;
+    }
+}
 
-        // Show typing indicator
-        const msgs = document.getElementById('chatMessages');
-        const typingId = 'typing-' + Date.now();
-        msgs.innerHTML += `<div class="chat-msg chat-bot" id="${typingId}"><div class="msg-sender">${currentAgentName}</div><div class="loading"></div> Thinking...</div>`;
-        msgs.scrollTop = msgs.scrollHeight;
+// ── Attachments UI ─────────────────────────────────
+function renderAttachments() {
+    const preview = document.getElementById('attachmentPreview');
+    preview.innerHTML = pendingAttachments.map((a, i) => `
+        <span class="msg-attachment">
+            ${a.is_link ? '🔗' : '📄'} ${a.filename.substring(0, 40)}
+            <span class="remove-attach" onclick="removeAttachment(${i})">×</span>
+        </span>
+    `).join('');
+}
 
-        try {
-            const resp = await api('/chat/send', {
-                method: 'POST',
-                body: JSON.stringify({
-                    content: msg,
-                    container_id: parseInt(currentBotId),
-                    provider: 'mimo'
-                })
-            });
+function removeAttachment(i) {
+    pendingAttachments.splice(i, 1);
+    renderAttachments();
+}
 
-            // Remove typing indicator
-            const typingEl = document.getElementById(typingId);
-            if (typingEl) typingEl.remove();
+// ── System Messages ────────────────────────────────
+function appendSystemMessage(text) {
+    const msgs = document.getElementById('chatMessages');
+    const id = 'sys-' + Date.now();
+    msgs.innerHTML += `<div class="chat-msg chat-bot" id="${id}" style="font-size:12px;opacity:0.8;">${text}</div>`;
+    msgs.scrollTop = msgs.scrollHeight;
+    return id;
+}
 
-            if (resp.success === false) {
-                // Handle specific errors
-                if (resp.error === 'token_quota_exceeded') {
-                    tokenQuotaExceeded = true;
-                    appendMessage(
-                        '⚠️ <strong>Token limit reached!</strong><br>You have used all your allocated tokens. To continue chatting, please:<br>• <a href="billing.html" style="color:var(--accent);text-decoration:underline">Top up tokens</a><br>• <a href="billing.html" style="color:var(--accent);text-decoration:underline">Upgrade your package</a>',
-                        'bot',
-                        'Quota: ' + formatNum(resp.used || 0) + ' / ' + formatNum(resp.quota || 0) + ' used'
-                    );
-                    loadTokenStatus(); // Refresh badge
-                    return;
-                }
-                if (resp.error === 'no_subscription' || resp.error === 'subscription_inactive') {
-                    appendMessage(
-                        '⚠️ ' + (resp.message || 'No active subscription.') + '<br><a href="billing.html" style="color:var(--accent);text-decoration:underline">Subscribe now</a>',
-                        'bot'
-                    );
-                    return;
-                }
-                if (resp.error === 'rate_limited') {
-                    appendMessage(
-                        '⚠️ <strong>Too many requests!</strong><br>You have exceeded the daily request limit for your package. Please try again later or <a href="billing.html" style="color:var(--accent);text-decoration:underline">upgrade your package</a> for higher limits.',
-                        'bot'
-                    );
-                    return;
-                }
+function removeSystemMessages() {
+    document.querySelectorAll('[id^="sys-"]').forEach(el => el.remove());
+}
 
-                appendMessage('❌ ' + (resp.message || 'Something went wrong. Please try again.'), 'bot');
+// ── Send Message ───────────────────────────────────
+async function sendMessage() {
+    const input = document.getElementById('chatInput');
+    const msg = input.value.trim();
+    const hasAttachments = pendingAttachments.length > 0;
+
+    if (!msg && !hasAttachments) return;
+    if (!currentBotId) return;
+
+    if (tokenQuotaExceeded) {
+        appendMessage('⚠️ Your token limit has been reached. Please <a href="billing.html" style="color:var(--accent);text-decoration:underline">top up tokens</a> or upgrade your package.', 'bot', 'Token quota exceeded');
+        return;
+    }
+
+    input.value = '';
+    setSending(true);
+
+    // Show attachments in user message
+    let displayMsg = msg || '';
+    if (hasAttachments) {
+        const attachLabels = pendingAttachments.map(a => a.is_link ? `🔗 Link` : `📄 ${a.filename}`).join(', ');
+        displayMsg = displayMsg ? `${attachLabels}\n${displayMsg}` : attachLabels;
+    }
+    appendMessage(displayMsg, 'user');
+
+    // Build context with attachments
+    let fullContent = msg || 'Analyze the attached content';
+
+    if (hasAttachments) {
+        const attachmentContext = pendingAttachments.map((a, i) => {
+            if (a.image_base64) {
+                return `[IMAGE ${i+1}: ${a.filename} — AI can see this image]`;
+            }
+            return `--- BEGIN DOCUMENT ${i+1}: ${a.filename} ---\n${a.text}\n--- END DOCUMENT ${i+1} ---`;
+        }).join('\n\n');
+        fullContent = `${attachmentContext}\n\nUSER MESSAGE: ${msg || 'Please analyze the attached content above. Summarize key points and answer any questions.'}`;
+    }
+
+    // Clear attachments
+    pendingAttachments = [];
+    renderAttachments();
+
+    // Show typing
+    const msgs = document.getElementById('chatMessages');
+    const typingId = 'typing-' + Date.now();
+    msgs.innerHTML += `<div class="chat-msg chat-bot" id="${typingId}"><div class="msg-sender">${currentAgentName}</div><div class="loading"></div> Thinking...</div>`;
+    msgs.scrollTop = msgs.scrollHeight;
+
+    try {
+        const resp = await api('/chat/send', {
+            method: 'POST',
+            body: JSON.stringify({
+                content: fullContent,
+                container_id: parseInt(currentBotId),
+                provider: 'mimo',
+            })
+        });
+
+        // Remove typing
+        const typingEl = document.getElementById(typingId);
+        if (typingEl) typingEl.remove();
+
+        if (resp.success === false) {
+            if (resp.error === 'token_quota_exceeded') {
+                tokenQuotaExceeded = true;
+                appendMessage('⚠️ <strong>Token limit reached!</strong>', 'bot', 'Quota exceeded');
+                loadTokenStatus();
                 return;
             }
-
-            // Success — show response
-            const reply = resp.response || resp.message || resp.content || 'No response received.';
-            const tokensUsed = resp.tokens_used || 0;
-            const extraParts = [];
-            if (tokensUsed > 0) extraParts.push('Tokens: ' + formatNum(tokensUsed));
-            if (resp.quota_warning) extraParts.push('⚠️ ' + resp.quota_warning);
-            appendMessage(reply, 'bot', extraParts.join(' · '));
-
-            // Refresh token status after each message
-            loadTokenStatus();
-
-        } catch (e) {
-            const typingEl = document.getElementById(typingId);
-            if (typingEl) typingEl.remove();
-            appendMessage('❌ Unable to connect to AI Staff. Please try again.', 'bot', e.message || 'Network error');
+            if (resp.error === 'no_subscription' || resp.error === 'subscription_inactive') {
+                appendMessage('⚠️ ' + (resp.message || 'No active subscription.'), 'bot');
+                return;
+            }
+            appendMessage(`❌ ${resp.message || resp.error || 'Something went wrong.'}`, 'bot');
+            return;
         }
 
-        setSending(false);
+        const reply = resp.content || resp.reply || '';
+        appendMessage(reply, 'bot', currentAgentName);
+    } catch (e) {
+        const typingEl = document.getElementById(typingId);
+        if (typingEl) typingEl.remove();
+        appendMessage('❌ Network error. Please try again.', 'bot');
     }
 
-    init();
-    </script>
-    <style>
-    .msg-sender {
-        font-size: 12px;
-        font-weight: 600;
-        color: var(--accent, #6366f1);
-        margin-bottom: 4px;
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
-    }
-    </style>
+    setSending(false);
+}
+
+// ── Helpers ────────────────────────────────────────
+function appendMessage(text, role, sender) {
+    const msgs = document.getElementById('chatMessages');
+    const cls = role === 'user' ? 'chat-user' : 'chat-bot';
+    const senderHtml = role === 'bot' && sender ? `<div class="msg-sender">${sender}</div>` : '';
+    msgs.innerHTML += `<div class="chat-msg ${cls}">${senderHtml}${text.replace(/\n/g, '<br>')}</div>`;
+    msgs.scrollTop = msgs.scrollHeight;
+}
+
+function setSending(disabled) {
+    document.getElementById('sendBtn').disabled = disabled;
+    document.getElementById('chatInput').disabled = disabled || tokenQuotaExceeded;
+    if (!disabled) document.getElementById('chatInput').focus();
+}
+
+async function loadTokenStatus() {
+    try {
+        const resp = await api('/chat/token-status');
+        const badge = document.getElementById('tokenBadge');
+        const badgeText = document.getElementById('tokenBadgeText');
+        if (resp.has_subscription) {
+            const pct = resp.percent_used || 0;
+            badgeText.textContent = `${formatNum(resp.remaining || 0)} left`;
+            badge.style.color = pct > 90 ? 'var(--danger)' : pct > 70 ? '#ffc107' : 'var(--muted)';
+        } else {
+            badgeText.textContent = 'No quota';
+            badge.style.color = 'var(--danger)';
+        }
+    } catch (e) {}
+}
+
+function formatNum(n) {
+    if (n >= 1000000) return (n/1000000).toFixed(1) + 'M';
+    if (n >= 1000) return (n/1000).toFixed(1) + 'K';
+    return String(n);
+}
+</script>
 </body>
 </html>
