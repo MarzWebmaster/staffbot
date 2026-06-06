@@ -33,6 +33,7 @@ from app.models.api_key import ApiKey
 from app.models.chat_message import ChatMessage
 from app.services.enforcement_service import EnforcementService
 from app.services.content_moderation import moderate_message
+from app.services import office_events
 
 
 
@@ -178,6 +179,15 @@ async def chat_send(
     )
     await db.commit()
 
+    # Office visualization — agent spawned
+    agent_id = f"client-{client_id}"
+    office_events.agent_spawned(
+        client_id=client_id,
+        name=current_user.name or f"User#{client_id}",
+        role="frontend",
+        task=data.content[:60],
+    )
+
     # ── 4b. Content moderation — 3-layer scan before AI forward ────
     # Layer 2 uses user's own API key for AI classification (token quota)
     moderation_api_key = data.api_key or HERMES_KEY
@@ -239,6 +249,8 @@ async def chat_send(
     }
 
     try:
+        # Office visualization — agent working
+        office_events.agent_working(client_id, agent_id)
         async with httpx.AsyncClient(timeout=120) as client:
             resp = await client.post(target_url, json=payload, headers=req_headers)
     except httpx.TimeoutException:
@@ -263,6 +275,9 @@ async def chat_send(
     hermes_data = resp.json()
     choices = hermes_data.get("choices", [])
     assistant_content = choices[0].get("message", {}).get("content", "") if choices else ""
+
+    # Office visualization — agent completed
+    office_events.agent_completed(client_id, agent_id, assistant_content[:60])
     
     result = {
         "success": True,

@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>My AI Office — StaffBot.my</title>
+    <link rel="stylesheet" href="/static/css/app.css?v=1780500227">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { background: #0d0d12; overflow: hidden; font-family: system-ui, sans-serif; }
+        #loading { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center;
+                   background: #0d0d12; color: #8b8b8b; font-size: 16px; z-index: 9999; flex-direction: column; gap: 12px; }
+        #loading .spinner { width: 32px; height: 32px; border: 3px solid rgba(255,255,255,0.1);
+                           border-top-color: #6366f1; border-radius: 50%; animation: spin 0.8s linear infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        #office-frame { width: 100vw; height: 100vh; border: none; }
+        #error { position: fixed; inset: 0; display: none; align-items: center; justify-content: center;
+                background: #0d0d12; color: #ef4444; font-size: 16px; flex-direction: column; gap: 12px; }
+        #error a { color: #6366f1; text-decoration: none; }
+    </style>
+</head>
+<body>
+    <div id="loading">
+        <div class="spinner"></div>
+        <span>Connecting to your AI office...</span>
+    </div>
+    <div id="error">
+        <span>⚠️ Could not connect to office server</span>
+        <a href="/customer/dashboard.html">← Back to Dashboard</a>
+    </div>
+    <iframe id="office-frame" style="display:none"></iframe>
+
+    <script>
+    const AUTH_TOKEN_KEY = 'auth_token';
+
+    async function init() {
+        const token = localStorage.getItem(AUTH_TOKEN_KEY);
+        if (!token) {
+            window.location.href = '/customer/login.html';
+            return;
+        }
+
+        try {
+            // Get office JWT from staffbot-api
+            const resp = await fetch('/api/v1/auth/office-token', {
+                headers: { 'Authorization': 'Bearer ' + token }
+            });
+
+            if (resp.status === 401) {
+                localStorage.removeItem(AUTH_TOKEN_KEY);
+                window.location.href = '/customer/login.html';
+                return;
+            }
+
+            const data = await resp.json();
+            if (data.error) {
+                showError();
+                return;
+            }
+
+            // Load the office iframe with the JWT
+            const officeFrame = document.getElementById('office-frame');
+            officeFrame.src = '/office/?token=' + encodeURIComponent(data.token);
+            officeFrame.onload = function() {
+                document.getElementById('loading').style.display = 'none';
+                officeFrame.style.display = 'block';
+            };
+
+            // Timeout fallback
+            setTimeout(() => {
+                const loading = document.getElementById('loading');
+                if (loading.style.display !== 'none') {
+                    document.getElementById('loading').style.display = 'none';
+                    officeFrame.style.display = 'block';
+                }
+            }, 5000);
+
+        } catch (e) {
+            console.error('Office init error:', e);
+            showError();
+        }
+    }
+
+    function showError() {
+        document.getElementById('loading').style.display = 'none';
+        document.getElementById('error').style.display = 'flex';
+    }
+
+    init();
+    </script>
+</body>
+</html>

@@ -6,3 +6,7 @@ venv/
 *.zip
 .gitignore
 api/scripts/seed_llm_providers.py
+
+Claude-Office/
+office/
+node_modules/
