@@ -30,6 +30,7 @@ from app.schemas.container import (
 )
 from app.middleware.auth import get_current_client
 from app.services.docker_service import DockerService
+from app.services import office_events
 
 import logging
 logger = logging.getLogger(__name__)
@@ -213,6 +214,16 @@ async def create_container(
 
     await db.commit()
     await db.refresh(container)
+
+    # ── Office event: bot created (agent joins office) ───────────
+    office_events.bot_created(
+        client_id=current_user.id,
+        bot_id=container.id,
+        name=container.name,
+        agent_name=container.agent_name or "",
+        skills=container.skills or [],
+    )
+
     return container
 
 
@@ -274,6 +285,16 @@ async def update_container(
 
     await db.commit()
     await db.refresh(container)
+
+    # ── Office event: bot updated ────────────────────────────────
+    office_events.bot_updated(
+        client_id=current_user.id,
+        bot_id=container.id,
+        name=container.name,
+        agent_name=container.agent_name or "",
+        skills=container.skills or [],
+    )
+
     return container
 
 
@@ -306,4 +327,11 @@ async def delete_container(
 
     await db.delete(container)
     await db.commit()
+
+    # ── Office event: bot deleted (agent leaves office) ──────────
+    office_events.bot_deleted(
+        client_id=current_user.id,
+        bot_id=container_id,
+    )
+
     return {"message": f"Container '{container.name}' deleted successfully"}
