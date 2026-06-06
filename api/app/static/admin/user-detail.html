@@ -175,8 +175,11 @@
                     <div id="containersInfo"><span style="color:rgba(255,255,255,0.3);font-size:13px">No containers deployed</span></div>
                 </div>
             </div>
-                <!-- Bottom Action Bar (visible when scrolled down) -->
-                <div id="bottomActionBar" style="display:none;margin-top:24px;padding:20px 0;border-top:1px solid rgba(255,255,255,0.08);text-align:center"></div>
+                <!-- Bottom Action Bar (always visible — no JS dependency) -->
+                <div id="bottomActionBar" style="margin-top:24px;padding:20px 0;border-top:1px solid rgba(255,255,255,0.08);text-align:center">
+                    <button onclick="if(typeof createUser==='function')createUser()" class="btn btn-success" style="padding:14px 40px;font-size:16px;border-radius:10px">➕ Create User</button>
+                    <a href="users.html" class="btn btn-ghost" style="padding:14px 30px;font-size:16px">❌ Cancel</a>
+                </div>
         </div>
     </div>
     <div id="toast-container" class="toast-container"></div>
@@ -331,6 +334,7 @@
 
         // Action bar
         const bar = $('actionBar');
+        const bottom = $('bottomActionBar');
         if (isView) {
             $('pageTitle').textContent = currentUser.name || 'User Profile';
             const subdomain = currentUser.subdomain || '';
@@ -340,13 +344,14 @@
                 (!hasContainer
                     ? '<button onclick="deployUser()" class="btn btn-success" style="background:#06b6d4">🚀 Deploy</button>'
                     : '<span style="color:rgba(255,255,255,0.3);font-size:12px;margin-left:8px">✓ Deployed</span>');
+            // Hide bottom bar in view mode
+            if (bottom) bottom.style.display = 'none';
         } else {
             $('pageTitle').textContent = 'Edit: ' + (currentUser.name || currentUser.email || 'User');
             bar.innerHTML = '<button onclick="saveUser()" class="btn btn-success">💾 Save Changes</button>' +
                 '<a href="?id=' + currentUser.id + '" class="btn btn-ghost">❌ Cancel</a>';
 
             // Bottom action bar for edit mode
-            const bottom = $('bottomActionBar');
             if (bottom) {
                 bottom.style.display = 'block';
                 bottom.innerHTML = '<button onclick="saveUser()" class="btn btn-success" style="padding:14px 40px;font-size:16px;border-radius:10px">💾 Save Changes</button>' +
