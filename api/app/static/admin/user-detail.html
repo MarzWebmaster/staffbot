@@ -175,6 +175,8 @@
                     <div id="containersInfo"><span style="color:rgba(255,255,255,0.3);font-size:13px">No containers deployed</span></div>
                 </div>
             </div>
+                <!-- Bottom Action Bar (visible when scrolled down) -->
+                <div id="bottomActionBar" style="display:none;margin-top:24px;padding:20px 0;border-top:1px solid rgba(255,255,255,0.08);text-align:center"></div>
         </div>
     </div>
     <div id="toast-container" class="toast-container"></div>
@@ -342,6 +344,14 @@
             $('pageTitle').textContent = 'Edit: ' + (currentUser.name || currentUser.email || 'User');
             bar.innerHTML = '<button onclick="saveUser()" class="btn btn-success">💾 Save Changes</button>' +
                 '<a href="?id=' + currentUser.id + '" class="btn btn-ghost">❌ Cancel</a>';
+
+            // Bottom action bar for edit mode
+            const bottom = $('bottomActionBar');
+            if (bottom) {
+                bottom.style.display = 'block';
+                bottom.innerHTML = '<button onclick="saveUser()" class="btn btn-success" style="padding:14px 40px;font-size:16px;border-radius:10px">💾 Save Changes</button>' +
+                    ' <a href="?id=' + currentUser.id + '" class="btn btn-ghost" style="padding:14px 30px;font-size:16px">❌ Cancel</a>';
+            }
         }
     }
 
@@ -374,6 +384,14 @@
 
         $('actionBar').innerHTML = '<button onclick="createUser()" class="btn btn-success">➕ Create User</button>' +
             '<a href="users.html" class="btn btn-ghost">❌ Cancel</a>';
+
+        // Bottom action bar
+        const bottom = $('bottomActionBar');
+        if (bottom) {
+            bottom.style.display = 'block';
+            bottom.innerHTML = '<button onclick="createUser()" class="btn btn-success" style="padding:14px 40px;font-size:16px;border-radius:10px">➕ Create User</button>' +
+                ' <a href="users.html" class="btn btn-ghost" style="padding:14px 30px;font-size:16px">❌ Cancel</a>';
+        }
     }
 
     async function saveUser() {
@@ -530,7 +548,7 @@
             ).join('') + '</div>';
     }
 
-    init();
+    document.addEventListener('DOMContentLoaded', function() { init(); });
     </script>
 </body>
 </html>
