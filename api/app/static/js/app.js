@@ -16,7 +16,7 @@ async function api(path, options = {}) {
         if (!res.ok) { const err = await res.json().catch(() => ({ detail: res.statusText })); throw new Error(err.detail || 'Request failed'); }
         return await res.json();
     } catch (e) {
-        if (e.message !== 'Session expired') showToast(e.message, 'error');
+        if (e.name !== 'AbortError' && e.message !== 'Session expired') showToast(e.message, 'error');
         throw e;
     }
 }

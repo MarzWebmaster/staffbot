@@ -38,6 +38,8 @@
         .drop-zone-inner span { font-size:40px; }
         .drop-zone-inner p { margin-top:8px; font-size:16px; }
         .loading { display:inline-block; width:20px; height:20px; border:2px solid var(--muted); border-top-color:var(--accent); border-radius:50%; animation:spin .6s linear infinite; margin-right:8px; }
+        .stop-btn { background:var(--danger,#e74c3c); color:#fff; border:none; padding:8px 16px; border-radius:8px; cursor:pointer; font-weight:600; font-size:14px; }
+        .stop-btn:hover { opacity:0.85; }
         @keyframes spin { to { transform:rotate(360deg); } }
         .link-badge { display:inline-flex; align-items:center; gap:4px; padding:3px 8px; background:var(--accent); color:#fff; border-radius:12px; font-size:11px; }
         .file-badge { display:inline-flex; align-items:center; gap:4px; padding:3px 8px; background:#5865f2; color:#fff; border-radius:12px; font-size:11px; }
@@ -130,6 +132,7 @@
                 <div class="input-row chat-input-wrapper">
                     <input type="text" id="chatInput" placeholder="Type a message... or upload a document first" disabled onkeypress="if(event.key==='Enter')sendMessage()">
                     <button id="sendBtn" onclick="sendMessage()" disabled>Send</button>
+                    <button id="stopBtn" onclick="stopChat()" style="display:none;" class="stop-btn">Stop</button>
                 </div>
             </div>
             <!-- Drop zone -->
@@ -148,6 +151,7 @@
 <script>
 // ── State ──────────────────────────────────────────
 let currentBotId = null;
+let currentAbortController = null;
 let currentAgentName = 'AI Staff';
 let tokenQuotaExceeded = false;
 let pendingAttachments = []; // {filename, text, mime_type, image_base64, pdf_base64}
@@ -417,6 +421,7 @@ data:${a.mime_type};base64,${a.image_base64}`;
     msgs.scrollTop = msgs.scrollHeight;
 
     try {
+        currentAbortController = new AbortController();
         const bodyPayload = {
             content: fullContent,
             container_id: parseInt(currentBotId),
@@ -428,7 +433,8 @@ data:${a.mime_type};base64,${a.image_base64}`;
         }
         const resp = await api('/chat/send', {
             method: 'POST',
-            body: JSON.stringify(bodyPayload)
+            body: JSON.stringify(bodyPayload),
+            signal: currentAbortController.signal
         });
 
         // Remove typing
@@ -455,9 +461,14 @@ data:${a.mime_type};base64,${a.image_base64}`;
     } catch (e) {
         const typingEl = document.getElementById(typingId);
         if (typingEl) typingEl.remove();
-        appendMessage('❌ Network error. Please try again.', 'bot');
+        if (e.name === 'AbortError') {
+            appendMessage('⏹️ Request stopped by user.', 'bot');
+        } else {
+            appendMessage('❌ Network error. Please try again.', 'bot');
+        }
     }
 
+    currentAbortController = null;
     setSending(false);
 }
 
@@ -472,8 +483,16 @@ function appendMessage(text, role, sender) {
 
 function setSending(disabled) {
     document.getElementById('sendBtn').disabled = disabled;
+    document.getElementById('stopBtn').style.display = disabled ? '' : 'none';
     document.getElementById('chatInput').disabled = disabled || tokenQuotaExceeded;
     if (!disabled) document.getElementById('chatInput').focus();
+}
+
+function stopChat() {
+    if (currentAbortController) {
+        currentAbortController.abort();
+        currentAbortController = null;
+    }
 }
 
 async function loadTokenStatus() {
