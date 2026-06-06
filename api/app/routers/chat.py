@@ -178,11 +178,14 @@ async def chat_send(
     )
     await db.commit()
 
-    # ── 4b. Content moderation — scan before AI forward ────────────
+    # ── 4b. Content moderation — 3-layer scan before AI forward ────
+    # Layer 2 uses user's own API key for AI classification (token quota)
+    moderation_api_key = data.api_key or HERMES_KEY
     violation = await moderate_message(
         message=data.content,
         client_id=client_id,
         db=db,
+        api_key=moderation_api_key,
     )
     if violation:
         await _save_message(
