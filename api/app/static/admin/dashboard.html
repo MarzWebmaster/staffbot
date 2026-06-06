@@ -197,17 +197,26 @@
 
     function renderActivity(data) {
         const container = document.getElementById('recentActivity');
-        if (!data || !data.items || data.items.length === 0) {
+        // Handle both {items: [...]} and raw array formats
+        const items = Array.isArray(data) ? data : (data && data.items ? data.items : []);
+        if (items.length === 0) {
             container.innerHTML = '<p style="color:var(--text-light);padding:16px;text-align:center">No recent activity</p>';
             return;
         }
-        container.innerHTML = `<div style="display:flex;flex-direction:column;gap:8px">${data.items.slice(0,10).map(a => `
+        // Map API fields to display fields
+        const icons = { user_registered: '👤', token_usage: '📊', container_deployed: '🐳', subscription: '💳', login: '🔑', payment: '💰', violation: '⚠️' };
+        container.innerHTML = `<div style="display:flex;flex-direction:column;gap:8px">${items.slice(0,10).map(a => {
+            const icon = a.icon || icons[a.type] || '📌';
+            const action = a.action || a.description || a.type || 'Activity';
+            const detail = a.detail || '';
+            const time = a.time || (a.timestamp ? new Date(a.timestamp).toLocaleString('en-MY', {hour:'2-digit',minute:'2-digit',day:'numeric',month:'short'}) : '');
+            return `
             <div style="display:flex;align-items:center;gap:12px;padding:8px 12px;border:1px solid var(--border);border-radius:6px;font-size:13px">
-                <span style="font-size:18px">${a.icon || '📌'}</span>
-                <div style="flex:1"><strong>${a.action}</strong> <span style="color:var(--text-light)">${a.detail || ''}</span></div>
-                <span style="font-size:11px;color:var(--text-light)">${a.time || ''}</span>
-            </div>
-        `).join('')}</div>`;
+                <span style="font-size:18px">${icon}</span>
+                <div style="flex:1"><strong>${action}</strong> <span style="color:var(--text-light)">${detail}</span></div>
+                <span style="font-size:11px;color:var(--text-light)">${time}</span>
+            </div>`;
+        }).join('')}</div>`;
     }
 
     init();
