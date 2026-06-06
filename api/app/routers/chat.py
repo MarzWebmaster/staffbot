@@ -32,6 +32,7 @@ from app.models.subscription import Subscription
 from app.models.api_key import ApiKey
 from app.models.chat_message import ChatMessage
 from app.services.enforcement_service import EnforcementService
+from app.services.content_moderation import moderate_message
 
 
 
@@ -176,6 +177,26 @@ async def chat_send(
         provider=data.provider,
     )
     await db.commit()
+
+    # ── 4b. Content moderation — scan before AI forward ────────────
+    violation = await moderate_message(
+        message=data.content,
+        client_id=client_id,
+        db=db,
+    )
+    if violation:
+        await _save_message(
+            db=db, client_id=client_id, role="assistant",
+            content=violation["message"], provider=data.provider,
+        )
+        await db.commit()
+        return {
+            "success": False,
+            "error": "policy_violation",
+            "message": violation["message"],
+            "categories": violation["categories"],
+            "action": violation["action"],
+        }
 
     # ── 5. Route ALL traffic to Hermes Native :8642 (text + vision) ─
     has_image = bool(data.image_base64)
