@@ -15,6 +15,7 @@
         .chat-user { align-self:flex-end; background:var(--accent); color:#fff; border-bottom-right-radius:4px; }
         .chat-bot { align-self:flex-start; background:var(--card-bg); border:1px solid var(--border); border-bottom-left-radius:4px; }
         .msg-sender { font-size:11px; color:var(--muted); margin-bottom:4px; font-weight:600; }
+.msg-time { font-size:10px; color:var(--muted); float:right; margin-left:8px; opacity:0.6; }
         .msg-attachments { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:8px; }
         .msg-attachment { display:flex; align-items:center; gap:6px; padding:4px 10px; background:var(--bg); border-radius:6px; font-size:12px; border:1px solid var(--border); }
         .msg-attachment .remove-attach { cursor:pointer; color:var(--danger); font-weight:bold; font-size:14px; }
@@ -209,6 +210,28 @@ function switchBot() {
     msgs.innerHTML = '';
     pendingAttachments = [];
     renderAttachments();
+    if (currentBotId) loadHistory();
+}
+
+async function loadHistory() {
+    if (!currentBotId) return;
+    const msgs = document.getElementById('chatMessages');
+    try {
+        const data = await api(`/chat/history?container_id=${currentBotId}&limit=50`);
+        if (!data.messages || data.messages.length === 0) return;
+        // Clear empty state and render history
+        const emptyState = msgs.querySelector('.empty-chat-state');
+        if (emptyState) emptyState.remove();
+        for (const m of data.messages) {
+            const cls = m.role === 'user' ? 'chat-user' : 'chat-bot';
+            const senderHtml = m.role === 'assistant' ? `<div class="msg-sender">${currentAgentName}</div>` : '';
+            const time = m.created_at ? new Date(m.created_at).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) : '';
+            msgs.innerHTML += `<div class="chat-msg ${cls}">${senderHtml}${(m.content||'').replace(/\n/g, '<br>')}<span class="msg-time">${time}</span></div>`;
+        }
+        msgs.scrollTop = msgs.scrollHeight;
+    } catch (e) {
+        console.warn('Failed to load history:', e);
+    }
 }
 
 // ── File Upload ────────────────────────────────────
