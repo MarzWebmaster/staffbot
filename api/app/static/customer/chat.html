@@ -2,32 +2,30 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <link rel="dns-prefetch" href="https://cdn.tailwindcss.com">
-    <link rel="preconnect" href="https://cdn.tailwindcss.com" crossorigin>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self' https://cdn.tailwindcss.com; script-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com; style-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com; img-src 'self' data: https:; connect-src 'self'; font-src 'self' data:;">
     <title>Chat — StaffBot.my</title>
-    <link rel="stylesheet" href="/static/css/app.css?v=1780499994">
+    <link rel="stylesheet" href="/static/css/app.css?v=1748883000">
     <style>
-        .chat-layout { display:flex; flex-direction:column; height:calc(100vh - 120px); max-width:900px; margin:0 auto; }
-        .chat-header { display:flex; align-items:center; justify-content:space-between; padding:12px 0; border-bottom:1px solid var(--border); }
-        .chat-header select { padding:6px 12px; border-radius:8px; border:1px solid var(--border); background:var(--bg); color:var(--text); font-size:14px; }
-        .chat-messages { flex:1; overflow-y:auto; padding:16px 0; display:flex; flex-direction:column; gap:16px; }
-        .chat-msg { max-width:80%; padding:12px 16px; border-radius:12px; line-height:1.5; font-size:14px; }
+        .chat-layout { display:flex; flex-direction:column; height:calc(100vh - 80px); max-width:900px; margin:0 auto; width:100%; }
+        .chat-header { display:flex; align-items:center; justify-content:space-between; padding:12px 0; border-bottom:1px solid var(--border); flex-wrap:wrap; gap:8px; }
+        .chat-header h2 { font-size:18px; min-width:0; }
+        .chat-header select { padding:6px 12px; border-radius:8px; border:1px solid var(--border); background:var(--bg); color:var(--text); font-size:14px; max-width:180px; }
+        .chat-messages { flex:1; overflow-y:auto; padding:12px 0; display:flex; flex-direction:column; gap:12px; }
+        .chat-msg { max-width:85%; padding:10px 14px; border-radius:12px; line-height:1.5; font-size:14px; word-break:break-word; }
         .chat-user { align-self:flex-end; background:var(--accent); color:#fff; border-bottom-right-radius:4px; }
         .chat-bot { align-self:flex-start; background:var(--card-bg); border:1px solid var(--border); border-bottom-left-radius:4px; }
-        .msg-sender { font-size:12px; color:var(--muted); margin-bottom:4px; font-weight:600; }
-        .msg-attachments { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:8px; }
+        .msg-sender { font-size:11px; color:var(--muted); margin-bottom:4px; font-weight:600; }
+        .msg-attachments { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:8px; }
         .msg-attachment { display:flex; align-items:center; gap:6px; padding:4px 10px; background:var(--bg); border-radius:6px; font-size:12px; border:1px solid var(--border); }
         .msg-attachment .remove-attach { cursor:pointer; color:var(--danger); font-weight:bold; font-size:14px; }
-        .chat-input-area { padding:12px 0; border-top:1px solid var(--border); }
+        .chat-input-area { padding:10px 0; border-top:1px solid var(--border); }
         .input-row { display:flex; gap:8px; align-items:center; }
-        .input-row input[type="text"] { flex:1; padding:10px 14px; border-radius:24px; border:1px solid var(--border); background:var(--bg); color:var(--text); font-size:14px; }
+        .input-row input[type="text"] { flex:1; padding:10px 14px; border-radius:24px; border:1px solid var(--border); background:var(--bg); color:var(--text); font-size:14px; min-width:0; }
         .input-row input[type="text"]:focus { outline:none; border-color:var(--accent); }
-        .input-row button { padding:10px 20px; border-radius:24px; border:none; background:var(--accent); color:#fff; font-size:14px; cursor:pointer; font-weight:600; }
+        .input-row button { padding:10px 20px; border-radius:24px; border:none; background:var(--accent); color:#fff; font-size:14px; cursor:pointer; font-weight:600; white-space:nowrap; }
         .input-row button:disabled { opacity:0.5; cursor:not-allowed; }
-        .toolbar-row { display:flex; gap:8px; margin-bottom:8px; align-items:center; }
-        .tool-btn { padding:6px 14px; border-radius:20px; border:1px solid var(--border); background:var(--bg); color:var(--text); cursor:pointer; font-size:12px; display:flex; align-items:center; gap:5px; transition:all .2s; }
+        .toolbar-row { display:flex; gap:6px; margin-bottom:8px; align-items:center; flex-wrap:wrap; }
+        .tool-btn { padding:6px 12px; border-radius:20px; border:1px solid var(--border); background:var(--bg); color:var(--text); cursor:pointer; font-size:12px; display:flex; align-items:center; gap:4px; transition:all .2s; white-space:nowrap; }
         .tool-btn:hover { border-color:var(--accent); }
         .tool-btn.active { background:var(--accent); color:#fff; border-color:var(--accent); }
         .link-popup { display:none; position:absolute; bottom:60px; left:0; right:0; background:var(--card-bg); border:1px solid var(--border); border-radius:12px; padding:12px; z-index:10; }
@@ -40,14 +38,51 @@
         .drop-zone-inner p { margin-top:8px; font-size:16px; }
         .loading { display:inline-block; width:20px; height:20px; border:2px solid var(--muted); border-top-color:var(--accent); border-radius:50%; animation:spin .6s linear infinite; margin-right:8px; }
         @keyframes spin { to { transform:rotate(360deg); } }
-        .link-badge { display:inline-flex; align-items:center; gap:4px; padding:3px 8px; background:var(--accent); color:#fff; border-radius:12px; font-size:12px; }
-        .file-badge { display:inline-flex; align-items:center; gap:4px; padding:3px 8px; background:#5865f2; color:#fff; border-radius:12px; font-size:12px; }
+        .link-badge { display:inline-flex; align-items:center; gap:4px; padding:3px 8px; background:var(--accent); color:#fff; border-radius:12px; font-size:11px; }
+        .file-badge { display:inline-flex; align-items:center; gap:4px; padding:3px 8px; background:#5865f2; color:#fff; border-radius:12px; font-size:11px; }
         .chat-input-wrapper { position:relative; }
+
+        /* ── Mobile ──────────────────────────── */
+        @media (max-width: 768px) {
+            .chat-layout { height:calc(100vh - 70px); max-width:100%; }
+            .chat-header h2 { font-size:15px; }
+            .chat-header select { max-width:140px; font-size:13px; }
+            .chat-msg { max-width:92%; font-size:13px; padding:8px 12px; }
+            .input-row input[type="text"] { padding:8px 12px; font-size:13px; }
+            .input-row button { padding:8px 14px; font-size:13px; }
+            .tool-btn { padding:5px 10px; font-size:11px; }
+            .chat-messages { padding:8px 0; gap:8px; }
+        }
+        @media (max-width: 480px) {
+            .chat-layout { height:calc(100vh - 60px); }
+            .chat-header h2 { font-size:14px; }
+            .chat-header select { max-width:120px; font-size:12px; padding:4px 8px; }
+            .chat-msg { max-width:95%; font-size:13px; }
+            .toolbar-row { gap:4px; }
+            .tool-btn { padding:4px 8px; font-size:10px; }
+        }
     </style>
 </head>
 <body>
-<div class="dashboard-layout">
-    <aside class="sidebar" id="sidebar"></aside>
+<div class="app-layout">
+    <button class="sidebar-toggle" onclick="toggleSidebar()">☰</button>
+    <div class="sidebar-overlay" onclick="toggleSidebar()"></div>
+    <aside class="sidebar" id="sidebar">
+        <div class="sidebar-brand">
+            <h2>StaffBot.my</h2>
+            <span>Customer Dashboard</span>
+        </div>
+        <nav class="sidebar-nav">
+            <a href="dashboard.html"><span>📊</span><span>Dashboard</span></a>
+            <a href="bots.html"><span>🤖</span><span>My AI Staff</span></a>
+            <a href="chat.html" class="active"><span>💬</span><span>Chat</span></a>
+            <a href="settings.html"><span>⚙️</span><span>Settings</span></a>
+            <a href="billing.html"><span>💰</span><span>Billing</span></a>
+            <a href="usage.html"><span>📈</span><span>Usage</span></a>
+            <a href="#" onclick="logout()" style="margin-top:20px;border-top:1px solid rgba(255,255,255,0.1);padding-top:20px"><span>🚪</span><span>Logout</span></a>
+        </nav>
+        <div id="sidebar-user" style="padding:16px 20px;border-top:1px solid rgba(255,255,255,0.1);margin-top:auto"></div>
+    </aside>
     <main class="main-content">
         <div class="chat-layout">
             <div class="chat-header">
@@ -75,7 +110,7 @@
                         🔗 Link
                     </button>
                     <input type="file" id="fileInput" style="display:none" accept=".pdf,.docx,.doc,.txt,.md,.csv,.json,.png,.jpg,.jpeg,.gif,.webp" onchange="handleFileUpload(event)" multiple>
-                    <span style="font-size:12px;color:var(--muted);margin-left:auto;" id="tokenBadge">
+                    <span style="font-size:11px;color:var(--muted);margin-left:auto;" id="tokenBadge">
                         Tokens: <span id="tokenBadgeText">...</span>
                     </span>
                 </div>
@@ -106,7 +141,7 @@
     </main>
 </div>
 
-<script defer src="/static/js/app.js?v=1780499994"></script>
+<script src="/static/js/app.js?v=1748883000"></script>
 <script>
 // ── State ──────────────────────────────────────────
 let currentBotId = null;
@@ -117,7 +152,9 @@ let pendingAttachments = []; // {filename, text, mime_type, image_base64, pdf_ba
 // ── Init ───────────────────────────────────────────
 (async () => {
     if (!AUTH_TOKEN) { location.href = '/customer/login.html'; return; }
-    await loadSidebar('sidebar');
+    const user = await checkAuth();
+    if (!user) return;
+    renderSidebarUser(user);
     await loadBots();
     await loadTokenStatus();
 
@@ -141,9 +178,9 @@ let pendingAttachments = []; // {filename, text, mime_type, image_base64, pdf_ba
 // ── Bots ───────────────────────────────────────────
 async function loadBots() {
     try {
-        const bots = await api('/containers/list');
+        const bots = await api('/containers');
         const sel = document.getElementById('botSelector');
-        sel.innerHTML = bots.map(b => `<option value="${b.id}">${escapeHtml(b.agent_name || b.name || 'Bot ' + b.id)}</option>`).join('');
+        sel.innerHTML = bots.map(b => `<option value="${b.id}">${b.agent_name || b.name || 'Bot ' + b.id}</option>`).join('');
         const params = new URLSearchParams(location.search);
         if (params.get('bot')) sel.value = params.get('bot');
         switchBot();
@@ -293,7 +330,7 @@ function removeAttachment(i) {
 function appendSystemMessage(text) {
     const msgs = document.getElementById('chatMessages');
     const id = 'sys-' + Date.now();
-    msgs.innerHTML += `<div class="chat-msg chat-bot" id="${id}" style="font-size:12px;opacity:0.8;">${escapeHtml(text)}</div>`;
+    msgs.innerHTML += `<div class="chat-msg chat-bot" id="${id}" style="font-size:12px;opacity:0.8;">${text}</div>`;
     msgs.scrollTop = msgs.scrollHeight;
     return id;
 }
@@ -351,21 +388,19 @@ data:${a.mime_type};base64,${a.image_base64}`;
     // Show typing
     const msgs = document.getElementById('chatMessages');
     const typingId = 'typing-' + Date.now();
-    msgs.innerHTML += `<div class="chat-msg chat-bot" id="${typingId}"><div class="msg-sender">${escapeHtml(currentAgentName)}</div><div class="loading"></div> Thinking...</div>`;
+    msgs.innerHTML += `<div class="chat-msg chat-bot" id="${typingId}"><div class="msg-sender">${currentAgentName}</div><div class="loading"></div> Thinking...</div>`;
     msgs.scrollTop = msgs.scrollHeight;
 
     try {
-        const resp = await api('/chat/send', {
-            method: 'POST',
-            const bodyPayload = {
-                content: fullContent,
-                container_id: parseInt(currentBotId),
-                provider: 'mimo',
-            };
-            const imgAttach = pendingAttachmentsSaved.find(a => a.image_base64);
-            if (imgAttach) {
-                bodyPayload.image_base64 = imgAttach.image_base64;
-            }
+        const bodyPayload = {
+            content: fullContent,
+            container_id: parseInt(currentBotId),
+            provider: 'mimo',
+        };
+        const imgAttach = pendingAttachmentsSaved.find(a => a.image_base64);
+        if (imgAttach) {
+            bodyPayload.image_base64 = imgAttach.image_base64;
+        }
         const resp = await api('/chat/send', {
             method: 'POST',
             body: JSON.stringify(bodyPayload)
