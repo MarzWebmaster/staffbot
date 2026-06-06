@@ -191,28 +191,84 @@ async def delete_user(
     admin: Client = Depends(get_current_admin),
     db: AsyncSession = Depends(get_db),
 ):
-    """Admin: Hard-delete a user."""
+    """Admin: Hard-delete a user with full cascade cleanup."""
+    from sqlalchemy import text
     result = await db.execute(select(Client).where(Client.id == user_id))
     user = result.scalar_one_or_none()
     if not user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
 
-    # Delete FK children first (Subscription, API keys)
+    logger.info(f"Cascade deleting user {user_id} ({user.email})")
+
+    # 1. Delete client_memory (personal AI memory)
+    mem_result = await db.execute(text("DELETE FROM client_memory WHERE client_id = :cid"), {"cid": user_id})
+    logger.info(f"  Deleted {mem_result.rowcount} client_memory records")
+
+    # 2. Delete memory_audit_log
+    await db.execute(text("DELETE FROM memory_audit_log WHERE client_id = :cid"), {"cid": user_id})
+
+    # 3. Delete notifications
+    await db.execute(text("DELETE FROM notifications_log WHERE client_id = :cid"), {"cid": user_id})
+    await db.execute(text("DELETE FROM notification_channels WHERE client_id = :cid"), {"cid": user_id})
+
+    # 4. Delete scheduled tasks
+    await db.execute(text("DELETE FROM tasks WHERE client_id = :cid"), {"cid": user_id})
+
+    # 5. Delete affiliates
+    await db.execute(text("DELETE FROM affiliates WHERE client_id = :cid"), {"cid": user_id})
+
+    # 6. Delete subdomains
+    await db.execute(text("DELETE FROM subdomains WHERE client_id = :cid"), {"cid": user_id})
+
+    # 7. Delete token_topups
+    await db.execute(text("DELETE FROM token_topups WHERE client_id = :cid"), {"cid": user_id})
+
+    # 8. Stop and remove Docker containers for this user
+    from app.services.docker_service import DockerService
+    containers = (await db.execute(select(Container).where(Container.client_id == user_id))).scalars().all()
+    for c in containers:
+        try:
+            DockerService.stop_container(c.container_name)
+            DockerService.remove_container(c.container_name)
+            logger.info(f"  Removed container: {c.container_name}")
+        except Exception as e:
+            logger.warning(f"  Failed to remove container {c.container_name}: {e}")
+        await db.delete(c)
+
+    # 9. Delete API keys
     from app.models.api_key import ApiKey
-    await db.execute(select(ApiKey).where(ApiKey.client_id == user_id))
     api_keys = (await db.execute(select(ApiKey).where(ApiKey.client_id == user_id))).scalars().all()
     for ak in api_keys:
         await db.delete(ak)
 
+    # 10. Delete subscription
     sub_result = await db.execute(select(Subscription).where(Subscription.client_id == user_id))
     sub = sub_result.scalar_one_or_none()
     if sub:
         await db.delete(sub)
 
+    # 11. Delete policy violations (NOT NULL FK → must delete)
+    r = await db.execute(text("DELETE FROM policy_violations WHERE client_id = :cid"), {"cid": user_id})
+    logger.info(f"  Deleted {r.rowcount} policy_violations")
+
+    # 12. Delete token usage log (NOT NULL FK → must delete)
+    r = await db.execute(text("DELETE FROM token_usage_log WHERE client_id = :cid"), {"cid": user_id})
+    logger.info(f"  Deleted {r.rowcount} token_usage_log")
+
+    # 13. Delete chat messages (NOT NULL FK → must delete; content already stripped below)
+    r = await db.execute(text("DELETE FROM chat_messages WHERE client_id = :cid"), {"cid": user_id})
+    logger.info(f"  Deleted {r.rowcount} chat_messages")
+
+    # 14. Nullify nullable FK references (keep parent rows for other analytics)
+    await db.execute(text("UPDATE affiliate_payouts SET processed_by = NULL WHERE processed_by = :cid"), {"cid": user_id})
+    await db.execute(text("UPDATE affiliate_referrals SET referred_client_id = NULL WHERE referred_client_id = :cid"), {"cid": user_id})
+
+    # 15. Delete the user
     await db.delete(user)
     await db.commit()
 
-    return {"message": f"User {user_id} deleted successfully"}
+    logger.info(f"User {user_id} fully deleted with cascade cleanup")
+    return {"message": f"User {user_id} deleted successfully with all associated data"}
 
 
 @router.get("/containers/list")
