@@ -317,6 +317,11 @@ async def chat_send(
             except Exception:
                 pass
 
+    # Fallback: use default env LLM if no key found (boss's own host — Mimo, phi, etc.)
+    if not provider_api_key and MIMO_KEY:
+        provider_api_key = MIMO_KEY
+        provider_base_url = MIMO_URL
+
     if not provider_api_key:
         return {"success": False, "error": "no_provider", "message": "No API key available for this provider."}
 
