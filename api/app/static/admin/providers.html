@@ -154,6 +154,7 @@
                     <td>${p.api_key_configured ? '<span class="status-badge status-active">✓ Configured</span>' : '<span class="status-badge status-error">✗ Not Set</span>'}</td>
                     <td>${p.is_active ? '<span class="status-badge status-active">Active</span>' : '<span class="status-badge status-error">Inactive</span>'}</td>
                     <td>
+                        <button class="btn btn-sm btn-ghost" onclick="testProvider(${p.id},'${p.display_name.replace(/'/g,"\\'")}')" title="Test Connection" ${!p.api_key_configured ? 'disabled style="opacity:0.4"' : ''}>🧪</button>
                         <button class="btn btn-sm btn-ghost" onclick="openEditProvider(${p.id})" title="Edit">✏️</button>
                         <button class="btn btn-sm btn-ghost" onclick="toggleProvider(${p.id},${!p.is_active})" title="${p.is_active ? 'Deactivate' : 'Activate'}">${p.is_active ? '🚫' : '✅'}</button>
                         <button class="btn btn-sm btn-ghost" onclick="deleteProvider(${p.id},'${p.display_name.replace(/'/g,"\\'")}')" title="Delete" style="color:var(--danger)">🗑️</button>
@@ -348,6 +349,27 @@
             showToast('Assignment removed', 'success');
             await loadAssignments();
         } catch {}
+    }
+
+    async function testProvider(id, name) {
+        const btn = event.target.closest('button');
+        const origHTML = btn.innerHTML;
+        btn.innerHTML = '⏳';
+        btn.disabled = true;
+
+        try {
+            const res = await api('/admin/providers/providers/' + id + '/test', { method: 'POST' });
+            if (res.success) {
+                showToast(`✅ ${name}: OK — ${res.latency_ms}ms (${res.model})${res.response_preview ? ' → "' + res.response_preview + '"' : ''}`, 'success');
+            } else {
+                showToast(`❌ ${name}: ${res.error || 'Unknown error'} (HTTP ${res.http_status || 'N/A'}, ${res.latency_ms}ms)`, 'error');
+            }
+        } catch (e) {
+            showToast(`❌ ${name}: ${e.message || 'Test failed'}`, 'error');
+        } finally {
+            btn.innerHTML = origHTML;
+            btn.disabled = false;
+        }
     }
 
     init();

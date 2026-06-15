@@ -336,3 +336,105 @@ async def remove_provider_from_package(
     await db.commit()
     await _notify_gateway_regenerate(db)
     return {"message": "Provider removed from package"}
+
+
+# ── Provider Test ─────────────────────────────────────────────────
+
+import httpx, time, logging
+logger = logging.getLogger(__name__)
+
+
+@router.post("/providers/{provider_id}/test")
+async def test_provider(
+    provider_id: int,
+    admin: Client = Depends(get_current_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Test connectivity to a provider by sending a minimal chat request.
+    Logs the result to audit trail.
+    """
+    result = await db.execute(select(LlmProvider).where(LlmProvider.id == provider_id))
+    p = result.scalar_one_or_none()
+    if not p:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Provider not found")
+    if not p.api_key_encrypted:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Provider has no API key configured")
+
+    # Decrypt the key
+    try:
+        api_key = decrypt_value(p.api_key_encrypted)
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to decrypt API key: {str(e)}")
+
+    base_url = p.base_url.rstrip("/")
+    model = p.default_model or (p.models[0] if p.models else "gpt-3.5-turbo")
+    endpoint = f"{base_url}/chat/completions"
+    test_body = {
+        "model": model,
+        "messages": [{"role": "user", "content": "Say OK"}],
+        "max_tokens": 5,
+    }
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json",
+    }
+
+    t0 = time.monotonic()
+    error_msg = None
+    status_code = None
+    response_preview = None
+
+    try:
+        async with httpx.AsyncClient(timeout=15) as client:
+            resp = await client.post(endpoint, json=test_body, headers=headers)
+            status_code = resp.status_code
+            latency = round((time.monotonic() - t0) * 1000)
+
+            if resp.status_code == 200:
+                body = resp.json()
+                choice = body.get("choices", [{}])[0] if body.get("choices") else {}
+                response_preview = choice.get("message", {}).get("content", "")[:120]
+                is_success = True
+            else:
+                error_msg = resp.text[:300]
+                is_success = False
+
+    except httpx.TimeoutException:
+        latency = round((time.monotonic() - t0) * 1000)
+        error_msg = "Connection timed out after 15s"
+        is_success = False
+    except Exception as e:
+        latency = round((time.monotonic() - t0) * 1000)
+        error_msg = f"Connection error: {str(e)[:300]}"
+        is_success = False
+
+    audit_status = "success" if is_success else "failure"
+
+    # Log to audit trail
+    from app.services.audit import log_audit
+    await log_audit(
+        client_id=admin.id,
+        action="provider_test",
+        resource=f"provider:{p.name}",
+        detail={
+            "provider_id": p.id,
+            "model": model,
+            "endpoint": endpoint,
+            "http_status": status_code,
+            "latency_ms": latency,
+            "success": is_success,
+            "error": error_msg[:200] if error_msg else None,
+            "response_preview": response_preview,
+        },
+        status=audit_status,
+    )
+
+    return {
+        "success": is_success,
+        "provider": p.display_name,
+        "model": model,
+        "latency_ms": latency,
+        "http_status": status_code,
+        "response_preview": response_preview,
+        "error": error_msg,
+    }
