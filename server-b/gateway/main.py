@@ -108,6 +108,15 @@ class ChatRequest(BaseModel):
     system_context: Optional[dict] = None
 
 
+class OpenAICompatRequest(BaseModel):
+    """OpenAI-compatible /v1/chat/completions request."""
+    model: str
+    messages: list
+    max_tokens: Optional[int] = 2000
+    temperature: Optional[float] = 0.7
+    client_id: Optional[int] = None
+
+
 async def verify_auth(x_api_key: str = Header(None)):
     if not x_api_key or x_api_key != AUTH_KEY:
         raise HTTPException(status_code=401, detail="Invalid API key")
@@ -745,6 +754,81 @@ def _calc_cost(provider: str, model: str, input_tokens: int, output_tokens: int)
         "staffbot_rate_per_1m": STAFFBOT_TOKEN_RATE,
         "provider_rates": {"input": pricing.get("input"), "output": pricing.get("output")},
     }
+
+
+async def verify_bearer(authorization: str = Header(None)):
+    """Auth via Bearer token (for OpenAI-compatible endpoint)."""
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Missing or invalid Bearer token")
+    token = authorization[7:]
+    if token != AUTH_KEY and token != STAFFBOT_API_KEY:
+        raise HTTPException(status_code=401, detail="Invalid Bearer token")
+    return True
+
+
+@app.post("/v1/chat/completions")
+async def openai_chat_completions(req: OpenAICompatRequest, auth=Depends(verify_bearer)):
+    """OpenAI-compatible endpoint — proxies to LLM provider with quota + token tracking.
+
+    Called by API container's chat.py router.
+    """
+    client_id = req.client_id
+    if not client_id:
+        raise HTTPException(status_code=400, detail="client_id required in request body")
+
+    # ── Resolve provider for this client ──
+    resolved = await _resolve_provider("openrouter", client_id)
+    if not resolved:
+        resolved = await _resolve_provider("deepseek", client_id)
+    if not resolved:
+        raise HTTPException(status_code=502, detail="No provider configured for this client")
+
+    api_key = resolved.get("api_key", "")
+    base_url = resolved.get("base_url", "")
+    if not api_key:
+        raise HTTPException(status_code=502, detail="No API key available")
+
+    # ── Check quota ──
+    quota_info = await _check_quota(client_id)
+    if quota_info.get("exceeded"):
+        raise HTTPException(status_code=429, detail=f"Token quota exceeded. Used: {quota_info['used']}, Limit: {quota_info['quota']}")
+
+    # ── Call LLM (raw OpenAI response) ──
+    url = f"{base_url.rstrip('/')}/chat/completions"
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json",
+    }
+    payload = {
+        "model": req.model,
+        "messages": req.messages,
+        "max_tokens": req.max_tokens or 2000,
+        "temperature": req.temperature or 0.7,
+    }
+    try:
+        async with httpx.AsyncClient(timeout=120) as client:
+            resp = await client.post(url, json=payload, headers=headers)
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"LLM call failed: {str(e)}")
+
+    if resp.status_code != 200:
+        raise HTTPException(status_code=502, detail=f"LLM API error {resp.status_code}: {resp.text[:300]}")
+
+    data = resp.json()
+
+    # ── Record token usage ──
+    input_tokens = data.get("usage", {}).get("prompt_tokens", 0)
+    output_tokens = data.get("usage", {}).get("completion_tokens", 0)
+    total_tokens = input_tokens + output_tokens
+    if total_tokens > 0:
+        try:
+            await _record_token_usage(client_id, "openrouter", req.model,
+                                      input_tokens, output_tokens, total_tokens)
+        except Exception:
+            pass
+
+    # Return raw OpenAI response (API container parses it)
+    return data
 
 
 @app.post("/api/chat/send")

@@ -159,6 +159,7 @@ from app.routers.admin.payments import router as admin_payments_router
 from app.routers.admin.token_topups import router as admin_topups_router
 from app.routers.tasks import router as tasks_router
 from app.routers.internal import router as internal_router
+from app.routers.memory import router as memory_router
 
 app.include_router(auth.router, prefix="/api/v1/auth", tags=["Authentication"])
 app.include_router(billing_router, prefix="/api/v1/billing", tags=["Billing"])
@@ -183,3 +184,4 @@ app.include_router(admin_policy.router, prefix="/api/v1/admin/policy", tags=["Ad
 app.include_router(tasks_router, prefix="/api/v1/tasks", tags=["Tasks"])
 app.include_router(user_affiliates_router, prefix="/api/v1/affiliates", tags=["Affiliates"])
 app.include_router(internal_router, prefix="/api/v1/internal", tags=["Internal — Gateway"])
+app.include_router(memory_router, prefix="/api/v1/memory", tags=["Memory"])

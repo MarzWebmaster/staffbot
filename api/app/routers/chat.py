@@ -317,6 +317,7 @@ async def chat_send(
     }
     payload = {
         "model": model_name,
+        "client_id": client_id,
         "messages": [
             {
                 "role": "system",
