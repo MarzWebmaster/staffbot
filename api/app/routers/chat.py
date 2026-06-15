@@ -313,7 +313,7 @@ async def chat_send(
     target_url = f"{HERMES_URL}/v1/chat/completions"
     req_headers = {
         "Content-Type": "application/json",
-        "Authorization": f"Bearer {HERMES_KEY}",
+        "Authorization": f"Bearer {GATEWAY_KEY}",
     }
     payload = {
         "model": model_name,
