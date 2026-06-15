@@ -14,15 +14,19 @@ class Settings(BaseSettings):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        # Treat empty OR unexpanded env references (e.g. "${SECRET_KEY}") as unset
+        # Only fall back to file if env var is truly unset (empty or unexpanded)
         if not self.SECRET_KEY or self.SECRET_KEY.startswith("${"):
             key_file = "/app/data/.secret_key"
-            os.makedirs(os.path.dirname(key_file), exist_ok=True)
             if os.path.exists(key_file):
                 with open(key_file, 'r') as f:
                     self.SECRET_KEY = f.read().strip()
+            # Last resort: auto-generate (dev only — production MUST set STAFFBOT_SECRET_KEY)
             if not self.SECRET_KEY:
+                import logging
+                logging.warning("SECRET_KEY not set! Auto-generating random key. "
+                                "Set STAFFBOT_SECRET_KEY env var for production.")
                 self.SECRET_KEY = secrets.token_urlsafe(32)
+                os.makedirs(os.path.dirname(key_file), exist_ok=True)
                 with open(key_file, 'w') as f:
                     f.write(self.SECRET_KEY)
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 1440  # 24 hours
