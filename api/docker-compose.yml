@@ -78,6 +78,7 @@ services:
 
 volumes:
   postgres_data:
+    external: true
 
 networks:
   staffbot-network:
