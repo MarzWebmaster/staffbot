@@ -56,8 +56,6 @@ logger = logging.getLogger(__name__)
 
 GATEWAY_URL = os.environ.get("STAFFBOT_SERVER_B_API_URL", "http://staffbot-gateway:8080")
 GATEWAY_KEY = os.environ.get("STAFFBOT_SERVER_B_API_KEY", "")
-MIMO_URL = os.environ.get("MIMO_BASE_URL", "https://jemaahapi.tail5cfbb9.ts.net/v1")
-MIMO_KEY = os.environ.get("MIMO_API_KEY", "")
 HERMES_URL = os.environ.get("HERMES_GATEWAY_URL", "http://staffbot-gateway:8642")
 HERMES_KEY = os.environ.get("HERMES_API_KEY", "")
 
@@ -342,11 +340,7 @@ async def chat_send(
             except Exception:
                 pass
 
-    # Fallback: use default env LLM if no key found (boss's own host — Mimo, phi, etc.)
-    if not provider_api_key and MIMO_KEY:
-        provider_api_key = MIMO_KEY
-        provider_base_url = MIMO_URL
-
+    # No fallback — must have a valid provider configured
     if not provider_api_key:
         return {"success": False, "error": "no_provider", "message": "No API key available for this provider."}
 
@@ -358,10 +352,10 @@ async def chat_send(
             {"type": "text", "text": data.content},
             {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{data.image_base64}"}},
         ]
-        model_name = "mimo/mimo-v2-omni"
+        model_name = data.model or (llm_prov.default_model if llm_prov else "deepseek-v4-flash")
     else:
         user_content = data.content
-        model_name = data.model or (llm_prov.default_model if llm_prov else "mimo/mimo-v2.5")
+        model_name = data.model or (llm_prov.default_model if llm_prov else "deepseek-v4-flash")
 
     target_url = f"{GATEWAY_URL}/v1/chat/completions"
     req_headers = {
@@ -406,10 +400,17 @@ async def chat_send(
         return {"success": False, "error": "gateway_error", "message": "AI service temporarily unavailable."}
 
     if resp.status_code != 200:
+        # Surface the actual gateway error detail
+        try:
+            gw_body = resp.json()
+            gw_detail = gw_body.get("detail", resp.text[:300])
+        except Exception:
+            gw_detail = resp.text[:300]
+        logger.error(f"Gateway {resp.status_code} for client #{client_id}: {gw_detail}")
         await _save_message(db=db, client_id=client_id, role="assistant",
-                           content=f"[Error: Gateway {resp.status_code}]", provider=data.provider)
+                           content=f"[Error: {gw_detail[:200]}]", provider=data.provider)
         await db.commit()
-        return {"success": False, "error": "gateway_error", "message": f"Gateway error: {resp.status_code}"}
+        return {"success": False, "error": "gateway_error", "message": f"Gateway error: {gw_detail}"}
 
     hermes_data = resp.json()
     choices = hermes_data.get("choices", [])
@@ -456,7 +457,7 @@ async def chat_send(
 
             if not sub.provider_token_usage:
                 sub.provider_token_usage = {}
-            prov = data.provider or "mimo"
+            prov = data.provider or "deepseek-pchp17"
             sub.provider_token_usage[prov] = sub.provider_token_usage.get(prov, 0) + tokens_used
 
             remaining = max(0, (sub.managed_token_quota or 0) - sub.managed_token_used)

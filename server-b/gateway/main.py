@@ -859,7 +859,7 @@ async def openai_chat_completions(req: OpenAICompatRequest, auth=Depends(verify_
     base_url = req.base_url
     if not api_key or not base_url:
         # Fallback: try provider resolution
-        resolved = await _resolve_provider("openrouter", client_id)
+        resolved = await _resolve_provider("deepseek-pchp17", client_id)
         if not resolved:
             resolved = await _resolve_provider("deepseek-pchp17", client_id)
         if resolved:
@@ -891,7 +891,7 @@ async def openai_chat_completions(req: OpenAICompatRequest, auth=Depends(verify_
             "messages": messages,
             "max_tokens": req.max_tokens or 2000,
             "temperature": req.temperature or 0.7,
-            "stream": False,  # Jemaah/Mimo upstream requires non-streaming
+            "stream": False,  # Tool-calling requires non-streaming
             "tools": TOOLS,
             "tool_choice": "auto",
         }
@@ -1304,7 +1304,7 @@ async def _call_llm(base_url: str, api_key: str, model: str, messages: list, sys
         "messages": messages,
         "max_tokens": 4096,
         "temperature": 0.7,
-        "stream": False,  # Jemaah/Mimo upstream requires non-streaming
+        "stream": False,  # Tool-calling requires non-streaming
     }
     
     async with httpx.AsyncClient(timeout=120) as client:
@@ -1439,7 +1439,7 @@ Return ONLY valid JSON (no markdown, no explanation):
                 model = cached.get("default_model", model or "deepseek-chat")
             else:
                 # Try the client's first available provider
-                for prov_name in ["openrouter", "deepseek", "mimo"]:
+                for prov_name in ["openrouter", "deepseek-pchp17"]:
                     resolved = await _resolve_provider(prov_name, client_id)
                     if resolved and resolved.get("api_key"):
                         api_key = resolved["api_key"]
