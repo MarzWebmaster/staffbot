@@ -326,6 +326,50 @@ async def send_telegram_client(client_id: int, data: dict, auth=Depends(verify_a
             return {"success": False, "error": f"Telegram error for client {client_id}: {str(e)}"}
 
 
+async def _send_tg_reply(client_id: int, chat_id, text: str):
+    """Internal helper — send a Telegram message back to the user via telegram-manager."""
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            await client.post(
+                f"{TELEGRAM_MANAGER_URL}/api/send/{client_id}",
+                json={"chat_id": chat_id, "text": text},
+            )
+    except Exception:
+        pass  # Don't fail if reply can't be sent
+
+
+async def _handle_telegram_connect(client_id: int, chat_id, bot_token: str):
+    """Handle /connect <token> command — calls StaffBot API to save token
+    and register webhook. Uses EXACT same DB + logic as settings.html form.
+    """
+    try:
+        async with httpx.AsyncClient(timeout=15) as client:
+            resp = await client.post(
+                f"{STAFFBOT_API_URL}/api/v1/internal/client/{client_id}/telegram/setup",
+                json={"bot_token": bot_token},
+                headers={"x-api-key": STAFFBOT_API_KEY, "Content-Type": "application/json"},
+            )
+            result = resp.json()
+
+        if result.get("success"):
+            await _send_tg_reply(client_id, chat_id,
+                "✅ **Telegram bot berjaya disambungkan!** 🎉\n\n"
+                "Chat ini kini bersambung dengan StaffBot anda.\n"
+                "Setiap mesej di sini akan diproses oleh AI Staff anda — "
+                "token akan ditolak dari kuota pakej.")
+        else:
+            error_msg = result.get("detail", result.get("message", "Unknown error"))
+            await _send_tg_reply(client_id, chat_id,
+                f"❌ Gagal menyambungkan bot: {error_msg}\n\n"
+                "Sila pastikan token dari @BotFather adalah betul.")
+
+        return {"success": True, "command": "connect", "api_result": result}
+    except Exception as e:
+        await _send_tg_reply(client_id, chat_id,
+            f"❌ Ralat sistem. Sila cuba lagi nanti.")
+        return {"success": False, "command": "connect", "error": str(e)}
+
+
 # =====================
 # Incoming Webhooks (from Baileys/Telegram → route to container)
 # =====================
@@ -358,11 +402,30 @@ async def incoming_whatsapp(client_id: int, data: dict):
 @app.post("/api/incoming/telegram/{client_id}")
 async def incoming_telegram(client_id: int, data: dict):
     """Receive incoming Telegram update from Telegram Manager.
-    Routes to the correct client's container for processing.
+    
+    Checks for special commands (connect) before routing to container.
+    Otherwise forwards to the client's container for AI processing.
     """
+    text = data.get("text", "").strip()
+    chat_id = data.get("chat_id")
+
+    # ── Handle /connect command ──────────────────────────────
+    if text and (text.lower().startswith("/connect ") or text.lower().startswith("connect ")):
+        parts = text.split(" ", 1)
+        bot_token = parts[1].strip() if len(parts) > 1 else ""
+        if not bot_token or len(bot_token) < 40:
+            await _send_tg_reply(client_id, chat_id,
+                "❌ Sila berikan token dari @BotFather.\n"
+                "Format: `connect 1234567890:ABCdefGHIjklMNOpqrsTUVwxyz`")
+            return {"success": True, "command": "connect", "error": "Invalid token"}
+        return await _handle_telegram_connect(client_id, chat_id, bot_token)
+
+    # ── Normal message — forward to container ────────────────
     try:
         container = _find_container_by_client(client_id)
         if not container:
+            await _send_tg_reply(client_id, chat_id,
+                "⚠️ StaffBot anda belum sedia. Sila setup di dashboard dahulu.")
             return {"success": False, "error": f"No container found for client {client_id}"}
 
         container_port = _get_port(container)
@@ -589,6 +652,58 @@ async def save_memory(data: MemorySave, auth=Depends(verify_auth)):
             await conn.close()
 
 
+class MemoryClassifyRequest(BaseModel):
+    client_id: int
+    user_msg: str
+    assistant_reply: str
+
+
+@app.post("/api/memory/classify-and-save")
+async def classify_and_save(data: MemoryClassifyRequest, auth=Depends(verify_auth)):
+    """Classify a chat exchange and auto-route: task→task system, fact/knowledge/preference→memory, chat→skip.
+    
+    Uses the client's OWN LLM provider (BYOK or managed) for classification.
+    Returns what action was taken so the caller knows.
+    """
+    try:
+        classification = await _classify_exchange(data.client_id, data.user_msg, data.assistant_reply)
+        mem_type = classification.get("type", "chat")
+        mem_summary = classification.get("summary", "")
+        class_tokens = classification.get("tokens_used", 0)
+        
+        # Track classification tokens against user's quota
+        if class_tokens > 0:
+            await _record_token_usage(
+                client_id=data.client_id,
+                provider=classification.get("provider", ""),
+                model=classification.get("model", ""),
+                input_tokens=classification.get("input_tokens", 0),
+                output_tokens=classification.get("output_tokens", 0),
+                total_tokens=class_tokens,
+            )
+            await _update_quota(data.client_id, class_tokens)
+        
+        if mem_type == "task":
+            task = await _create_task_from_chat(
+                client_id=data.client_id,
+                title=mem_summary or data.user_msg[:200],
+                description=f"USER: {data.user_msg[:500]}\nASSISTANT: {data.assistant_reply[:500]}",
+                priority="normal"
+            )
+            return {"success": True, "action": "task_created", "type": mem_type, "task": task}
+        
+        elif mem_type in ("fact", "knowledge", "preference"):
+            memory_entry = f"[{mem_type.upper()}] {mem_summary}\nUSER: {data.user_msg[:500]}\nASSISTANT: {data.assistant_reply[:500]}"
+            await _save_memory_bg(data.client_id, memory_entry, memory_type=mem_type)
+            return {"success": True, "action": "memory_saved", "type": mem_type}
+        
+        else:
+            return {"success": True, "action": "skipped", "type": "chat"}
+    
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
 
 
 # =====================
@@ -699,8 +814,31 @@ async def chat_send(req: ChatRequest, auth=Depends(verify_auth)):
             "used": quota_info["used"],
         }
 
-    # ── 3. Call LLM with retry (3 attempts) ──
+    # ── 2b. Search memory for relevant past context ──
     import asyncio
+    memories = await _search_memories(client_id, content, limit=3)
+    memory_context = ""
+    if memories:
+        memory_lines = ["RELEVANT PAST CONTEXT (use this to inform your response):"]
+        for i, mem in enumerate(memories, 1):
+            memory_lines.append(f"  [{i}] {mem.get('content', '')[:500]}")
+        memory_context = "\n".join(memory_lines)
+
+    # Build system prompt with language/style enforcement
+    system_prompt = (
+        "You are an AI Staff agent for StaffBot.my. "
+        "RULES:\n"
+        "1. LANGUAGE & STYLE MATCHING — mirror the user's language AND style:\n"
+        "   - BM → BM. EN → EN. Rojak → rojak balik.\n"
+        "   - Casual → casual. Formal → formal.\n"
+        "   - Pendek → pendek. Panjang → panjang.\n"
+        "2. Be helpful, professional, and concise.\n"
+        "3. Natural conversational tone — NOT robotic."
+    )
+    if memory_context:
+        system_prompt += "\n\n" + memory_context
+
+    # ── 3. Call LLM with retry (3 attempts) ──
     llm_response = None
     last_error = None
     for attempt in range(3):
@@ -709,7 +847,10 @@ async def chat_send(req: ChatRequest, auth=Depends(verify_auth)):
                 base_url=base_url,
                 api_key=api_key,
                 model=model,
-                messages=[{"role": "user", "content": content}],
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": content},
+                ],
                 system_context=req.system_context,
             )
             break
@@ -730,6 +871,52 @@ async def chat_send(req: ChatRequest, auth=Depends(verify_auth)):
     # ── 5. Save chat messages ──
     await _save_chat_message(client_id, req.container_id, "user", content, model, provider_name, 0)
     await _save_chat_message(client_id, req.container_id, "assistant", llm_response.get("content", ""), model, provider_name, total_tokens)
+
+    # ── 5b. Smart memory routing with classification ──
+    user_msg = content[:500]
+    ai_reply = llm_response.get("content", "")[:500]
+    
+    # Classify in background (non-blocking — don't slow down the response)
+    async def _smart_memory_routing():
+        try:
+            classification = await _classify_exchange(
+                client_id, user_msg, ai_reply,
+                provider_name=provider_name, api_key=api_key,
+                base_url=base_url, model=model,
+            )
+            mem_type = classification.get("type", "chat")
+            mem_summary = classification.get("summary", "")
+            class_tokens = classification.get("tokens_used", 0)
+            
+            # Track classification tokens against user's quota
+            if class_tokens > 0:
+                await _record_token_usage(
+                    client_id=client_id,
+                    provider=classification.get("provider", provider_name),
+                    model=classification.get("model", model),
+                    input_tokens=classification.get("input_tokens", 0),
+                    output_tokens=classification.get("output_tokens", 0),
+                    total_tokens=class_tokens,
+                )
+                await _update_quota(client_id, class_tokens)
+            
+            if mem_type == "task":
+                # Create an actual task in the task system
+                await _create_task_from_chat(
+                    client_id=client_id,
+                    title=mem_summary or user_msg[:200],
+                    description=f"USER: {user_msg}\nASSISTANT: {ai_reply}",
+                    priority="normal"
+                )
+            elif mem_type in ("fact", "knowledge", "preference"):
+                # Save to memory with type tag
+                memory_entry = f"[{mem_type.upper()}] {mem_summary}\nUSER: {user_msg}\nASSISTANT: {ai_reply}"
+                await _save_memory_bg(client_id, memory_entry, memory_type=mem_type)
+            # else: "chat" → don't waste memory on greetings/small talk
+        except Exception:
+            pass  # Silent — memory classification is best-effort
+    
+    asyncio.ensure_future(_smart_memory_routing())
     
     # ── 6. Record token usage with dual cost ──
     await _record_token_usage(
@@ -908,6 +1095,164 @@ async def _record_token_usage(client_id: int, provider: str, model: str, input_t
     finally:
         if conn:
             await conn.close()
+
+
+async def _search_memories(client_id: int, query: str, limit: int = 3) -> list:
+    """Search client_memory for relevant past context. Graceful degradation."""
+    conn = None
+    try:
+        conn = await asyncpg.connect(DATABASE_URL)
+        rows = await conn.fetch(
+            """SELECT content, created_at FROM client_memory 
+               WHERE client_id=$1 AND content ILIKE $2
+               ORDER BY created_at DESC LIMIT $3""",
+            client_id, f"%{query}%", limit,
+        )
+        return [dict(r) for r in rows]
+    except Exception:
+        return []
+    finally:
+        if conn:
+            await conn.close()
+
+
+async def _save_memory_bg(client_id: int, content: str, memory_type: str = "chat"):
+    """Save exchange to client_memory with type classification. Silent on failure."""
+    if not content.strip():
+        return
+    conn = None
+    try:
+        conn = await asyncpg.connect(DATABASE_URL)
+        await conn.execute(
+            "INSERT INTO client_memory (client_id, content, metadata) VALUES ($1, $2, $3)",
+            client_id, content[:2000], json.dumps({"memory_type": memory_type}),
+        )
+    except Exception:
+        pass
+    finally:
+        if conn:
+            await conn.close()
+
+
+async def _classify_exchange(client_id: int, user_msg: str, assistant_reply: str,
+                             provider_name: str = "", api_key: str = "",
+                             base_url: str = "", model: str = "") -> dict:
+    """Classify a chat exchange using the CLIENT'S OWN LLM provider (BYOK or managed).
+    
+    Returns: {"type": str, "summary": str, "tokens_used": int}
+    Types: fact, knowledge, preference, task, chat
+    """
+    classification_prompt = f"""Analyze this chat exchange and classify it into EXACTLY ONE type:
+
+TYPES:
+- task: Actionable task, reminder, deadline, to-do. User wants something DONE.
+- fact: Factual statement about identity, data, dates, places, numbers (who/what/where/when).
+- knowledge: Learned information, procedure, how-to, explanation, workflow, process.
+- preference: User preference, like, dislike, style choice, personal taste.
+- chat: Casual conversation, greeting, small talk, acknowledgment, thanks, "ok".
+
+RULES:
+- If user says "nama saya X" or "panggil saya Y" → fact (identity)
+- If user says "saya suka X" or "saya tak suka Y" → preference  
+- If user asks you to remind/schedule/track/buat → task
+- If it's just "hello"/"ok"/"thanks"/"bye" → chat
+- If user shares a procedure, tip, or instruction → knowledge
+
+USER: {user_msg[:400]}
+ASSISTANT: {assistant_reply[:400]}
+
+Return ONLY valid JSON (no markdown, no explanation):
+{{"type": "<one word>", "summary": "<short summary in original language>"}}"""
+    
+    try:
+        # Resolve provider: use passed params, or fall back to client's managed provider
+        if not api_key:
+            # Resolve client's default provider
+            cached = _cache_get(f"provider_{client_id}")
+            if cached:
+                api_key = cached["api_key"]
+                base_url = cached["base_url"]
+                provider_name = cached.get("name", provider_name)
+                model = cached.get("default_model", model or "deepseek-chat")
+            else:
+                # Try the client's first available provider
+                for prov_name in ["openrouter", "deepseek", "mimo"]:
+                    resolved = await _resolve_provider(prov_name, client_id)
+                    if resolved and resolved.get("api_key"):
+                        api_key = resolved["api_key"]
+                        base_url = resolved["base_url"]
+                        provider_name = prov_name
+                        model = resolved.get("default_model", "deepseek-chat")
+                        _cache_set(f"provider_{client_id}", {
+                            "api_key": api_key, "base_url": base_url,
+                            "name": provider_name, "default_model": model,
+                        })
+                        break
+        
+        if not api_key:
+            return {"type": "chat", "summary": ""}
+        
+        if not model:
+            model = "deepseek-chat"
+        
+        url = f"{base_url.rstrip('/')}/chat/completions"
+        headers = {
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+        }
+        payload = {
+            "model": model,
+            "messages": [
+                {"role": "user", "content": classification_prompt}
+            ],
+            "max_tokens": 80,
+            "temperature": 0.1,  # low temp for classification
+        }
+        
+        async with httpx.AsyncClient(timeout=10) as client:
+            resp = await client.post(url, json=payload, headers=headers)
+            if resp.status_code == 200:
+                data = resp.json()
+                raw = data["choices"][0]["message"]["content"].strip()
+                # Clean JSON
+                if raw.startswith("```"):
+                    raw = raw.split("\n", 1)[1].rsplit("```", 1)[0].strip()
+                result = json.loads(raw)
+                usage = data.get("usage", {})
+                return {
+                    "type": result.get("type", "chat"),
+                    "summary": result.get("summary", ""),
+                    "input_tokens": usage.get("prompt_tokens", 0),
+                    "output_tokens": usage.get("completion_tokens", 0),
+                    "tokens_used": usage.get("total_tokens", 0),
+                    "provider": provider_name,
+                    "model": model,
+                }
+    except Exception:
+        pass
+    return {"type": "chat", "summary": "", "tokens_used": 0}
+
+
+async def _create_task_from_chat(client_id: int, title: str, description: str = "", priority: str = "normal"):
+    """Create a task in Server A's task system via internal endpoint when LLM detects one."""
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            resp = await client.post(
+                f"{STAFFBOT_API_URL}/api/v1/internal/client/{client_id}/tasks/create",
+                json={
+                    "title": title[:200],
+                    "description": description[:1000],
+                    "priority": priority,
+                    "created_by_agent": "chat_classifier",
+                },
+                headers={"x-api-key": STAFFBOT_API_KEY, "Content-Type": "application/json"},
+            )
+            if resp.status_code in (200, 201):
+                data = resp.json()
+                return data.get("task", data)
+    except Exception:
+        pass
+    return None
 
 
 async def _update_quota(client_id: int, tokens_used: int):

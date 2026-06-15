@@ -105,3 +105,103 @@ async def list_providers(
         }
         for p in providers
     ]
+
+
+class TelegramSetupInternalRequest(BaseModel):
+    bot_token: str
+
+
+@router.post("/client/{client_id}/telegram/setup")
+async def setup_telegram_internal(
+    client_id: int,
+    data: TelegramSetupInternalRequest,
+    db: AsyncSession = Depends(get_db),
+    auth: bool = Depends(verify_internal),
+):
+    """Internal endpoint — called by Gateway when user sends /connect <token> in Telegram chat.
+    
+    Same logic as clients.py setup_telegram: saves encrypted token to clients table,
+    then registers webhook via telegram-manager.
+    """
+    from app.models.client import Client
+    from app.utils.encryption import encrypt_value
+    from app.services.server_b_service import GatewayService
+
+    result = await db.execute(select(Client).where(Client.id == client_id))
+    client = result.scalar_one_or_none()
+    if not client:
+        raise HTTPException(status_code=404, detail="Client not found")
+
+    # Save encrypted Telegram token — SAME DB column as settings.html
+    client.telegram_token_encrypted = encrypt_value(data.bot_token)
+    await db.commit()
+    await db.refresh(client)
+
+    # Register webhook with telegram-manager
+    try:
+        webhook_result = await GatewayService.telegram_register_webhook(
+            client_id=client_id,
+            bot_token=data.bot_token,
+        )
+        return {
+            "success": True,
+            "message": "Telegram bot registered successfully",
+            "webhook_url": webhook_result.get("webhook_url"),
+        }
+    except Exception as e:
+        return {
+            "success": True,
+            "message": "Token saved. Webhook registration pending.",
+            "error": str(e),
+        }
+
+
+class TaskCreateInternalRequest(BaseModel):
+    title: str
+    description: str = ""
+    priority: str = "normal"
+    assigned_to: Optional[str] = None
+    container_id: Optional[int] = None
+    created_by_agent: Optional[str] = None
+
+
+@router.post("/client/{client_id}/tasks/create")
+async def create_task_internal(
+    client_id: int,
+    data: TaskCreateInternalRequest,
+    db: AsyncSession = Depends(get_db),
+    auth: bool = Depends(verify_internal),
+):
+    """Internal endpoint — called by Gateway when chat classifier detects a task.
+    
+    Creates a task under the given client_id, authenticated via x-api-key.
+    """
+    from app.models.task import Task
+    from datetime import datetime
+
+    task = Task(
+        client_id=client_id,
+        container_id=data.container_id,
+        title=data.title,
+        description=data.description,
+        priority=data.priority,
+        status="pending",
+        assigned_to=data.assigned_to,
+        created_by_agent=data.created_by_agent or "chat_classifier",
+        created_at=datetime.utcnow(),
+        updated_at=datetime.utcnow(),
+    )
+    db.add(task)
+    await db.commit()
+    await db.refresh(task)
+
+    return {
+        "success": True,
+        "task": {
+            "id": task.id,
+            "client_id": task.client_id,
+            "title": task.title,
+            "priority": task.priority,
+            "status": task.status,
+        },
+    }

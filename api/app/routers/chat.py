@@ -1,7 +1,7 @@
 """Chat router — proxies to Gateway with token tracking + BYOK + message history."""
 import os, httpx, json, logging
 from datetime import datetime, timezone
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, Header, UploadFile, File
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request, Header, UploadFile, File
 from pydantic import BaseModel
 import io, os as _os, base64, tempfile
 
@@ -86,10 +86,96 @@ async def _save_message(db: AsyncSession, client_id: int, role: str, content: st
     return msg
 
 
+async def _search_memory(client_id: int, query: str, limit: int = 3) -> list:
+    """Search client's knowledge base via Gateway Central Brain.
+    Returns list of relevant memory items. Gracefully degrades if unavailable.
+    """
+    if not GATEWAY_KEY:
+        return []
+    try:
+        async with httpx.AsyncClient(timeout=5) as client:
+            resp = await client.post(
+                f"{GATEWAY_URL}/api/memory/search",
+                json={"client_id": client_id, "query": query, "limit": limit},
+                headers={"x-api-key": GATEWAY_KEY, "Content-Type": "application/json"},
+            )
+            if resp.status_code == 200:
+                data = resp.json()
+                return data.get("results", [])
+    except Exception:
+        pass
+    return []
+
+
+async def _classify_and_save(client_id: int, user_msg: str, assistant_reply: str):
+    """Classify chat exchange via Gateway and auto-route: task→task system, fact/knowledge/preference→memory, chat→skip.
+    Non-blocking — failures are silent.
+    """
+    if not GATEWAY_KEY or not user_msg.strip():
+        return
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            resp = await client.post(
+                f"{GATEWAY_URL}/api/memory/classify-and-save",
+                json={"client_id": client_id, "user_msg": user_msg[:500], "assistant_reply": assistant_reply[:500]},
+                headers={"x-api-key": GATEWAY_KEY, "Content-Type": "application/json"},
+            )
+            # Response is fire-and-forget — we don't block on the result
+    except Exception:
+        pass
+
+
+def _build_system_prompt(client_name: str, client_company: str, client_id: int,
+                         enforcement: dict, memories: list) -> str:
+    """Build the system prompt with enforcement rules + memory context."""
+    parts = [
+        f"You are an AI Staff agent for {client_name or 'Client'}"
+        f" ({client_company or 'StaffBot'}). Client ID: {client_id}.",
+        "",
+        "RULES:",
+        "1. LANGUAGE & STYLE MATCHING — ALWAYS mirror the user's language AND style:",
+        "   - Bahasa: BM → BM. EN → EN. Rojak → rojak balik.",
+        "   - Nada: casual → casual. Formal → formal.",
+        "   - Ayat: pendek → pendek. Panjang → panjang.",
+        "   - Gaya: bullet points → bullet points. Paragraph → paragraph.",
+        "   - Slang: kalau user guna 'aku/ko', guna 'aku/ko'. Kalau 'saya/awak', guna 'saya/awak'.",
+        "2. Be helpful, professional, and concise.",
+        "3. Natural conversational tone — NOT robotic, NOT overly formal unless user is.",
+    ]
+    
+    # Inject enforcement rules
+    allowed_skills = enforcement.get("allowed_skills", [])
+    allowed_tools = enforcement.get("allowed_tools", [])
+    governance = enforcement.get("governance", {})
+    
+    if allowed_skills or allowed_tools or governance:
+        parts.append("")
+        parts.append("POLICY GOVERNANCE (you MUST follow these):")
+        if allowed_skills:
+            parts.append(f"- Allowed skills: {', '.join(allowed_skills) if allowed_skills else 'none restricted'}")
+        if allowed_tools:
+            parts.append(f"- Allowed tools: {', '.join(allowed_tools) if allowed_tools else 'none restricted'}")
+        if governance:
+            for key, val in governance.items():
+                parts.append(f"- {key}: {val}")
+        parts.append("- Do NOT use skills/tools outside the allowed list.")
+    
+    # Inject memory context
+    if memories:
+        parts.append("")
+        parts.append("RELEVANT PAST CONTEXT (use these to inform your response):")
+        for i, mem in enumerate(memories, 1):
+            content = mem.get("content", "")[:500]
+            parts.append(f"  [{i}] {content}")
+    
+    return "\n".join(parts)
+
+
 @router.post("/send")
 async def chat_send(
     data: ChatSendRequest,
     request: Request,
+    background_tasks: BackgroundTasks,
     current_user: Client = Depends(get_current_client),
     db: AsyncSession = Depends(get_db),
 ):
@@ -156,18 +242,6 @@ async def chat_send(
         db=db,
     )
 
-    system_context = {
-        "client_id": client_id,
-        "client_name": current_user.name or "",
-        "client_company": current_user.company or "",
-        "client_package": current_user.package or "basic",
-        "enforcement": {
-            "allowed_skills": enforcement.get("allowed_skill_ids", []),
-            "allowed_tools": enforcement.get("allowed_tool_ids", []),
-            "governance": enforcement.get("governance", {}),
-        },
-    }
-
     # ── 4. Save user message BEFORE sending ───────────────────────
     await _save_message(
         db=db,
@@ -211,6 +285,16 @@ async def chat_send(
             "action": violation["action"],
         }
 
+    # ── 4c. Search memory for relevant past context ─────────────
+    memories = await _search_memory(client_id, data.content, limit=3)
+
+    # ── 4d. Build enforcement rules dict ─────────────────────────
+    enforcement_rules = {
+        "allowed_skills": enforcement.get("allowed_skill_ids", []),
+        "allowed_tools": enforcement.get("allowed_tool_ids", []),
+        "governance": enforcement.get("governance", {}),
+    }
+
     # ── 5. Route ALL traffic to Hermes Native :8642 (text + vision) ─
     has_image = bool(data.image_base64)
 
@@ -236,11 +320,10 @@ async def chat_send(
         "messages": [
             {
                 "role": "system",
-                "content": (
-                    f"You are an AI Staff agent for {current_user.name or 'Client'} "
-                    f"({current_user.company or 'StaffBot'}). "
-                    f"Client ID: {client_id}. "
-                    "Be helpful, professional, and concise."
+                "content": _build_system_prompt(
+                    current_user.name, current_user.company, client_id,
+                    enforcement_rules,
+                    memories,
                 ),
             },
             {"role": "user", "content": user_content},
@@ -299,6 +382,9 @@ async def chat_send(
             provider=result.get("provider", data.provider),
             tokens_used=result.get("tokens_used", 0),
         )
+
+        # ── 6b. Smart classify-and-save (background) ──
+        background_tasks.add_task(_classify_and_save, client_id, data.content, result['content'])
 
     # ── 7. Track token usage (managed tokens only, not BYOK) ─────
     if not data.api_key and result.get("success") and result.get("tokens_used"):
