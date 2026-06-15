@@ -36,3 +36,6 @@ class Client(Base):
     notification_channels = relationship("NotificationChannel", back_populates="client")
     notifications_log = relationship("NotificationLog", back_populates="client")
     tasks = relationship("Task", back_populates="client")
+    webhooks = relationship("ClientWebhook", back_populates="client")
+    search_configs = relationship("ClientSearchConfig", back_populates="client")
+    email_configs = relationship("ClientEmailConfig", back_populates="client")

@@ -160,6 +160,9 @@ from app.routers.admin.token_topups import router as admin_topups_router
 from app.routers.tasks import router as tasks_router
 from app.routers.internal import router as internal_router
 from app.routers.memory import router as memory_router
+from app.routers.client_webhooks import router as client_webhooks_router
+from app.routers.client_search_configs import router as client_search_configs_router
+from app.routers.client_email_configs import router as client_email_configs_router
 
 app.include_router(auth.router, prefix="/api/v1/auth", tags=["Authentication"])
 app.include_router(billing_router, prefix="/api/v1/billing", tags=["Billing"])
@@ -185,3 +188,6 @@ app.include_router(tasks_router, prefix="/api/v1/tasks", tags=["Tasks"])
 app.include_router(user_affiliates_router, prefix="/api/v1/affiliates", tags=["Affiliates"])
 app.include_router(internal_router, prefix="/api/v1/internal", tags=["Internal — Gateway"])
 app.include_router(memory_router, prefix="/api/v1/memory", tags=["Memory"])
+app.include_router(client_webhooks_router, prefix="/api/v1/webhooks/config", tags=["Webhooks — Config"])
+app.include_router(client_search_configs_router, prefix="/api/v1/clients/me/search-config", tags=["Search — Config"])
+app.include_router(client_email_configs_router, prefix="/api/v1/clients/me/email-config", tags=["Email — Config"])

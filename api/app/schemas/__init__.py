@@ -36,3 +36,6 @@ from app.schemas.affiliate import (
 )
 from app.schemas.webhook import StripeWebhookEvent, StripeCheckoutSession
 from app.schemas.task import TaskCreate, TaskUpdate, TaskResponse
+from app.schemas.client_webhook import (
+    ClientWebhookCreate, ClientWebhookUpdate, ClientWebhookResponse,
+)

@@ -40,6 +40,7 @@ services:
     environment:
       DATABASE_URL: postgresql://staffbot:***@memory-db:5432/staffbot_memory
       AUTH_KEY: ${GATEWAY_AUTH_KEY:?GATEWAY_AUTH_KEY is required}
+      SERVER_B_API_KEY: SERVER_B_API_KEY_REDACTED
       BAILEYS_MANAGER_URL: http://baileys-manager:8653
       TELEGRAM_MANAGER_URL: http://telegram-manager:8654
     volumes:
@@ -51,6 +52,7 @@ services:
         condition: service_healthy
     networks:
       - staffbot-b
+      - api_staffbot-network
     security_opt:
       - no-new-privileges:true
     cap_drop:
@@ -97,3 +99,5 @@ networks:
     ipam:
       config:
         - subnet: "10.100.0.0/24"
+  api_staffbot-network:
+    external: true

@@ -14,3 +14,6 @@ from app.models.token_usage import TokenUsageLog
 from app.models.chat_message import ChatMessage
 from app.models.task import Task
 from app.models.audit_trail import AuditTrail
+from app.models.client_webhook import ClientWebhook
+from app.models.client_search_config import ClientSearchConfig
+from app.models.client_email_config import ClientEmailConfig

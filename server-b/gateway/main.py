@@ -49,6 +49,7 @@ STAFFBOT_TOKEN_RATE = float(os.environ.get("STAFFBOT_TOKEN_RATE", "0.10"))  # US
 STAFFBOT_API_KEY = os.environ.get("STAFFBOT_API_KEY", AUTH_KEY)
 
 
+
 def validate_container_name(name: str) -> str:
     """Sanitize container name — only lowercase alphanumeric + hyphens."""
     sanitized = re.sub(r"[^a-z0-9-]", "", name.lower().strip())
@@ -145,6 +146,74 @@ TOOLS = [
                     "memory_type": {"type": "string", "enum": ["fact", "preference", "knowledge", "chat"], "description": "Type of memory"},
                 },
                 "required": ["content", "memory_type"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "call_webhook",
+            "description": "Call a 3rd party API/webhook that the user has configured (e.g. WordPress, HubSpot, CRM, email API). Use only endpoints the user has already set up — ask them to 'connect' a service first if none are available.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "endpoint_name": {"type": "string", "description": "Name of the configured webhook endpoint (e.g. 'My WordPress', 'HubSpot CRM')"},
+                    "path": {"type": "string", "description": "API path to call (e.g. /wp/v2/posts, /crm/v3/objects/contacts)"},
+                    "method": {"type": "string", "enum": ["GET", "POST", "PUT", "DELETE"], "description": "HTTP method"},
+                    "body": {"type": "object", "description": "JSON body for POST/PUT requests (optional)"},
+                    "query_params": {"type": "object", "description": "Query parameters as key-value pairs (optional)"},
+                },
+                "required": ["endpoint_name", "path", "method"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "web_search",
+            "description": "Search the web for current information, facts, or answers. Use when the user asks about recent events, news, or anything that may have changed since your training data cutoff.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string", "description": "The search query"},
+                    "count": {"type": "integer", "description": "Number of results (1-10, default 5)"},
+                },
+                "required": ["query"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "send_email",
+            "description": "Send an email using the client's configured SMTP server. Use when the user asks to send an email, notify someone, or share information via email.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "to": {"type": "string", "description": "Recipient email address"},
+                    "subject": {"type": "string", "description": "Email subject line"},
+                    "body": {"type": "string", "description": "Email body — plain text or HTML"},
+                    "cc": {"type": "string", "description": "CC email address (optional)"},
+                },
+                "required": ["to", "subject", "body"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "set_smtp_config",
+            "description": "Setup or update the SMTP email sending configuration. Use when the user wants to configure email, connect their own SMTP server, or change email settings. Supports Gmail, SendGrid, Brevo, Mailgun, or any SMTP provider.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "smtp_host": {"type": "string", "description": "SMTP server hostname, e.g. smtp.gmail.com"},
+                    "smtp_port": {"type": "integer", "description": "SMTP port — 587 for STARTTLS, 465 for SSL, 25 for no encryption"},
+                    "smtp_user": {"type": "string", "description": "SMTP username (usually your email address)"},
+                    "smtp_pass": {"type": "string", "description": "SMTP password or app password (for Gmail use App Password, not your regular password)"},
+                    "from_name": {"type": "string", "description": "Optional display name, e.g. 'Marz Support' or your company name"},
+                },
+                "required": ["smtp_host", "smtp_port", "smtp_user", "smtp_pass"],
             },
         },
     },
@@ -811,6 +880,598 @@ async def verify_bearer(authorization: str = Header(None)):
     return True
 
 
+# ── Rate limiter (in-memory token bucket, per client) ──
+import time as _time
+_webhook_limits: Dict[int, dict] = {}  # {client_id: {"tokens": float, "last_refill": float}}
+
+WEBHOOK_MAX_CALLS = 10  # max calls per minute per client
+WEBHOOK_WINDOW = 60.0   # seconds
+
+def _check_webhook_rate(client_id: int) -> bool:
+    """Token bucket rate limiter. Returns True if allowed."""
+    now = _time.time()
+    bucket = _webhook_limits.get(client_id)
+    if not bucket:
+        _webhook_limits[client_id] = {"tokens": float(WEBHOOK_MAX_CALLS - 1), "last_refill": now}
+        return True
+    # Refill
+    elapsed = now - bucket["last_refill"]
+    bucket["tokens"] = min(float(WEBHOOK_MAX_CALLS), bucket["tokens"] + elapsed * (WEBHOOK_MAX_CALLS / WEBHOOK_WINDOW))
+    bucket["last_refill"] = now
+    if bucket["tokens"] >= 1.0:
+        bucket["tokens"] -= 1.0
+        return True
+    return False
+
+
+# ── Web search rate limiter (20/min per client) ──
+_search_limits: Dict[int, dict] = {}
+SEARCH_MAX_CALLS = 20
+SEARCH_WINDOW = 60.0
+
+def _check_search_rate(client_id: int) -> bool:
+    now = _time.time()
+    bucket = _search_limits.get(client_id)
+    if not bucket:
+        _search_limits[client_id] = {"tokens": float(SEARCH_MAX_CALLS - 1), "last_refill": now}
+        return True
+    elapsed = now - bucket["last_refill"]
+    bucket["tokens"] = min(float(SEARCH_MAX_CALLS), bucket["tokens"] + elapsed * (SEARCH_MAX_CALLS / SEARCH_WINDOW))
+    bucket["last_refill"] = now
+    if bucket["tokens"] >= 1.0:
+        bucket["tokens"] -= 1.0
+        return True
+    return False
+
+
+# ── Email rate limiter (50/day per client) ──
+_email_limits: Dict[int, dict] = {}
+EMAIL_MAX_PER_DAY = 50
+EMAIL_WINDOW = 86400.0
+
+def _check_email_rate(client_id: int) -> bool:
+    now = _time.time()
+    bucket = _email_limits.get(client_id)
+    if not bucket:
+        _email_limits[client_id] = {"count": 0, "window_start": now}
+        return True
+    if now - bucket["window_start"] > EMAIL_WINDOW:
+        bucket["count"] = 0
+        bucket["window_start"] = now
+    if bucket["count"] < EMAIL_MAX_PER_DAY:
+        bucket["count"] += 1
+        return True
+    return False
+
+
+# ── Internal IP ranges (blocked for webhook calls) ──
+import ipaddress as _ipaddress
+_BLOCKED_NETS = [
+    _ipaddress.ip_network("127.0.0.0/8"),
+    _ipaddress.ip_network("10.0.0.0/8"),
+    _ipaddress.ip_network("172.16.0.0/12"),
+    _ipaddress.ip_network("192.168.0.0/16"),
+    _ipaddress.ip_network("169.254.0.0/16"),
+    _ipaddress.ip_network("::1/128"),
+    _ipaddress.ip_network("fc00::/7"),
+]
+
+
+async def _resolve_webhook(client_id: int, endpoint_name: str) -> Optional[dict]:
+    """Fetch webhook config from API with decrypted auth value."""
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            resp = await client.post(
+                f"{STAFFBOT_API_URL}/api/v1/internal/webhook/resolve",
+                json={"client_id": client_id, "endpoint_name": endpoint_name},
+                headers={"x-api-key": SERVER_B_API_KEY},
+            )
+            if resp.status_code == 200:
+                return resp.json()
+            return None
+    except Exception:
+        return None
+
+
+async def _execute_call_webhook(client_id: int, tool_args: dict) -> str:
+    """Execute a call_webhook tool invocation with full sandbox."""
+    import json as _json
+
+    endpoint_name = tool_args.get("endpoint_name", "")
+    path = tool_args.get("path", "")
+    method = tool_args.get("method", "GET").upper()
+    body = tool_args.get("body")
+    query_params = tool_args.get("query_params", {})
+
+    if not endpoint_name or not path:
+        return _json.dumps({"error": "endpoint_name and path are required"})
+
+    # Rate limit
+    if not _check_webhook_rate(client_id):
+        return _json.dumps({"error": "Rate limit exceeded. Max 10 calls/min.", "retry_after_seconds": 30})
+
+    # Resolve webhook config
+    config = await _resolve_webhook(client_id, endpoint_name)
+    if not config:
+        return _json.dumps({"error": f"Webhook '{endpoint_name}' not found. Ask the user to connect it first."})
+
+    base_url = config["base_url"].rstrip("/")
+    path = path.lstrip("/")
+    full_url = f"{base_url}/{path}"
+
+    # Sandbox: Validate URL starts with base_url
+    if not full_url.startswith(base_url):
+        return _json.dumps({"error": "URL must be under the configured base_url"})
+
+    # Sandbox: Block internal IPs
+    try:
+        from urllib.parse import urlparse
+        hostname = urlparse(full_url).hostname
+        if hostname:
+            addr = _ipaddress.ip_address(socket.gethostbyname(hostname))
+            for net in _BLOCKED_NETS:
+                if addr in net:
+                    return _json.dumps({"error": "Internal IP addresses are blocked"})
+    except Exception:
+        pass  # DNS failure → let httpx handle it naturally
+
+    # Build headers
+    headers = dict(config.get("default_headers", {}))
+    auth_type = config.get("auth_type", "none")
+    auth_value = config.get("auth_value")
+    auth_header = config.get("auth_header")
+
+    if auth_type == "bearer" and auth_value:
+        headers["Authorization"] = f"Bearer {auth_value}"
+    elif auth_type == "api_key" and auth_value:
+        header_name = auth_header or "X-API-Key"
+        headers[header_name] = auth_value
+    elif auth_type == "basic" and auth_value:
+        import base64 as _b64
+        headers["Authorization"] = f"Basic {_b64.b64encode(auth_value.encode()).decode()}"
+
+    # Execute HTTP request
+    timeout = config.get("max_timeout", 30)
+    try:
+        async with httpx.AsyncClient(timeout=float(timeout)) as client:
+            if method == "GET":
+                resp = await client.get(full_url, headers=headers, params=query_params)
+            elif method == "POST":
+                resp = await client.post(full_url, headers=headers, params=query_params, json=body)
+            elif method == "PUT":
+                resp = await client.put(full_url, headers=headers, params=query_params, json=body)
+            elif method == "DELETE":
+                resp = await client.delete(full_url, headers=headers, params=query_params)
+            else:
+                return _json.dumps({"error": f"Unsupported method: {method}"})
+
+        # Truncate large responses
+        response_text = resp.text[:50000]  # max 50KB
+        try:
+            response_json = _json.loads(response_text)
+            result = {
+                "status_code": resp.status_code,
+                "data": response_json if isinstance(response_json, (dict, list)) else response_text,
+            }
+        except (ValueError, _json.JSONDecodeError):
+            result = {
+                "status_code": resp.status_code,
+                "text": response_text[:1000],
+            }
+
+        # Audit log
+        _ = await _log_webhook_audit(client_id, endpoint_name, method, full_url, resp.status_code)
+        return _json.dumps(result)
+
+    except httpx.TimeoutException:
+        return _json.dumps({"error": f"Request timed out after {timeout}s"})
+    except Exception as e:
+        return _json.dumps({"error": str(e)[:500]})
+
+
+async def _log_webhook_audit(client_id: int, endpoint_name: str, method: str, url: str, status_code: int):
+    """Log webhook call to audit trail via API."""
+    try:
+        async with httpx.AsyncClient(timeout=3.0) as client:
+            await client.post(
+                f"{STAFFBOT_API_URL}/api/v1/internal/audit/log",
+                json={
+                    "client_id": client_id,
+                    "action": "webhook_call",
+                    "resource": f"webhook:{endpoint_name}",
+                    "detail": {"method": method, "url": url, "status_code": status_code},
+                    "status": "success" if 200 <= status_code < 400 else "failure",
+                },
+                headers={"x-api-key": SERVER_B_API_KEY},
+            )
+    except Exception:
+        pass  # audit failure must not break main flow
+
+
+async def _resolve_search_config(client_id: int) -> Optional[dict]:
+    """Fetch active search config from API with decrypted api_key."""
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            resp = await client.post(
+                f"{STAFFBOT_API_URL}/api/v1/internal/search-config/resolve",
+                json={"client_id": client_id},
+                headers={"x-api-key": SERVER_B_API_KEY},
+            )
+            if resp.status_code == 200:
+                return resp.json()
+            return None
+    except Exception:
+        return None
+
+
+async def _execute_web_search(client_id: int, tool_args: dict) -> str:
+    """Execute web search via client's configured provider (Brave/DuckDuckGo/Google/SerpAPI)."""
+    import json as _json
+
+    query = tool_args.get("query", "").strip()
+    if not query:
+        return _json.dumps({"error": "query is required"})
+
+    count = min(int(tool_args.get("count", 5)), 10)
+    count = max(count, 1)
+
+    # Rate limit
+    if not _check_search_rate(client_id):
+        return _json.dumps({"error": "Search rate limit exceeded. Max 20/min.", "retry_after_seconds": 10})
+
+    # Resolve client's search config
+    config = await _resolve_search_config(client_id)
+    if not config:
+        return _json.dumps({"error": "No search provider configured. Set one up with: /api/v1/clients/me/search-config — or use DuckDuckGo (free, no key needed!)"})
+
+    provider = config.get("provider", "brave")
+    api_key = config.get("api_key")  # already decrypted
+    base_url = config.get("base_url")
+
+    # Audit log (fire-and-forget)
+    search_audit = _log_search_audit(client_id, query, provider)
+
+    if provider == "duckduckgo":
+        return await _search_duckduckgo(query, count, search_audit)
+    elif provider == "brave":
+        return await _search_brave(query, count, api_key, search_audit)
+    elif provider == "serpapi":
+        return await _search_serpapi(query, count, api_key, search_audit)
+    elif provider == "google":
+        return await _search_google_cse(query, count, api_key, base_url, search_audit)
+    else:
+        _ = await search_audit
+        return _json.dumps({"error": f"Unknown provider: {provider}"})
+
+
+async def _search_duckduckgo(query: str, count: int, audit_task) -> str:
+    """Search via DuckDuckGo (free, no API key needed)."""
+    import json as _json, asyncio
+
+    try:
+        # DuckDuckGo SDK is synchronous — run in thread
+        def _do_search():
+            try:
+                from ddgs import DDGS
+            except ImportError:
+                from duckduckgo_search import DDGS
+            with DDGS() as ddgs:
+                return list(ddgs.text(query, max_results=count))
+
+        results_raw = await asyncio.to_thread(_do_search)
+        results = []
+        for r in results_raw:
+            results.append({
+                "title": r.get("title", ""),
+                "url": r.get("href", ""),
+                "description": (r.get("body", "") or "")[:300],
+            })
+
+        _ = await audit_task
+        return _json.dumps({
+            "query": query,
+            "provider": "duckduckgo",
+            "total_results": len(results),
+            "results": results,
+        })
+    except ImportError:
+        _ = await audit_task
+        return _json.dumps({"error": "DuckDuckGo library not installed. Install: pip install duckduckgo_search"})
+    except Exception as e:
+        _ = await audit_task
+        return _json.dumps({"error": f"DuckDuckGo search failed: {str(e)[:200]}"})
+
+
+async def _search_brave(query: str, count: int, api_key: str, audit_task) -> str:
+    """Search via Brave Search API."""
+    import json as _json
+
+    if not api_key:
+        _ = await audit_task
+        return _json.dumps({"error": "Brave API key not configured. Set it via /api/v1/clients/me/search-config"})
+
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.get(
+                "https://api.search.brave.com/res/v1/web/search",
+                params={"q": query, "count": count},
+                headers={
+                    "Accept": "application/json",
+                    "Accept-Encoding": "gzip",
+                    "X-Subscription-Token": api_key,
+                },
+            )
+            if resp.status_code != 200:
+                _ = await audit_task
+                return _json.dumps({"error": f"Brave Search API returned {resp.status_code}"})
+
+            data = resp.json()
+            web_results = data.get("web", {}).get("results", [])
+
+            results = []
+            for r in web_results[:count]:
+                results.append({
+                    "title": r.get("title", ""),
+                    "url": r.get("url", ""),
+                    "description": r.get("description", "")[:300],
+                })
+
+            _ = await audit_task
+            return _json.dumps({
+                "query": query,
+                "provider": "brave",
+                "total_results": len(results),
+                "results": results,
+            })
+    except httpx.TimeoutException:
+        return _json.dumps({"error": "Brave search request timed out"})
+    except Exception as e:
+        return _json.dumps({"error": str(e)[:500]})
+
+
+async def _search_serpapi(query: str, count: int, api_key: str, audit_task) -> str:
+    """Search via SerpAPI (Google results)."""
+    import json as _json
+
+    if not api_key:
+        _ = await audit_task
+        return _json.dumps({"error": "SerpAPI key not configured."})
+
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.get(
+                "https://serpapi.com/search",
+                params={"q": query, "num": count, "api_key": api_key, "engine": "google"},
+            )
+            if resp.status_code != 200:
+                _ = await audit_task
+                return _json.dumps({"error": f"SerpAPI returned {resp.status_code}"})
+
+            data = resp.json()
+            organic = data.get("organic_results", [])
+
+            results = []
+            for r in organic[:count]:
+                results.append({
+                    "title": r.get("title", ""),
+                    "url": r.get("link", ""),
+                    "description": (r.get("snippet", "") or "")[:300],
+                })
+
+            _ = await audit_task
+            return _json.dumps({
+                "query": query,
+                "provider": "serpapi",
+                "total_results": len(results),
+                "results": results,
+            })
+    except httpx.TimeoutException:
+        return _json.dumps({"error": "SerpAPI request timed out"})
+    except Exception as e:
+        return _json.dumps({"error": str(e)[:500]})
+
+
+async def _search_google_cse(query: str, count: int, api_key: str, base_url: Optional[str], audit_task) -> str:
+    """Search via Google Custom Search Engine."""
+    import json as _json
+
+    if not api_key:
+        _ = await audit_task
+        return _json.dumps({"error": "Google CSE API key not configured."})
+
+    cse_url = base_url or "https://www.googleapis.com/customsearch/v1"
+
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.get(
+                cse_url,
+                params={"q": query, "num": count, "key": api_key},
+            )
+            if resp.status_code != 200:
+                _ = await audit_task
+                return _json.dumps({"error": f"Google CSE returned {resp.status_code}"})
+
+            data = resp.json()
+            items = data.get("items", [])
+
+            results = []
+            for r in items[:count]:
+                results.append({
+                    "title": r.get("title", ""),
+                    "url": r.get("link", ""),
+                    "description": (r.get("snippet", "") or "")[:300],
+                })
+
+            _ = await audit_task
+            return _json.dumps({
+                "query": query,
+                "provider": "google",
+                "total_results": len(results),
+                "results": results,
+            })
+    except httpx.TimeoutException:
+        return _json.dumps({"error": "Google CSE request timed out"})
+    except Exception as e:
+        return _json.dumps({"error": str(e)[:500]})
+
+
+async def _log_search_audit(client_id: int, query: str, provider: str = "unknown"):
+    """Log search to audit trail via API."""
+    try:
+        async with httpx.AsyncClient(timeout=3.0) as client:
+            await client.post(
+                f"{STAFFBOT_API_URL}/api/v1/internal/audit/log",
+                json={
+                    "client_id": client_id,
+                    "action": "web_search",
+                    "resource": f"search:{provider}:{query[:80]}",
+                    "detail": {"query": query, "provider": provider},
+                    "status": "success",
+                },
+                headers={"x-api-key": SERVER_B_API_KEY},
+            )
+    except Exception:
+        pass
+
+
+async def _resolve_email_config(client_id: int) -> Optional[dict]:
+    """Fetch active email/SMTP config from API with decrypted password."""
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            resp = await client.post(
+                f"{STAFFBOT_API_URL}/api/v1/internal/email-config/resolve",
+                json={"client_id": client_id},
+                headers={"x-api-key": SERVER_B_API_KEY},
+            )
+            if resp.status_code == 200:
+                return resp.json()
+            return None
+    except Exception:
+        return None
+
+
+async def _execute_send_email(client_id: int, tool_args: dict) -> str:
+    """Send email via client's SMTP config using smtplib."""
+    import json as _json, asyncio, smtplib
+
+    to_addr = tool_args.get("to", "").strip()
+    subject = tool_args.get("subject", "").strip()
+    body = tool_args.get("body", "").strip()
+    cc_addr = tool_args.get("cc", "").strip() or None
+
+    if not to_addr or not subject or not body:
+        return _json.dumps({"error": "to, subject, and body are required"})
+
+    # Rate limit
+    if not _check_email_rate(client_id):
+        return _json.dumps({"error": "Email rate limit exceeded. Max 50/day.", "retry_after_hours": 24})
+
+    # Resolve email config
+    config = await _resolve_email_config(client_id)
+    if not config:
+        return _json.dumps({"error": "No email config found. Set up SMTP via /api/v1/clients/me/email-config"})
+
+    # Send via smtplib (sync, run in thread)
+    def _send():
+        from email.mime.text import MIMEText
+        from email.mime.multipart import MIMEMultipart
+
+        msg = MIMEMultipart()
+        msg["From"] = f"{config.get('from_name', '')} <{config.get('from_email', config['smtp_user'])}>".strip()
+        if not msg["From"] or msg["From"] == " <>":
+            msg["From"] = config["smtp_user"]
+        msg["To"] = to_addr
+        msg["Subject"] = subject
+        if cc_addr:
+            msg["Cc"] = cc_addr
+
+        # Auto-detect HTML vs plain text
+        subtype = "html" if "<" in body and ">" in body else "plain"
+        msg.attach(MIMEText(body, subtype, "utf-8"))
+
+        recipients = [to_addr]
+        if cc_addr:
+            recipients.append(cc_addr)
+
+        host = config["smtp_host"]
+        port = config["smtp_port"]
+        use_tls = config.get("use_tls", True)
+
+        if use_tls:
+            with smtplib.SMTP(host, port, timeout=15) as server:
+                server.starttls()
+                server.login(config["smtp_user"], config["smtp_pass"])
+                server.sendmail(msg["From"], recipients, msg.as_string())
+        else:
+            with smtplib.SMTP_SSL(host, port, timeout=15) as server:
+                server.login(config["smtp_user"], config["smtp_pass"])
+                server.sendmail(msg["From"], recipients, msg.as_string())
+
+    try:
+        await asyncio.to_thread(_send)
+
+        # Audit log
+        _ = _log_email_audit(client_id, to_addr, subject)
+        return _json.dumps({"sent": True, "to": to_addr, "subject": subject})
+    except smtplib.SMTPAuthenticationError:
+        return _json.dumps({"error": "SMTP authentication failed. Check username/password."})
+    except smtplib.SMTPConnectError:
+        return _json.dumps({"error": f"Could not connect to SMTP server {config.get('smtp_host')}:{config.get('smtp_port')}"})
+    except Exception as e:
+        return _json.dumps({"error": str(e)[:500]})
+
+
+async def _log_email_audit(client_id: int, to_addr: str, subject: str):
+    """Log email send to audit trail via API."""
+    try:
+        async with httpx.AsyncClient(timeout=3.0) as client:
+            await client.post(
+                f"{STAFFBOT_API_URL}/api/v1/internal/audit/log",
+                json={
+                    "client_id": client_id,
+                    "action": "send_email",
+                    "resource": f"email:{to_addr}",
+                    "detail": {"recipient": to_addr, "subject": subject},
+                    "status": "success",
+                },
+                headers={"x-api-key": SERVER_B_API_KEY},
+            )
+    except Exception:
+        pass
+
+
+async def _execute_set_smtp_config(client_id: int, tool_args: dict) -> str:
+    """Call internal API to upsert the client's SMTP config."""
+    import json as _json
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.post(
+                f"{STAFFBOT_API_URL}/api/v1/internal/email-config/upsert",
+                json={
+                    "client_id": client_id,
+                    "smtp_host": tool_args.get("smtp_host"),
+                    "smtp_port": tool_args.get("smtp_port", 587),
+                    "smtp_user": tool_args.get("smtp_user"),
+                    "smtp_pass": tool_args.get("smtp_pass"),
+                    "use_tls": tool_args.get("use_tls", True),
+                    "from_name": tool_args.get("from_name"),
+                },
+                headers={"x-api-key": SERVER_B_API_KEY},
+            )
+            data = resp.json()
+            if resp.status_code == 200 and data.get("success"):
+                return _json.dumps({
+                    "saved": True,
+                    "action": data.get("action"),
+                    "host": data.get("smtp_host"),
+                    "from": data.get("from_email"),
+                    "tip": "✅ SMTP configured! You can now use send_email to send messages."
+                })
+            return _json.dumps({"error": f"API returned {resp.status_code}: {data.get('detail', 'Unknown error')}"})
+    except Exception as e:
+        return _json.dumps({"error": str(e)[:500]})
+
+
 async def _execute_tool(client_id: int, tool_name: str, tool_args: dict) -> str:
     """Execute a built-in tool and return the result as a JSON string."""
     import json as _json
@@ -839,6 +1500,18 @@ async def _execute_tool(client_id: int, tool_name: str, tool_args: dict) -> str:
         mem_type = tool_args.get("memory_type", "chat")
         await _save_memory_bg(client_id, content, mem_type)
         return _json.dumps({"saved": True, "type": mem_type})
+
+    elif tool_name == "call_webhook":
+        return await _execute_call_webhook(client_id, tool_args)
+
+    elif tool_name == "web_search":
+        return await _execute_web_search(client_id, tool_args)
+
+    elif tool_name == "send_email":
+        return await _execute_send_email(client_id, tool_args)
+
+    elif tool_name == "set_smtp_config":
+        return await _execute_set_smtp_config(client_id, tool_args)
 
     return _json.dumps({"error": "Unknown tool: %s" % tool_name})
 
