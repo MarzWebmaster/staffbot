@@ -34,6 +34,8 @@ from app.models.chat_message import ChatMessage
 from app.services.enforcement_service import EnforcementService
 from app.services.content_moderation import moderate_message
 from app.services import office_events
+from app.models.llm_provider import LlmProvider
+from app.utils.encryption import decrypt_value
 
 
 
@@ -295,22 +297,43 @@ async def chat_send(
         "governance": enforcement.get("governance", {}),
     }
 
-    # ── 5. Route ALL traffic to Hermes Native :8642 (text + vision) ─
+    # ── 5. Resolve provider credentials ───────────────────────
+    provider_api_key = data.api_key  # BYOK: use user-supplied key
+    provider_base_url = None
+
+    if not provider_api_key:
+        # Managed: look up provider config from DB, decrypt API key
+        prov_result = await db.execute(
+            select(LlmProvider).where(
+                LlmProvider.name == (data.provider or "deepseek"),
+                LlmProvider.is_active == True,
+            )
+        )
+        llm_prov = prov_result.scalar_one_or_none()
+        if llm_prov and llm_prov.api_key_encrypted:
+            try:
+                provider_api_key = decrypt_value(llm_prov.api_key_encrypted)
+                provider_base_url = llm_prov.base_url
+            except Exception:
+                pass
+
+    if not provider_api_key:
+        return {"success": False, "error": "no_provider", "message": "No API key available for this provider."}
+
+    # ── 6. Route to Gateway /v1/chat/completions ──────────
     has_image = bool(data.image_base64)
 
     if has_image:
-        # Vision — use Mimo Omni via Hermes custom_providers
         user_content = [
             {"type": "text", "text": data.content},
             {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{data.image_base64}"}},
         ]
         model_name = "mimo/mimo-v2-omni"
     else:
-        # Text — use default model with tools
         user_content = data.content
         model_name = data.model or "deepseek-v4-flash"
 
-    target_url = f"{HERMES_URL}/v1/chat/completions"
+    target_url = f"{GATEWAY_URL}/v1/chat/completions"
     req_headers = {
         "Content-Type": "application/json",
         "Authorization": f"Bearer {GATEWAY_KEY}",
@@ -318,6 +341,8 @@ async def chat_send(
     payload = {
         "model": model_name,
         "client_id": client_id,
+        "api_key": provider_api_key,
+        "base_url": provider_base_url or "",
         "messages": [
             {
                 "role": "system",
@@ -344,7 +369,7 @@ async def chat_send(
         await db.commit()
         return {"success": False, "error": "timeout", "message": "Request timed out. Please try again."}
     except Exception as e:
-        logger.error(f"Hermes error for client #{client_id}: {e}")
+        logger.error(f"Gateway error for client #{client_id}: {e}")
         await _save_message(db=db, client_id=client_id, role="assistant",
                            content=f"[Error: AI service unavailable]", provider=data.provider)
         await db.commit()
