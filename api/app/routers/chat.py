@@ -26,6 +26,7 @@ from typing import Optional, List
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, text
 from app.database import get_db
+from app.services.audit import log_audit
 from app.middleware.auth import get_current_client, get_current_client_or_internal
 from app.models.client import Client
 from app.models.subscription import Subscription
@@ -211,6 +212,7 @@ async def chat_send(
         sub = sub_result.scalar_one_or_none()
 
         if not sub:
+            await log_audit(client_id=client_id, action="chat_request", resource="subscription", detail={"error": "no_subscription"}, ip_address=request.client.host if request.client else None, status="blocked")
             return {
                 "success": False,
                 "error": "no_subscription",
@@ -218,6 +220,7 @@ async def chat_send(
             }
 
         if sub.status != "active":
+            await log_audit(client_id=client_id, action="chat_request", resource="subscription", detail={"error": "subscription_inactive", "status": sub.status}, ip_address=request.client.host if request.client else None, status="blocked")
             return {
                 "success": False,
                 "error": "subscription_inactive",
@@ -228,6 +231,7 @@ async def chat_send(
         used = sub.managed_token_used or 0
 
         if quota > 0 and used >= quota:
+            await log_audit(client_id=client_id, action="chat_request", resource="subscription", detail={"error": "quota_exceeded", "quota": quota, "used": used}, ip_address=request.client.host if request.client else None, status="blocked")
             return {
                 "success": False,
                 "error": "token_quota_exceeded",
@@ -273,6 +277,7 @@ async def chat_send(
         api_key=moderation_api_key,
     )
     if violation:
+        await log_audit(client_id=client_id, action="chat_request", resource="moderation", detail={"categories": violation.get("categories", []), "action": violation.get("action")}, ip_address=request.client.host if request.client else None, status="blocked")
         await _save_message(
             db=db, client_id=client_id, role="assistant",
             content=violation["message"], provider=data.provider,
@@ -342,6 +347,7 @@ async def chat_send(
 
     # No fallback — must have a valid provider configured
     if not provider_api_key:
+        await log_audit(client_id=client_id, action="chat_request", resource="provider", detail={"error": "no_api_key", "provider": provider_name}, ip_address=request.client.host if request.client else None, status="failure")
         return {"success": False, "error": "no_provider", "message": "No API key available for this provider."}
 
     # ── 6. Route to Gateway /v1/chat/completions ──────────
@@ -391,12 +397,14 @@ async def chat_send(
         await _save_message(db=db, client_id=client_id, role="assistant",
                            content="[Error: Request timed out]", provider=data.provider)
         await db.commit()
+        await log_audit(client_id=client_id, action="chat_request", resource="gateway", detail={"error": "timeout"}, ip_address=request.client.host if request.client else None, status="failure")
         return {"success": False, "error": "timeout", "message": "Request timed out. Please try again."}
     except Exception as e:
         logger.error(f"Gateway error for client #{client_id}: {e}")
         await _save_message(db=db, client_id=client_id, role="assistant",
                            content=f"[Error: AI service unavailable]", provider=data.provider)
         await db.commit()
+        await log_audit(client_id=client_id, action="chat_request", resource="gateway", detail={"error": "exception", "exception": str(e)[:300]}, ip_address=request.client.host if request.client else None, status="failure")
         return {"success": False, "error": "gateway_error", "message": "AI service temporarily unavailable."}
 
     if resp.status_code != 200:
@@ -410,6 +418,7 @@ async def chat_send(
         await _save_message(db=db, client_id=client_id, role="assistant",
                            content=f"[Error: {gw_detail[:200]}]", provider=data.provider)
         await db.commit()
+        await log_audit(client_id=client_id, action="chat_request", resource="gateway", detail={"error": "non_200", "status_code": resp.status_code, "detail": gw_detail[:300]}, ip_address=request.client.host if request.client else None, status="failure")
         return {"success": False, "error": "gateway_error", "message": f"Gateway error: {gw_detail}"}
 
     hermes_data = resp.json()
@@ -468,6 +477,26 @@ async def chat_send(
                 result["quota_warning"] = f"Low token balance: {int(remaining):,} tokens remaining."
 
     await db.commit()
+    
+    # ── Audit trail ────────────────────────────────────────────
+    await log_audit(
+        client_id=client_id,
+        action="chat_request",
+        resource=f"provider:{data.provider or 'deepseek-pchp17'}",
+        detail={
+            "model": result.get("model"),
+            "provider": data.provider,
+            "input_tokens": hermes_data.get("usage", {}).get("prompt_tokens", 0),
+            "output_tokens": hermes_data.get("usage", {}).get("completion_tokens", 0),
+            "total_tokens": result.get("tokens_used", 0),
+            "gw_cost": hermes_data.get("cost", {}),
+            "is_byok": bool(data.api_key),
+        },
+        ip_address=request.client.host if request.client else None,
+        user_agent=request.headers.get("user-agent"),
+        status="success",
+    )
+    
     return result
 
 
