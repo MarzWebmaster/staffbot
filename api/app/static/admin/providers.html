@@ -154,14 +154,17 @@
                     <td>${p.api_key_configured ? '<span class="status-badge status-active">✓ Configured</span>' : '<span class="status-badge status-error">✗ Not Set</span>'}</td>
                     <td>${p.is_active ? '<span class="status-badge status-active">Active</span>' : '<span class="status-badge status-error">Inactive</span>'}</td>
                     <td>
-                        <button class="btn btn-sm btn-ghost" onclick="testProvider(${p.id},'${p.display_name.replace(/'/g,"\\'")}')" title="Test Connection" ${!p.api_key_configured ? 'disabled style="opacity:0.4"' : ''}>🧪</button>
+                        <button class="btn btn-sm btn-ghost" onclick="testProvider(${p.id},'${p.display_name.replace(/'/g,"\\'")}',this)" title="Test Connection" ${!p.api_key_configured ? 'disabled style="opacity:0.4"' : ''}>🧪</button>
                         <button class="btn btn-sm btn-ghost" onclick="openEditProvider(${p.id})" title="Edit">✏️</button>
                         <button class="btn btn-sm btn-ghost" onclick="toggleProvider(${p.id},${!p.is_active})" title="${p.is_active ? 'Deactivate' : 'Activate'}">${p.is_active ? '🚫' : '✅'}</button>
                         <button class="btn btn-sm btn-ghost" onclick="deleteProvider(${p.id},'${p.display_name.replace(/'/g,"\\'")}')" title="Delete" style="color:var(--danger)">🗑️</button>
                     </td>
                 </tr>
             `).join('');
-        } catch {}
+        } catch (e) {
+            console.error('loadProviders error:', e);
+            tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:red">⚠️ Failed to load: ' + (e.message || 'Unknown') + '</td></tr>';
+        }
     }
 
     async function loadAssignments() {
@@ -187,7 +190,10 @@
                     </td>
                 </tr>
             `).join('');
-        } catch {}
+        } catch (e) {
+            console.error('loadAssignments error:', e);
+            tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:red">⚠️ Failed to load assignments: ' + (e.message || 'Unknown') + '</td></tr>';
+        }
     }
 
     async function addProvider(e) {
@@ -351,8 +357,7 @@
         } catch {}
     }
 
-    async function testProvider(id, name) {
-        const btn = event.target.closest('button');
+    async function testProvider(id, name, btn) {
         const origHTML = btn.innerHTML;
         btn.innerHTML = '⏳';
         btn.disabled = true;
