@@ -34,7 +34,8 @@ from app.models.chat_message import ChatMessage
 from app.services.enforcement_service import EnforcementService
 from app.services.content_moderation import moderate_message
 from app.services import office_events
-from app.models.llm_provider import LlmProvider
+from app.models.llm_provider import LlmProvider, PackageProvider
+from app.models.package import Package
 from app.utils.encryption import decrypt_value
 
 
@@ -64,7 +65,7 @@ HERMES_KEY = os.environ.get("HERMES_API_KEY", "")
 class ChatSendRequest(BaseModel):
     content: str
     container_id: Optional[int] = None
-    provider: str = "mimo"
+    provider: Optional[str] = None
     model: Optional[str] = None
     api_key: Optional[str] = None
     image_base64: Optional[str] = None
@@ -302,10 +303,34 @@ async def chat_send(
     provider_base_url = None
 
     if not provider_api_key:
+        # Resolve provider name: explicit > package > fallback
+        provider_name = data.provider
+        if not provider_name:
+            # Look up client's package → first available provider
+            if sub:
+                pp_result = await db.execute(
+                    select(PackageProvider.provider_id, LlmProvider.name)
+                    .join(LlmProvider, LlmProvider.id == PackageProvider.provider_id)
+                    .where(
+                        PackageProvider.package_id == (
+                            select(Package.id).where(Package.name == sub.package)
+                        ).scalar_subquery(),
+                        PackageProvider.is_available == True,
+                        LlmProvider.is_active == True,
+                    )
+                    .order_by(PackageProvider.id)
+                    .limit(1)
+                )
+                pp_row = pp_result.first()
+                if pp_row:
+                    provider_name = pp_row.name
+            if not provider_name:
+                provider_name = "deepseek-pchp17"  # final fallback
+
         # Managed: look up provider config from DB, decrypt API key
         prov_result = await db.execute(
             select(LlmProvider).where(
-                LlmProvider.name == (data.provider or "deepseek"),
+                LlmProvider.name == provider_name,
                 LlmProvider.is_active == True,
             )
         )
@@ -336,7 +361,7 @@ async def chat_send(
         model_name = "mimo/mimo-v2-omni"
     else:
         user_content = data.content
-        model_name = data.model or "deepseek-v4-flash"
+        model_name = data.model or (llm_prov.default_model if llm_prov else "mimo/mimo-v2.5")
 
     target_url = f"{GATEWAY_URL}/v1/chat/completions"
     req_headers = {

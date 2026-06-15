@@ -861,7 +861,7 @@ async def openai_chat_completions(req: OpenAICompatRequest, auth=Depends(verify_
         # Fallback: try provider resolution
         resolved = await _resolve_provider("openrouter", client_id)
         if not resolved:
-            resolved = await _resolve_provider("deepseek", client_id)
+            resolved = await _resolve_provider("deepseek-pchp17", client_id)
         if resolved:
             api_key = api_key or resolved.get("api_key", "")
             base_url = base_url or resolved.get("base_url", "")
@@ -891,6 +891,7 @@ async def openai_chat_completions(req: OpenAICompatRequest, auth=Depends(verify_
             "messages": messages,
             "max_tokens": req.max_tokens or 2000,
             "temperature": req.temperature or 0.7,
+            "stream": False,  # Jemaah/Mimo upstream requires non-streaming
             "tools": TOOLS,
             "tool_choice": "auto",
         }
@@ -1040,29 +1041,88 @@ async def chat_send(req: ChatRequest, auth=Depends(verify_auth)):
     if memory_context:
         system_prompt += "\n\n" + memory_context
 
-    # ── 3. Call LLM with retry (3 attempts) ──
+    # ── 3. ReAct Loop: LLM with tool calling (max 3 rounds) ──
+    url = f"{base_url.rstrip('/')}/chat/completions"
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json",
+    }
+    react_messages = [
+        {"role": "system", "content": system_prompt},
+    ]
+    if req.system_context:
+        react_messages.append({"role": "system", "content": f"[SYSTEM CONTEXT]\n{json.dumps(req.system_context, indent=2)}"})
+    react_messages.append({"role": "user", "content": content})
+    
+    total_input = 0
+    total_output = 0
+    final_content = ""
     llm_response = None
-    last_error = None
-    for attempt in range(3):
+    
+    for round_num in range(3):
+        payload = {
+            "model": model,
+            "messages": react_messages,
+            "max_tokens": 4096,
+            "temperature": 0.7,
+            "stream": False,
+            "tools": TOOLS,
+            "tool_choice": "auto",
+        }
         try:
-            llm_response = await _call_llm(
-                base_url=base_url,
-                api_key=api_key,
-                model=model,
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": content},
-                ],
-                system_context=req.system_context,
-            )
-            break
+            async with httpx.AsyncClient(timeout=120) as client:
+                resp = await client.post(url, json=payload, headers=headers)
         except Exception as e:
-            last_error = e
-            if attempt < 2:
-                await asyncio.sleep(1.0 * (attempt + 1))
+            if round_num == 0:
+                raise HTTPException(status_code=502, detail=f"LLM call failed: {str(e)}")
+            break
+        
+        if resp.status_code != 200:
+            raise HTTPException(status_code=502, detail=f"LLM API error {resp.status_code}: {resp.text[:300]}")
+        
+        data = resp.json()
+        total_input += data.get("usage", {}).get("prompt_tokens", 0)
+        total_output += data.get("usage", {}).get("completion_tokens", 0)
+        
+        choice = data.get("choices", [{}])[0]
+        msg = choice.get("message", {})
+        
+        # Tool calls?
+        tool_calls = msg.get("tool_calls")
+        if not tool_calls:
+            final_content = msg.get("content", "")
+            llm_response = {
+                "content": final_content,
+                "model": data.get("model", model),
+                "input_tokens": total_input,
+                "output_tokens": total_output,
+            }
+            break
+        
+        # Execute tools and append to messages
+        react_messages.append({"role": "assistant", "content": msg.get("content"), "tool_calls": tool_calls})
+        for tc in tool_calls:
+            fn = tc.get("function", {})
+            tool_name = fn.get("name", "")
+            tool_args = fn.get("arguments", "{}")
+            try:
+                tool_args_dict = json.loads(tool_args)
+            except Exception:
+                tool_args_dict = {}
+            result = await _execute_tool(client_id, tool_name, tool_args_dict)
+            react_messages.append({
+                "role": "tool",
+                "tool_call_id": tc.get("id", ""),
+                "content": result,
+            })
     
     if not llm_response:
-        raise HTTPException(status_code=502, detail=f"LLM error after 3 retries: {str(last_error)}")
+        llm_response = {
+            "content": final_content,
+            "model": model,
+            "input_tokens": total_input,
+            "output_tokens": total_output,
+        }
 
     # ── 4. Calculate costs ──
     input_tokens = llm_response.get("input_tokens", 0)
@@ -1244,6 +1304,7 @@ async def _call_llm(base_url: str, api_key: str, model: str, messages: list, sys
         "messages": messages,
         "max_tokens": 4096,
         "temperature": 0.7,
+        "stream": False,  # Jemaah/Mimo upstream requires non-streaming
     }
     
     async with httpx.AsyncClient(timeout=120) as client:
