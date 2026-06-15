@@ -27,6 +27,7 @@ from datetime import datetime
 import numpy as np
 
 AUTH_KEY = os.environ.get("AUTH_KEY", "staffbot-secret-key")
+SERVER_B_API_KEY = os.environ.get("SERVER_B_API_KEY", AUTH_KEY)  # For API container's STAFFBOT_SERVER_B_API_KEY
 DATABASE_URL = os.environ.get("DATABASE_URL", "postgresql://staffbot:staffbot@localhost:5432/staffbot_memory")
 CONTAINER_DIR = "/root/staffbot/containers"
 STAFFBOT_CORE_IMAGE = "staffbot-core:latest"
@@ -108,6 +109,48 @@ class ChatRequest(BaseModel):
     system_context: Optional[dict] = None
 
 
+# ── Built-in Tools (Hermes capabilities via function calling) ──
+TOOLS = [
+    {
+        "type": "function",
+        "function": {
+            "name": "search_memory",
+            "description": "Search past conversations and saved knowledge for relevant context. Use when user references something from previous chats or when you need to recall stored information about the user.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string", "description": "What to search for — keywords, topic, or question"},
+                },
+                "required": ["query"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_current_time",
+            "description": "Get the current date and time. Use when user asks about time, date, scheduling, or needs current timestamp context.",
+            "parameters": {"type": "object", "properties": {}},
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "save_to_memory",
+            "description": "Save important information the user shares so you can recall it in future conversations. Use for facts (names, dates, data), preferences (likes/dislikes), or knowledge the user wants remembered.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "content": {"type": "string", "description": "The information to save — be concise but complete"},
+                    "memory_type": {"type": "string", "enum": ["fact", "preference", "knowledge", "chat"], "description": "Type of memory"},
+                },
+                "required": ["content", "memory_type"],
+            },
+        },
+    },
+]
+
+
 class OpenAICompatRequest(BaseModel):
     """OpenAI-compatible /v1/chat/completions request."""
     model: str
@@ -115,6 +158,8 @@ class OpenAICompatRequest(BaseModel):
     max_tokens: Optional[int] = 2000
     temperature: Optional[float] = 0.7
     client_id: Optional[int] = None
+    api_key: Optional[str] = None       # Provider API key (passed by API container)
+    base_url: Optional[str] = None      # Provider base URL (e.g. https://api.deepseek.com/v1)
 
 
 async def verify_auth(x_api_key: str = Header(None)):
@@ -761,73 +806,146 @@ async def verify_bearer(authorization: str = Header(None)):
     if not authorization or not authorization.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Missing or invalid Bearer token")
     token = authorization[7:]
-    if token != AUTH_KEY and token != STAFFBOT_API_KEY:
+    if token != AUTH_KEY and token != STAFFBOT_API_KEY and token != SERVER_B_API_KEY:
         raise HTTPException(status_code=401, detail="Invalid Bearer token")
     return True
+
+
+async def _execute_tool(client_id: int, tool_name: str, tool_args: dict) -> str:
+    """Execute a built-in tool and return the result as a JSON string."""
+    import json as _json
+    from datetime import datetime as _dt, timezone as _tz
+
+    if tool_name == "search_memory":
+        query = tool_args.get("query", "")
+        results = await _search_memories(client_id, query, limit=3)
+        if results:
+            items = ["[%d] %s" % (i+1, r.get('content', '')[:300]) for i, r in enumerate(results)]
+            return _json.dumps({"found": len(results), "memories": items})
+        return _json.dumps({"found": 0, "memories": []})
+
+    elif tool_name == "get_current_time":
+        now = _dt.now(_tz.utc)
+        tz_kl = _dt.now()
+        return _json.dumps({
+            "utc": now.strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "local": tz_kl.strftime("%Y-%m-%d %H:%M %Z"),
+            "day": now.strftime("%A"),
+            "timestamp": int(now.timestamp()),
+        })
+
+    elif tool_name == "save_to_memory":
+        content = tool_args.get("content", "")
+        mem_type = tool_args.get("memory_type", "chat")
+        await _save_memory_bg(client_id, content, mem_type)
+        return _json.dumps({"saved": True, "type": mem_type})
+
+    return _json.dumps({"error": "Unknown tool: %s" % tool_name})
 
 
 @app.post("/v1/chat/completions")
 async def openai_chat_completions(req: OpenAICompatRequest, auth=Depends(verify_bearer)):
     """OpenAI-compatible endpoint — proxies to LLM provider with quota + token tracking.
 
-    Called by API container's chat.py router.
+    Uses api_key + base_url passed by API container (already resolved).
+    Falls back to provider resolution if not passed.
     """
     client_id = req.client_id
     if not client_id:
         raise HTTPException(status_code=400, detail="client_id required in request body")
 
-    # ── Resolve provider for this client ──
-    resolved = await _resolve_provider("openrouter", client_id)
-    if not resolved:
-        resolved = await _resolve_provider("deepseek", client_id)
-    if not resolved:
-        raise HTTPException(status_code=502, detail="No provider configured for this client")
-
-    api_key = resolved.get("api_key", "")
-    base_url = resolved.get("base_url", "")
+    # ── Use passed-in credentials or resolve ──
+    api_key = req.api_key
+    base_url = req.base_url
+    if not api_key or not base_url:
+        # Fallback: try provider resolution
+        resolved = await _resolve_provider("openrouter", client_id)
+        if not resolved:
+            resolved = await _resolve_provider("deepseek", client_id)
+        if resolved:
+            api_key = api_key or resolved.get("api_key", "")
+            base_url = base_url or resolved.get("base_url", "")
     if not api_key:
         raise HTTPException(status_code=502, detail="No API key available")
+    if not base_url:
+        base_url = "https://api.deepseek.com/v1"  # default
 
     # ── Check quota ──
     quota_info = await _check_quota(client_id)
     if quota_info.get("exceeded"):
         raise HTTPException(status_code=429, detail=f"Token quota exceeded. Used: {quota_info['used']}, Limit: {quota_info['quota']}")
 
-    # ── Call LLM (raw OpenAI response) ──
+    # ── ReAct Loop: LLM with tool calling (max 3 rounds) ──
     url = f"{base_url.rstrip('/')}/chat/completions"
     headers = {
         "Authorization": f"Bearer {api_key}",
         "Content-Type": "application/json",
     }
-    payload = {
-        "model": req.model,
-        "messages": req.messages,
-        "max_tokens": req.max_tokens or 2000,
-        "temperature": req.temperature or 0.7,
-    }
-    try:
-        async with httpx.AsyncClient(timeout=120) as client:
-            resp = await client.post(url, json=payload, headers=headers)
-    except Exception as e:
-        raise HTTPException(status_code=502, detail=f"LLM call failed: {str(e)}")
+    messages = list(req.messages)  # working copy
+    total_input = 0
+    total_output = 0
 
-    if resp.status_code != 200:
-        raise HTTPException(status_code=502, detail=f"LLM API error {resp.status_code}: {resp.text[:300]}")
+    for round_num in range(3):
+        payload = {
+            "model": req.model,
+            "messages": messages,
+            "max_tokens": req.max_tokens or 2000,
+            "temperature": req.temperature or 0.7,
+            "tools": TOOLS,
+            "tool_choice": "auto",
+        }
+        try:
+            async with httpx.AsyncClient(timeout=120) as client:
+                resp = await client.post(url, json=payload, headers=headers)
+        except Exception as e:
+            raise HTTPException(status_code=502, detail=f"LLM call failed: {str(e)}")
 
-    data = resp.json()
+        if resp.status_code != 200:
+            raise HTTPException(status_code=502, detail=f"LLM API error {resp.status_code}: {resp.text[:300]}")
 
-    # ── Record token usage ──
-    input_tokens = data.get("usage", {}).get("prompt_tokens", 0)
-    output_tokens = data.get("usage", {}).get("completion_tokens", 0)
-    total_tokens = input_tokens + output_tokens
-    if total_tokens > 0:
+        data = resp.json()
+        total_input += data.get("usage", {}).get("prompt_tokens", 0)
+        total_output += data.get("usage", {}).get("completion_tokens", 0)
+
+        choice = data.get("choices", [{}])[0]
+        msg = choice.get("message", {})
+
+        # Tool calls?
+        tool_calls = msg.get("tool_calls")
+        if not tool_calls:
+            # Final text response — record usage and return
+            if total_input + total_output > 0:
+                try:
+                    await _record_token_usage(client_id, "openrouter", req.model,
+                                              total_input, total_output, total_input + total_output)
+                except Exception:
+                    pass
+            return data
+
+        # Execute tools and append to messages
+        messages.append({"role": "assistant", "content": msg.get("content"), "tool_calls": tool_calls})
+        for tc in tool_calls:
+            fn = tc.get("function", {})
+            tool_name = fn.get("name", "")
+            tool_args = fn.get("arguments", "{}")
+            try:
+                tool_args_dict = json.loads(tool_args)
+            except Exception:
+                tool_args_dict = {}
+            result = await _execute_tool(client_id, tool_name, tool_args_dict)
+            messages.append({
+                "role": "tool",
+                "tool_call_id": tc.get("id", ""),
+                "content": result,
+            })
+
+    # Max rounds reached — return last response
+    if total_input + total_output > 0:
         try:
             await _record_token_usage(client_id, "openrouter", req.model,
-                                      input_tokens, output_tokens, total_tokens)
+                                      total_input, total_output, total_input + total_output)
         except Exception:
             pass
-
-    # Return raw OpenAI response (API container parses it)
     return data
 
 
