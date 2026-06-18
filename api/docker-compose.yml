@@ -46,6 +46,7 @@ services:
       - /root/staffbot/api/app/static:/app/app/static
       - /etc/nginx/ssl:/etc/nginx/ssl
       - /root/staffbot/profiles:/app/data/profiles
+      - /root/staffbot/data/deleted-users:/app/data/deleted-users
     depends_on:
       db:
         condition: service_healthy

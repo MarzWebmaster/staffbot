@@ -15,7 +15,11 @@ from app.schemas.admin import UserUpdateAdmin, UserCreateAdmin
 from app.middleware.auth import get_current_admin
 from app.utils.security import hash_password
 
+import gzip
+import json
 import logging
+from pathlib import Path
+
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
@@ -191,39 +195,61 @@ async def delete_user(
     admin: Client = Depends(get_current_admin),
     db: AsyncSession = Depends(get_db),
 ):
-    """Admin: Hard-delete a user with full cascade cleanup."""
+    """Admin: Hard-delete a user with full cascade cleanup.
+
+    Flow:
+      1. Dump user data to JSON.gz archive (personal data for future study)
+      2. Cleanup containers + dependent records
+      3. Anonymize chat_messages content
+      4. Delete analytics rows (aggregate analytics preserved via GROUP BY)
+      5. Delete user record
+    """
     from sqlalchemy import text
+
+    # 0. Get user (needed for dump)
     result = await db.execute(select(Client).where(Client.id == user_id))
     user = result.scalar_one_or_none()
     if not user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
 
-    logger.info(f"Cascade deleting user {user_id} ({user.email})")
+    # 1. DUMP user data BEFORE any deletion (for future study)
+    dump_path = await dump_user_data(user_id, user, db)
 
-    # 1. Delete client_memory (personal AI memory)
-    mem_result = await db.execute(text("DELETE FROM client_memory WHERE client_id = :cid"), {"cid": user_id})
-    logger.info(f"  Deleted {mem_result.rowcount} client_memory records")
+    logger.info(f"Cascade deleting user {user_id} ({user.email}) — dumped to {dump_path}")
 
-    # 2. Delete memory_audit_log
-    await db.execute(text("DELETE FROM memory_audit_log WHERE client_id = :cid"), {"cid": user_id})
+    # 2. Delete client_memory (personal AI memory) — fault-tolerant via SAVEPOINT
+    #    (vector extension may be missing in some DBs)
+    try:
+        async with db.begin_nested():
+            mem_result = await db.execute(text("DELETE FROM client_memory WHERE client_id = :cid"), {"cid": user_id})
+        logger.info(f"  Deleted {mem_result.rowcount} client_memory records")
+    except Exception as e:
+        logger.warning(f"  Skipped client_memory: {type(e).__name__}: {e}")
 
-    # 3. Delete notifications
+    # 3. Delete memory_audit_log — fault-tolerant
+    try:
+        async with db.begin_nested():
+            await db.execute(text("DELETE FROM memory_audit_log WHERE client_id = :cid"), {"cid": user_id})
+    except Exception as e:
+        logger.warning(f"  Skipped memory_audit_log: {type(e).__name__}: {e}")
+
+    # 4. Delete notifications
     await db.execute(text("DELETE FROM notifications_log WHERE client_id = :cid"), {"cid": user_id})
     await db.execute(text("DELETE FROM notification_channels WHERE client_id = :cid"), {"cid": user_id})
 
-    # 4. Delete scheduled tasks
+    # 5. Delete scheduled tasks
     await db.execute(text("DELETE FROM tasks WHERE client_id = :cid"), {"cid": user_id})
 
-    # 5. Delete affiliates
+    # 6. Delete affiliates
     await db.execute(text("DELETE FROM affiliates WHERE client_id = :cid"), {"cid": user_id})
 
-    # 6. Delete subdomains
+    # 7. Delete subdomains
     await db.execute(text("DELETE FROM subdomains WHERE client_id = :cid"), {"cid": user_id})
 
-    # 7. Delete token_topups
+    # 8. Delete token_topups
     await db.execute(text("DELETE FROM token_topups WHERE client_id = :cid"), {"cid": user_id})
 
-    # 8. Stop and remove Docker containers for this user
+    # 9. Stop and remove Docker containers for this user
     from app.services.docker_service import DockerService
     containers = (await db.execute(select(Container).where(Container.client_id == user_id))).scalars().all()
     for c in containers:
@@ -235,29 +261,104 @@ async def delete_user(
             logger.warning(f"  Failed to remove container {c.container_name}: {e}")
         await db.delete(c)
 
-    # 9. Delete API keys
+    # 10. Delete API keys
     from app.models.api_key import ApiKey
     api_keys = (await db.execute(select(ApiKey).where(ApiKey.client_id == user_id))).scalars().all()
     for ak in api_keys:
         await db.delete(ak)
 
-    # 10. Delete subscription
+    # 11. Delete subscription
     sub_result = await db.execute(select(Subscription).where(Subscription.client_id == user_id))
     sub = sub_result.scalar_one_or_none()
     if sub:
         await db.delete(sub)
 
-    # 11. Anonymize business data (KEEP for analytics, strip PII)
-    await db.execute(text(
-        "UPDATE chat_messages SET content = '[deleted]' WHERE client_id = :cid"
-    ), {"cid": user_id})
+    # 12. Anonymize chat_messages (keep row count, strip PII)
+    cm_result = await db.execute(
+        text("UPDATE chat_messages SET content = '[deleted]' WHERE client_id = :cid"),
+        {"cid": user_id}
+    )
+    logger.info(f"  Anonymized {cm_result.rowcount} chat_messages")
 
-    # 12. Delete the user
+    # 13. Delete analytics rows (aggregate analytics still queryable via GROUP BY)
+    tu_result = await db.execute(text("DELETE FROM token_usage_log WHERE client_id = :cid"), {"cid": user_id})
+    logger.info(f"  Deleted {tu_result.rowcount} token_usage_log")
+    at_result = await db.execute(text("DELETE FROM audit_trail WHERE client_id = :cid"), {"cid": user_id})
+    logger.info(f"  Deleted {at_result.rowcount} audit_trail")
+    await db.execute(text("DELETE FROM policy_violations WHERE client_id = :cid"), {"cid": user_id})
+
+    # 14. Delete the user
     await db.delete(user)
     await db.commit()
 
-    logger.info(f"User {user_id} fully deleted with cascade cleanup")
-    return {"message": f"User {user_id} deleted successfully with all associated data"}
+    logger.info(f"User {user_id} fully deleted — archive: {dump_path}")
+    return {
+        "message": f"User {user_id} deleted successfully",
+        "archive": dump_path,
+    }
+
+
+async def dump_user_data(user_id: int, user: Client, db: AsyncSession) -> str:
+    """Dump user data to JSON.gz archive before deletion.
+
+    Saves personal data (user details, memory, chat history) to:
+        /app/data/deleted-users/{user_id}-{timestamp}.json.gz
+
+    This archive can be used later for retrospective study.
+    Aggregate analytics (token_usage, audit_trail) are NOT archived here —
+    they remain in the main DB and can still be queried via GROUP BY.
+
+    Sensitive fields excluded: password_hash, telegram_token_encrypted.
+
+    Returns absolute path to the dump file.
+    """
+    from sqlalchemy import text
+
+    dump_dir = Path("/app/data/deleted-users")
+    dump_dir.mkdir(parents=True, exist_ok=True)
+
+    # User details (exclude sensitive credentials)
+    sensitive_fields = {"password_hash", "telegram_token_encrypted"}
+    user_data = {
+        c.name: getattr(user, c.name)
+        for c in Client.__table__.columns
+        if c.name not in sensitive_fields
+    }
+
+    # Helper to fetch all rows for this user (fault-tolerant — broken table won't kill dump)
+    # Uses SAVEPOINT so a failed query on one table doesn't poison the connection
+    # for subsequent fetches in the same dump.
+    async def fetch_all(table: str) -> list:
+        try:
+            async with db.begin_nested():
+                result = await db.execute(
+                    text(f"SELECT * FROM {table} WHERE client_id = :cid"),
+                    {"cid": user_id}
+                )
+                return [dict(row._mapping) for row in result.fetchall()]
+        except Exception as e:
+            logger.warning(f"Dump skip {table}: {type(e).__name__}: {e}")
+            return [{"_dump_error": f"{type(e).__name__}: {str(e)[:200]}"}]
+
+    # Assemble dump payload
+    dump_data = {
+        "schema_version": 1,
+        "dumped_at": datetime.now(timezone.utc).isoformat(),
+        "user_id": user_id,
+        "user": user_data,
+        "client_memory": await fetch_all("client_memory"),
+        "memory_audit_log": await fetch_all("memory_audit_log"),
+        "chat_messages": await fetch_all("chat_messages"),
+    }
+
+    # Write compressed JSON
+    timestamp = int(datetime.now(timezone.utc).timestamp())
+    dump_path = dump_dir / f"{user_id}-{timestamp}.json.gz"
+    with gzip.open(dump_path, "wt", encoding="utf-8") as f:
+        json.dump(dump_data, f, default=str, indent=2, ensure_ascii=False)
+
+    logger.info(f"Dumped user {user_id} → {dump_path} ({dump_path.stat().st_size} bytes)")
+    return str(dump_path)
 
 
 @router.get("/containers/list")
