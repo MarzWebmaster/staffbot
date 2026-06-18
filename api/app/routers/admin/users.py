@@ -73,7 +73,7 @@ async def list_users(
     return ClientListResponse(items=clients, total=total)
 
 
-@router.post("/", response_model=ClientResponse, status_code=status.HTTP_201_CREATED)
+@router.post("", response_model=ClientResponse, status_code=status.HTTP_201_CREATED)
 async def create_user(
     data: UserCreateAdmin,
     admin: Client = Depends(get_current_admin),
@@ -247,23 +247,12 @@ async def delete_user(
     if sub:
         await db.delete(sub)
 
-    # 11. Delete policy violations (NOT NULL FK → must delete)
-    r = await db.execute(text("DELETE FROM policy_violations WHERE client_id = :cid"), {"cid": user_id})
-    logger.info(f"  Deleted {r.rowcount} policy_violations")
+    # 11. Anonymize business data (KEEP for analytics, strip PII)
+    await db.execute(text(
+        "UPDATE chat_messages SET content = '[deleted]' WHERE client_id = :cid"
+    ), {"cid": user_id})
 
-    # 12. Delete token usage log (NOT NULL FK → must delete)
-    r = await db.execute(text("DELETE FROM token_usage_log WHERE client_id = :cid"), {"cid": user_id})
-    logger.info(f"  Deleted {r.rowcount} token_usage_log")
-
-    # 13. Delete chat messages (NOT NULL FK → must delete; content already stripped below)
-    r = await db.execute(text("DELETE FROM chat_messages WHERE client_id = :cid"), {"cid": user_id})
-    logger.info(f"  Deleted {r.rowcount} chat_messages")
-
-    # 14. Nullify nullable FK references (keep parent rows for other analytics)
-    await db.execute(text("UPDATE affiliate_payouts SET processed_by = NULL WHERE processed_by = :cid"), {"cid": user_id})
-    await db.execute(text("UPDATE affiliate_referrals SET referred_client_id = NULL WHERE referred_client_id = :cid"), {"cid": user_id})
-
-    # 15. Delete the user
+    # 12. Delete the user
     await db.delete(user)
     await db.commit()
 

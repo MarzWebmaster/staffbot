@@ -15,7 +15,6 @@ from app.utils.encryption import encrypt_value, decrypt_value
 router = APIRouter()
 
 
-@router.get("/")
 @router.get("")
 async def get_all_settings(
     admin: Client = Depends(get_current_admin),
@@ -35,7 +34,6 @@ async def get_all_settings(
     ]
 
 
-@router.put("/")
 @router.put("")
 async def update_setting(
     data: SettingUpdate,

@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
-@router.get("/", response_model=list[dict])
+@router.get("", response_model=list[dict])
 async def list_packages(
     db: AsyncSession = Depends(get_db),
 ):
@@ -87,7 +87,7 @@ async def list_categories(
     }
 
 
-@router.post("/", status_code=status.HTTP_201_CREATED)
+@router.post("", status_code=status.HTTP_201_CREATED)
 async def create_package(
     data: PackageCreate,
     admin: Client = Depends(get_current_admin),
@@ -107,6 +107,8 @@ async def create_package(
         cpu_limit=data.cpu_limit,
         memory_limit_mb=data.memory_limit_mb,
         storage_limit_gb=data.storage_limit_gb,
+        memory_retention_days=data.memory_retention_days,
+        memory_item_limit=data.memory_item_limit,
         skill_category_ids=data.skill_category_ids,
         tool_category_ids=data.tool_category_ids,
         allowed_skill_categories=data.allowed_skill_categories,
@@ -312,6 +314,8 @@ def _pkg_to_dict(pkg: Package, admin: bool = False) -> dict:
         "cpu_limit": pkg.cpu_limit or 1.0,
         "memory_limit_mb": pkg.memory_limit_mb or 512,
         "storage_limit_gb": pkg.storage_limit_gb or 10,
+        "memory_retention_days": pkg.memory_retention_days if pkg.memory_retention_days is not None else 7,
+        "memory_item_limit": pkg.memory_item_limit if pkg.memory_item_limit is not None else 50,
         "skill_category_ids": pkg.skill_category_ids or [],
         "tool_category_ids": pkg.tool_category_ids or [],
         "allowed_skill_categories": pkg.allowed_skill_categories or [],

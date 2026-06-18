@@ -49,7 +49,7 @@ app = FastAPI(
     version="1.0.0",
     description="Digital Employee as a Service (DEaaS) — Backend API",
     lifespan=lifespan,
-    redirect_slashes=False,
+    redirect_slashes=True,
 )
 
 app.add_middleware(
@@ -151,6 +151,7 @@ from app.routers.chat import router as chat_router
 from app.routers.billing import router as billing_router
 from app.routers.llm_providers import router as user_llm_providers_router
 from app.routers.admin import dashboard, packages, users, settings as admin_settings, policy as admin_policy, subdomains as admin_subdomains
+from app.routers.admin import _missing_stubs as admin_missing_stubs
 from app.routers.admin.packages import public_router as packages_public_router
 from app.routers.admin.llm_providers import router as admin_llm_providers_router
 from app.routers.affiliates import router as user_affiliates_router
@@ -176,6 +177,7 @@ app.include_router(packages.router, prefix="/api/v1/admin/packages", tags=["Admi
 app.include_router(packages_public_router, prefix="/api/v1/packages", tags=["Public Packages"])
 app.include_router(users.router, prefix="/api/v1/admin/users", tags=["Admin Users"])
 app.include_router(admin_subdomains.router, prefix="/api/v1/admin/subdomains", tags=["Admin Subdomains"])
+app.include_router(admin_missing_stubs.router, prefix="/api/v1/admin", tags=["Admin Stubs"])
 app.include_router(admin_settings.router, prefix="/api/v1/admin/settings", tags=["Admin Settings"])
 app.include_router(admin_llm_providers_router, prefix="/api/v1/admin/providers", tags=["Admin LLM Providers"])
 app.include_router(user_llm_providers_router, prefix="/api/v1/providers", tags=["LLM Providers"])

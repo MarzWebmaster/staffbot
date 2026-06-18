@@ -244,34 +244,114 @@ async def get_system_health(
 
 @router.get("/usage/tokens")
 async def get_chart_token_usage(
+    period: str = "this_month",
+    token_type: str = "all",
     admin: Client = Depends(get_current_admin),
     db: AsyncSession = Depends(get_db),
 ):
-    """Get token usage for dashboard chart (7 days)."""
-    now = datetime.now(timezone.utc).replace(tzinfo=None)
-    week_ago = now - timedelta(days=7)
-    
+    """Get token usage for dashboard chart, filtered by period + token_type.
+
+    period: today, yesterday, this_week, last_week, this_month, last_month, this_year, all
+    token_type: all, provider, managed (provider IS NOT NULL; managed = provider='managed')
+    """
     from sqlalchemy import text
-    
-    result = await db.execute(
-        text("""
-            SELECT DATE(created_at) AS day, SUM(total_tokens) AS tokens
-            FROM token_usage_log
-            WHERE created_at >= :start
-            GROUP BY DATE(created_at)
-            ORDER BY day
-        """),
-        {"start": week_ago}
-    )
+
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
+
+    # ── Compute date range from period ──────────────────────────────
+    if period == "today":
+        range_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        range_end = now
+    elif period == "yesterday":
+        yesterday = now - timedelta(days=1)
+        range_start = yesterday.replace(hour=0, minute=0, second=0, microsecond=0)
+        range_end = yesterday.replace(hour=23, minute=59, second=59, microsecond=999999)
+    elif period == "this_week":
+        range_start = (now - timedelta(days=now.weekday())).replace(
+            hour=0, minute=0, second=0, microsecond=0
+        )
+        range_end = now
+    elif period == "last_week":
+        last_week_end = (now - timedelta(days=now.weekday())).replace(
+            hour=23, minute=59, second=59, microsecond=999999
+        )
+        range_start = (last_week_end - timedelta(days=6)).replace(
+            hour=0, minute=0, second=0, microsecond=0
+        )
+        range_end = last_week_end
+    elif period == "last_month":
+        # First day of THIS month minus 1 day = last day of last month
+        first_of_this_month = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        last_of_last_month = first_of_this_month - timedelta(seconds=1)
+        range_start = last_of_last_month.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        range_end = last_of_last_month
+    elif period == "this_year":
+        range_start = now.replace(month=1, day=1, hour=0, minute=0, second=0, microsecond=0)
+        range_end = now
+    elif period == "all":
+        range_start = datetime(2020, 1, 1)
+        range_end = now
+    else:  # this_month (default)
+        range_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        range_end = now
+
+    # ── Build WHERE clause based on token_type filter ──────────────
+    where_clauses = ["created_at >= :start", "created_at <= :end"]
+    params: dict = {"start": range_start, "end": range_end}
+
+    if token_type == "provider":
+        where_clauses.append("provider IS NOT NULL AND provider != ''")
+    elif token_type == "managed":
+        where_clauses.append("provider = :managed_provider")
+        params["managed_provider"] = "managed"
+
+    where_sql = " AND ".join(where_clauses)
+
+    # ── Pick granularity (day for short ranges, month for long) ────
+    days = (range_end - range_start).days
+    if days > 180:
+        granularity = "month"
+        date_trunc = "DATE_TRUNC('month', created_at)"
+    elif days > 31:
+        granularity = "week"
+        date_trunc = "DATE_TRUNC('week', created_at)"
+    else:
+        granularity = "day"
+        date_trunc = "DATE(created_at)"
+
+    query = text(f"""
+        SELECT {date_trunc} AS bucket, SUM(total_tokens) AS tokens
+        FROM token_usage_log
+        WHERE {where_sql}
+        GROUP BY bucket
+        ORDER BY bucket
+    """)
+
+    result = await db.execute(query, params)
     rows = result.all()
-    
+
     labels = []
     values = []
     for row in rows:
-        labels.append(row.day.strftime("%b %d") if row.day else "N/A")
-        values.append(row.tokens or 0)
-    
-    return {"labels": labels, "values": values}
+        bucket = row.bucket
+        if granularity == "month":
+            labels.append(bucket.strftime("%b %Y") if bucket else "N/A")
+        elif granularity == "week":
+            labels.append(bucket.strftime("%b %d") if bucket else "N/A")
+        else:
+            labels.append(bucket.strftime("%b %d") if bucket else "N/A")
+        values.append(int(row.tokens or 0))
+
+    return {
+        "labels": labels,
+        "values": values,
+        "period": period,
+        "token_type": token_type,
+        "granularity": granularity,
+        "total_tokens": sum(values),
+        "range_start": range_start.isoformat(),
+        "range_end": range_end.isoformat(),
+    }
 
 
 @router.get("/activity")

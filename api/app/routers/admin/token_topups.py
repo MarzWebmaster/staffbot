@@ -12,7 +12,7 @@ from app.middleware.auth import get_current_admin
 router = APIRouter()
 
 
-@router.get("/", response_model=list[dict])
+@router.get("", response_model=list[dict])
 async def list_topup_packages(
     admin: Client = Depends(get_current_admin),
     db: AsyncSession = Depends(get_db),
@@ -36,7 +36,7 @@ async def list_topup_packages(
     ]
 
 
-@router.post("/", status_code=status.HTTP_201_CREATED)
+@router.post("", status_code=status.HTTP_201_CREATED)
 async def create_topup_package(
     data: dict,
     admin: Client = Depends(get_current_admin),

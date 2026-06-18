@@ -26,7 +26,7 @@ router = APIRouter()
 
 # ── Affiliate Profiles ─────────────────────────────────────────────
 
-@router.get("/", response_model=list[AffiliateProfileResponse])
+@router.get("", response_model=list[AffiliateProfileResponse])
 async def list_affiliates(
     search: Optional[str] = None,
     status_filter: Optional[str] = None,
