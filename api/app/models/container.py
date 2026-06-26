@@ -12,7 +12,7 @@ class Container(Base):
     __tablename__ = "containers"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    client_id = Column(Integer, ForeignKey("clients.id"), nullable=False)
+    client_id = Column(Integer, ForeignKey("clients.id", ondelete="CASCADE"), nullable=False, index=True)
     name = Column(String(255), default="StaffBot 1")
     agent_name = Column(String(100), nullable=True)
     container_name = Column(String(255), nullable=True)

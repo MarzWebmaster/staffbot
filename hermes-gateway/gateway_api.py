@@ -193,11 +193,12 @@ async def health():
 @app.post("/api/chat/send")
 async def chat_send(req: ChatRequest):
     cid = req.client_id
-    await security.enforce_all(cid, "llm_call", content=req.content)
-    if not await rate_limiter.check(cid):
-        return {"success": False, "error": "rate_limited"}
+    # Check cheapest first: token quota → rate limit → content moderation
     if await rate_limiter.is_exhausted(cid):
         return {"success": False, "error": "token_quota_exceeded"}
+    if not await rate_limiter.check(cid):
+        return {"success": False, "error": "rate_limited"}
+    await security.enforce_all(cid, "llm_call", content=req.content)
     try:
         result = await request_queue.enqueue(cid, _call_llm(cid, req))
         await security.audit(cid, "chat", "success")

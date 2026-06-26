@@ -10,6 +10,10 @@ from datetime import datetime, timezone
 from app.database import Base
 
 
+def utcnow():
+    return datetime.now(timezone.utc).replace(tzinfo=None)
+
+
 class ClientSearchConfig(Base):
     __tablename__ = "client_search_configs"
 
@@ -19,7 +23,7 @@ class ClientSearchConfig(Base):
     api_key = Column(Text, nullable=True)  # ENCRYPTED — NULL for duckduckgo
     base_url = Column(String(500), nullable=True)  # optional custom endpoint
     is_active = Column(Boolean, nullable=False, default=True)
-    created_at = Column(DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
+    created_at = Column(DateTime, nullable=False, default=utcnow)
 
     # Relationships
     client = relationship("Client", back_populates="search_configs")

@@ -12,7 +12,7 @@ class NotificationChannel(Base):
     __tablename__ = "notification_channels"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    client_id = Column(Integer, ForeignKey("clients.id"), nullable=False)
+    client_id = Column(Integer, ForeignKey("clients.id", ondelete="CASCADE"), nullable=False, index=True)
     channel = Column(String(50), nullable=False)  # whatsapp / email / sms / in-app
     value = Column(String(255), nullable=False)
     is_active = Column(Boolean, default=True)
@@ -27,7 +27,7 @@ class NotificationLog(Base):
     __tablename__ = "notifications_log"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    client_id = Column(Integer, ForeignKey("clients.id"), nullable=True)
+    client_id = Column(Integer, ForeignKey("clients.id", ondelete="CASCADE"), nullable=True, index=True)
     type = Column(String(50), nullable=False)
     channel = Column(String(50), nullable=False)
     subject = Column(String(255), nullable=True)

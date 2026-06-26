@@ -13,7 +13,7 @@ class Affiliate(Base):
     __tablename__ = "affiliates"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    client_id = Column(Integer, ForeignKey("clients.id"), unique=True, nullable=False)
+    client_id = Column(Integer, ForeignKey("clients.id", ondelete="CASCADE"), unique=True, nullable=False)
     referral_code = Column(String(50), unique=True, nullable=False, index=True)
     commission_rate = Column(Float, default=10.0)            # Percentage (e.g. 10 = 10%)
     total_earnings = Column(Float, default=0.0)

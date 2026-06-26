@@ -25,6 +25,8 @@ class Package(Base):
     storage_limit_gb = Column(Integer, default=10)
     skill_category_ids = Column(ARRAY(Integer), default=[])
     tool_category_ids = Column(ARRAY(Integer), default=[])
+    # NOTE: allowed_skill_categories (JSON) duplicates skill_category_ids (ARRAY).
+    # Keep both for backward compat — prefer skill_category_ids for new code.
     allowed_skill_categories = Column(JSON, default=list)
     allowed_tool_categories = Column(JSON, default=list)
     enabled_skills = Column(JSON, default=list)
@@ -34,4 +36,4 @@ class Package(Base):
     is_public = Column(Boolean, default=True)
     is_active = Column(Boolean, default=True)
     badge = Column(String(50), nullable=True)
-    created_at = Column(DateTime, default=datetime.now)
+    created_at = Column(DateTime, default=utcnow)

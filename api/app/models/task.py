@@ -12,7 +12,7 @@ class Task(Base):
     __tablename__ = "tasks"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    client_id = Column(Integer, ForeignKey("clients.id"), nullable=False)
+    client_id = Column(Integer, ForeignKey("clients.id", ondelete="CASCADE"), nullable=False, index=True)
     container_id = Column(Integer, ForeignKey("containers.id"), nullable=True)
     title = Column(String(500), nullable=False)
     description = Column(Text, nullable=True)

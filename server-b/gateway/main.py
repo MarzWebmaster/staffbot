@@ -108,6 +108,7 @@ class ChatRequest(BaseModel):
     model: Optional[str] = None
     api_key: Optional[str] = None
     system_context: Optional[dict] = None
+    image_base64: Optional[str] = None  # Base64-encoded image for vision
 
 
 # ── Built-in Tools (Hermes capabilities via function calling) ──
@@ -2076,6 +2077,19 @@ async def _search_memories(client_id: int, query: str, limit: int = 3) -> list:
     conn = None
     try:
         conn = await asyncpg.connect(DATABASE_URL)
+        # Try pgvector semantic search first
+        try:
+            rows = await conn.fetch(
+                """SELECT content, created_at FROM client_memory 
+                   WHERE client_id=$1 AND embedding IS NOT NULL
+                   ORDER BY embedding <=> $2::vector LIMIT $3""",
+                client_id, query, limit,
+            )
+            if rows:
+                return [dict(r) for r in rows]
+        except Exception:
+            pass
+        # Fallback: ILIKE substring match
         rows = await conn.fetch(
             """SELECT content, created_at FROM client_memory 
                WHERE client_id=$1 AND content ILIKE $2

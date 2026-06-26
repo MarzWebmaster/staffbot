@@ -12,7 +12,7 @@ class Subscription(Base):
     __tablename__ = "subscriptions"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    client_id = Column(Integer, ForeignKey("clients.id"), unique=True, nullable=False)
+    client_id = Column(Integer, ForeignKey("clients.id", ondelete="CASCADE"), unique=True, nullable=False)
     stripe_subscription_id = Column(String(255), nullable=True)
     stripe_session_id = Column(String(255), nullable=True)
     package = Column(String(50), default="basic")

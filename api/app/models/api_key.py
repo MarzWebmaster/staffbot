@@ -12,7 +12,7 @@ class ApiKey(Base):
     __tablename__ = "api_keys"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    client_id = Column(Integer, ForeignKey("clients.id"), nullable=False)
+    client_id = Column(Integer, ForeignKey("clients.id", ondelete="CASCADE"), nullable=False, index=True)
     provider = Column(String(50), default="openrouter")
     key_encrypted = Column(Text, nullable=True)
     key_prefix = Column(String(20), nullable=True)
