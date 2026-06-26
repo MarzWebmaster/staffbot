@@ -56,13 +56,35 @@ async def get_dashboard_stats(
     # Simplified: estimate from active subs
     total_revenue = 0.0
 
+    # ── Monthly revenue breakdown (from payments or subscription packages) ──
+    monthly_revenue = []
+    try:
+        # Try to get real revenue from token_topups (payments table)
+        from app.models.token_topup import TokenTopup
+        months_result = await db.execute(
+            select(
+                func.to_char(TokenTopup.created_at, 'YYYY-MM').label('month'),
+                func.sum(TokenTopup.amount).label('total')
+            )
+            .where(TokenTopup.status == 'completed')
+            .group_by(func.to_char(TokenTopup.created_at, 'YYYY-MM'))
+            .order_by(func.to_char(TokenTopup.created_at, 'YYYY-MM'))
+            .limit(12)
+        )
+        for row in months_result:
+            monthly_revenue.append({"month": row.month, "amount": float(row.total or 0)})
+    except Exception:
+        pass
+    if not monthly_revenue:
+        monthly_revenue = [{"month": datetime.now(timezone.utc).strftime("%Y-%m"), "amount": 0}]
+
     return DashboardStats(
         total_users=total_users,
         active_users=active_users,
         total_revenue=total_revenue,
         active_containers=active_containers,
         pending_deployments=pending_deployments,
-        monthly_revenue=[{"month": "May 2026", "amount": 0}],  # Placeholder
+        monthly_revenue=monthly_revenue,
     )
 
 

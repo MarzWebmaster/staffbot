@@ -498,10 +498,12 @@ async def _handle_telegram_connect(client_id: int, chat_id, bot_token: str):
 # =====================
 
 @app.post("/api/incoming/whatsapp/{client_id}")
-async def incoming_whatsapp(client_id: int, data: dict):
+async def incoming_whatsapp(client_id: int, data: dict, x_gateway_key: str = Header(None)):
     """Receive incoming WhatsApp message from Baileys Manager.
     Routes to the correct client's container for processing.
     """
+    if x_gateway_key != AUTH_KEY:
+        raise HTTPException(status_code=401, detail="Invalid gateway key")
     try:
         container = _find_container_by_client(client_id)
         if not container:
@@ -523,12 +525,14 @@ async def incoming_whatsapp(client_id: int, data: dict):
 
 
 @app.post("/api/incoming/telegram/{client_id}")
-async def incoming_telegram(client_id: int, data: dict):
+async def incoming_telegram(client_id: int, data: dict, x_gateway_key: str = Header(None)):
     """Receive incoming Telegram update from Telegram Manager.
     
     Checks for special commands (connect) before routing to container.
     Otherwise forwards to the client's container for AI processing.
     """
+    if x_gateway_key != AUTH_KEY:
+        raise HTTPException(status_code=401, detail="Invalid gateway key")
     text = data.get("text", "").strip()
     chat_id = data.get("chat_id")
 
@@ -588,7 +592,21 @@ def _get_reranker():
 async def _vector_search(conn, client_id: int, query: str, limit: int) -> list:
     """Strategy 1: Semantic vector search via pgvector."""
     try:
-        # Generate a simple embedding — use 384-dim if available
+        # Try actual pgvector similarity search first
+        rows = await conn.fetch(
+            "SELECT id, content, metadata, created_at, "
+            "embedding <=> $2::vector AS distance "
+            "FROM client_memory "
+            "WHERE client_id=$1 AND embedding IS NOT NULL "
+            "ORDER BY distance LIMIT $3",
+            client_id, query, limit
+        )
+        if rows:
+            return [dict(r) for r in rows]
+    except Exception:
+        pass
+    # Fallback: ILIKE substring match
+    try:
         rows = await conn.fetch(
             "SELECT id, content, metadata, created_at FROM client_memory "
             "WHERE client_id=$1 AND content ILIKE $2 "
@@ -1531,9 +1549,11 @@ async def openai_chat_completions(req: OpenAICompatRequest, auth=Depends(verify_
     api_key = req.api_key
     base_url = req.base_url
     if not api_key or not base_url:
-        # Fallback: try provider resolution
-        resolved = await _resolve_provider("deepseek-pchp17", client_id)
+        # Fallback: resolve provider based on requested model
+        provider_name = _guess_provider_from_model(req.model or "")
+        resolved = await _resolve_provider(provider_name, client_id)
         if not resolved:
+            # Try default provider as last resort
             resolved = await _resolve_provider("deepseek-pchp17", client_id)
         if resolved:
             api_key = api_key or resolved.get("api_key", "")
@@ -1911,6 +1931,24 @@ async def chat_history(client_id: int, container_id: Optional[int] = None, limit
 
 
 # ── LLM Helper Functions ──
+
+def _guess_provider_from_model(model: str) -> str:
+    """Guess provider name from model string."""
+    model_lower = model.lower()
+    if "deepseek" in model_lower:
+        return "deepseek-pchp17"
+    if "gemini" in model_lower or "gemma" in model_lower:
+        return "google"
+    if "gpt" in model_lower or "openai" in model_lower:
+        return "openai"
+    if "claude" in model_lower or "anthropic" in model_lower:
+        return "anthropic"
+    if "qwen" in model_lower:
+        return "qwen"
+    if "mistral" in model_lower:
+        return "mistral"
+    return "deepseek-pchp17"  # default fallback
+
 
 async def _resolve_provider(provider_name: str, client_id: int) -> Optional[dict]:
     """Resolve provider config from Server A API (returns decrypted key)."""

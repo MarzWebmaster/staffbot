@@ -11,6 +11,7 @@ from app.database import get_db
 from app.middleware.auth import get_current_admin
 from app.models.client import Client
 from app.models.subscription import Subscription
+from app.models.package import Package
 
 router = APIRouter()
 
@@ -27,9 +28,10 @@ async def billing_overview(
     )
     active_count = result.scalar() or 0
 
-    # Sum revenue from active subscriptions (sum of price)
+    # Sum revenue from active subscriptions (join with package price)
     result = await db.execute(
-        select(func.coalesce(func.sum(Subscription.price), 0))
+        select(func.coalesce(func.sum(Package.price_monthly), 0))
+        .join(Subscription, Subscription.package == Package.name)
         .where(Subscription.status == "active")
     )
     mrr = float(result.scalar() or 0)

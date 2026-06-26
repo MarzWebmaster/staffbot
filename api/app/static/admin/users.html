@@ -293,6 +293,8 @@
         loadContainerStats();
     }
 
+    function $(id) { return document.getElementById(id); }
+
     async function loadContainerStats() {
         try {
             const stats = await api('/admin/users/container-stats');

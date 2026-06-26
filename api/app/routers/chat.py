@@ -200,7 +200,7 @@ async def chat_send(
         )
         byok_key = byok_result.scalar_one_or_none()
         if byok_key and byok_key.key_encrypted:
-            is_byok = False
+            is_byok = True
         else:
             is_byok = False
 
