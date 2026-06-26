@@ -43,9 +43,11 @@ async def get_dashboard_stats(
     active_containers = container_result.scalar() or 0
 
     # Active clients (users with activity in last 30 days)
-    from app.models.client import Client
+    from datetime import timedelta
     active_clients_result = await db.execute(
-        select(func.count(Client.id)).where(Client.status == "active")
+        select(func.count(func.distinct(TokenUsageLog.client_id))).where(
+            TokenUsageLog.created_at >= datetime.utcnow() - timedelta(days=30)
+        )
     )
     active_clients = active_clients_result.scalar() or 0
 

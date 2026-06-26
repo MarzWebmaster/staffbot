@@ -39,14 +39,14 @@
             <div id="affiliate-list"></div>
             <div class="card admin-card admin-card-indigo" style="border-radius:12px">
                 <div class="card-header">
-                    <h3>📋 Senarai Affiliates</h3>
+                    <h3>📋 List Affiliates</h3>
                     <div style="display:flex;gap:8px">
                         <select id="statusFilter" class="form-control" style="width:auto" onchange="loadAffiliates()">
-                            <option value="">Semua Status</option>
+                            <option value="">All Status</option>
                             <option value="active">Active</option>
                             <option value="suspended">Suspended</option>
                         </select>
-                        <input type="text" id="searchInput" class="form-control" placeholder="Cari..." style="width:200px" onkeyup="loadAffiliates()">
+                        <input type="text" id="searchInput" class="form-control" placeholder="Search..." style="width:200px" onkeyup="loadAffiliates()">
                     </div>
                 </div>
                 <div style="overflow-x:auto">
@@ -96,7 +96,7 @@
                     <div class="form-group"><label>Status</label><select id="editStatus" class="form-control"><option value="active">Active</option><option value="suspended">Suspended</option></select></div>
                     <div class="form-group"><label>Notes</label><textarea id="editNotes" class="form-control" rows="2"></textarea></div>
                 </div>
-                <div class="modal-footer"><button type="button" class="btn btn-ghost" onclick="closeModal('editAffiliateModal')">Batal</button><button type="submit" class="btn btn-primary">Simpan</button></div>
+                <div class="modal-footer"><button type="button" class="btn btn-ghost" onclick="closeModal('editAffiliateModal')">Cancel</button><button type="submit" class="btn btn-primary">Save</button></div>
             </form>
         </div>
     </div>
@@ -112,7 +112,7 @@
                     <div class="form-group"><label>Action</label><select id="payoutAction" class="form-control"><option value="completed">✅ Approve & Pay</option><option value="rejected">❌ Reject</option></select></div>
                     <div class="form-group"><label>Admin Notes</label><textarea id="payoutNotes" class="form-control" rows="2"></textarea></div>
                 </div>
-                <div class="modal-footer"><button type="button" class="btn btn-ghost" onclick="closeModal('processPayoutModal')">Batal</button><button type="submit" class="btn btn-primary">Proses</button></div>
+                <div class="modal-footer"><button type="button" class="btn btn-ghost" onclick="closeModal('processPayoutModal')">Cancel</button><button type="submit" class="btn btn-primary">Process</button></div>
             </form>
         </div>
     </div>
@@ -151,7 +151,7 @@
             const affs = await api(url);
             const tbody = document.getElementById('affiliatesBody');
             if (!affs.length) {
-                tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--text-light)">Tiada affiliate.</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--text-light)">None affiliate.</td></tr>';
                 return;
             }
             tbody.innerHTML = affs.map(a => `
@@ -174,7 +174,7 @@
             const payouts = await api('/admin/affiliates/payouts/all');
             const tbody = document.getElementById('payoutsBody');
             if (!payouts.length) {
-                tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--text-light)">Tiada payout request.</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--text-light)">None payout request.</td></tr>';
                 return;
             }
             tbody.innerHTML = payouts.map(p => `
@@ -184,7 +184,7 @@
                     <td>${p.method}</td>
                     <td>${statusBadge(p.status)}</td>
                     <td>${formatDate(p.created_at)}</td>
-                    <td>${p.status === 'pending' ? `<button class="btn btn-sm btn-primary" onclick="openProcessPayout(${p.id}, ${p.amount})">Proses</button>` : '-'}</td>
+                    <td>${p.status === 'pending' ? `<button class="btn btn-sm btn-primary" onclick="openProcessPayout(${p.id}, ${p.amount})">Process</button>` : '-'}</td>
                 </tr>
             `).join('');
         } catch {}
@@ -195,7 +195,7 @@
             const lb = await api('/admin/affiliates/leaderboard?limit=20');
             const tbody = document.getElementById('leaderboardBody');
             if (!lb.entries.length) {
-                tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--text-light)">Tiada data leaderboard.</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--text-light)">None data leaderboard.</td></tr>';
                 return;
             }
             tbody.innerHTML = lb.entries.map(e => `

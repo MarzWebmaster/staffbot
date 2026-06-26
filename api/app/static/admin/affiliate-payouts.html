@@ -49,7 +49,7 @@
                             <div class="form-group"><label>Action</label><select id="payoutAction" class="form-control"><option value="completed">✅ Approve & Pay</option><option value="rejected">❌ Reject</option></select></div>
                             <div class="form-group"><label>Admin Notes</label><textarea id="payoutNotes" class="form-control" rows="2"></textarea></div>
                         </div>
-                        <div class="modal-footer"><button type="button" class="btn btn-ghost" onclick="closeModal('processPayoutModal')">Cancel</button><button type="submit" class="btn btn-primary">Proses</button></div>
+                        <div class="modal-footer"><button type="button" class="btn btn-ghost" onclick="closeModal('processPayoutModal')">Cancel</button><button type="submit" class="btn btn-primary">Process</button></div>
                     </form>
                 </div>
             </div>
@@ -86,7 +86,7 @@
                     <td>${p.method}</td>
                     <td>${statusBadge(p.status)}</td>
                     <td>${formatDate(p.created_at)}</td>
-                    <td>${p.status === 'pending' ? `<button class="btn btn-sm btn-primary" onclick="openProcessPayout(${p.id}, ${p.amount})">Proses</button>` : '-'}</td>
+                    <td>${p.status === 'pending' ? `<button class="btn btn-sm btn-primary" onclick="openProcessPayout(${p.id}, ${p.amount})">Process</button>` : '-'}</td>
                 </tr>
             `).join('');
         } catch {}

@@ -55,7 +55,7 @@ async function telegramApi(token, method, params = {}) {
 async function notifyGateway(clientId, msgData) {
     try {
         await axios.post(`${GATEWAY_URL}/api/incoming/telegram/${clientId}`, msgData, {
-            headers: { 'X-API-Key': GATEWAY_AUTH_KEY },
+            headers: { 'X-API-Key': GATEWAY_AUTH_KEY, 'x-gateway-key': GATEWAY_AUTH_KEY },
             timeout: 5000,
         });
     } catch (err) {
