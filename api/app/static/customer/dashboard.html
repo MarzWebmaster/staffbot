@@ -95,15 +95,16 @@
                         <div><strong>${escapeHtml(c.name)}</strong><br><span style="font-size:12px;color:var(--text-light)">${c.image}</span></div>
                         <div>${statusBadge(c.status)}</div>
                     </div>
-                `).join('') : '<p style="color:var(--text-light)">Belum ada bot. Klik "Manage Staff" untuk tambah.</p>';
+                `).join('') : '<p style="color:var(--text-light)">No bots yet. Click "Manage Staff" to add one.</p>';
+            
+            // Use subscription from parallel fetch (no duplicate call)
+            if (sub) {
+                document.getElementById('stat-sub').textContent = sub.status;
+                document.getElementById('stat-tokens').textContent = `${sub.managed_token_used.toFixed(0)} / ${sub.managed_token_quota.toFixed(0)}`;
+            } else {
+                document.getElementById('stat-sub').textContent = '-';
+            }
         } catch { document.getElementById('bots-list').innerHTML = '<p style="color:var(--text-light)">Failed to load data</p>'; }
-
-        // Load subscription
-        try {
-            const sub = await api(`/subscriptions/${user.id}`);
-            document.getElementById('stat-sub').textContent = sub.status;
-            document.getElementById('stat-tokens').textContent = `${sub.managed_token_used.toFixed(0)} / ${sub.managed_token_quota.toFixed(0)}`;
-        } catch { document.getElementById('stat-sub').textContent = '-'; }
     }
     init();
     </script>

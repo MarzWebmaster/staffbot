@@ -47,6 +47,7 @@
             const data = await api('/admin/dashboard');
             document.getElementById('billing-revenue').textContent = formatCurrency(data.total_revenue || 0);
             document.getElementById('billing-active').textContent = data.active_users || 0;
+            document.getElementById('billing-pending').textContent = data.pending_payments || 0;
             if (data.monthly_revenue && data.monthly_revenue.length > 0) {
                 document.getElementById('billing-monthly').textContent = formatCurrency(data.monthly_revenue[data.monthly_revenue.length-1].amount);
             }

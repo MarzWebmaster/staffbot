@@ -15,7 +15,7 @@ class AuditTrail(Base):
     #      'provider_call', 'token_topup', 'api_key_rotate', 'admin_action'
     resource = Column(String(100), nullable=True)
     # e.g. 'chat', 'subscription', 'provider:deepseek-pchp17', 'settings:general'
-    detail = Column(JSONB, nullable=True)
+    detail = Column(JSONB, nullable=False, server_default='{}')
     # Flexible: {"model": "deepseek-chat", "input_tokens": 150, "output_tokens": 30, ...}
     ip_address = Column(String(45), nullable=True)
     user_agent = Column(Text, nullable=True)

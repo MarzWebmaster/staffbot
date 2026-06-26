@@ -109,7 +109,7 @@
                     <div class="card" style="text-align:center;padding:32px">
                         <div style="font-size:48px;margin-bottom:16px">🤖</div>
                         <h3 style="margin-bottom:8px">No AI Staff Yet</h3>
-                        <p style="color:var(--text-light);margin-bottom:24px">Klik "Tambah Staff" untuk cipta staff AI pertama anda.</p>
+                        <p style="color:var(--text-light);margin-bottom:24px">Click "Add Staff" to create your first AI staff member.</p>
                         <button class="btn btn-primary" onclick="showAddBotModal()">+ Add Staff</button>
                     </div>
                 `;
@@ -137,7 +137,7 @@
                     </div>
                 </div>
             `).join('')}</div>`;
-        } catch { /* handled by api helper */ }
+        } catch { document.getElementById('bots-container').innerHTML = '<p style="color:var(--text-light)">Failed to load staff. Please refresh.</p>'; }
     }
 
     function showAddBotModal() { openModal('addBotModal'); document.getElementById('botName').value = ''; document.getElementById('agentName').value = ''; }

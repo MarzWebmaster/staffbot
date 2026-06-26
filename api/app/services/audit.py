@@ -55,7 +55,7 @@ async def create_audit_table():
                 client_id INTEGER NOT NULL REFERENCES clients(id),
                 action VARCHAR(50) NOT NULL,
                 resource VARCHAR(100),
-                detail JSONB DEFAULT '{}',
+                detail JSONB NOT NULL DEFAULT '{}',
                 ip_address VARCHAR(45),
                 user_agent TEXT,
                 status VARCHAR(20) DEFAULT 'success',

@@ -28,7 +28,7 @@ class NotificationLog(Base):
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     client_id = Column(Integer, ForeignKey("clients.id", ondelete="CASCADE"), nullable=True, index=True)
-    type = Column(String(50), nullable=False)
+    type = Column("notification_type", String(50), nullable=False)
     channel = Column(String(50), nullable=False)
     subject = Column(String(255), nullable=True)
     body = Column(Text)

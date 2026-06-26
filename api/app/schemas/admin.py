@@ -12,7 +12,9 @@ class DashboardStats(BaseModel):
     active_users: int
     total_revenue: float
     active_containers: int
+    active_clients: int = 0
     pending_deployments: int
+    pending_payments: int = 0
     monthly_revenue: List[dict]
 
 

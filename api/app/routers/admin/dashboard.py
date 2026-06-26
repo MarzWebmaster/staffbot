@@ -42,6 +42,13 @@ async def get_dashboard_stats(
     )
     active_containers = container_result.scalar() or 0
 
+    # Active clients (users with activity in last 30 days)
+    from app.models.client import Client
+    active_clients_result = await db.execute(
+        select(func.count(Client.id)).where(Client.status == "active")
+    )
+    active_clients = active_clients_result.scalar() or 0
+
     # Pending deployments
     pending_result = await db.execute(
         select(func.count(Container.id)).where(Container.status == "pending")
@@ -55,6 +62,16 @@ async def get_dashboard_stats(
     )
     # Simplified: estimate from active subs
     total_revenue = 0.0
+
+    # Pending payments
+    try:
+        from app.models.token_topup import TokenTopup
+        pending_result = await db.execute(
+            select(func.count(TokenTopup.id)).where(TokenTopup.status == "pending")
+        )
+        pending_payments = pending_result.scalar() or 0
+    except Exception:
+        pending_payments = 0
 
     # ── Monthly revenue breakdown (from payments or subscription packages) ──
     monthly_revenue = []
@@ -83,7 +100,9 @@ async def get_dashboard_stats(
         active_users=active_users,
         total_revenue=total_revenue,
         active_containers=active_containers,
+        active_clients=active_clients,
         pending_deployments=pending_deployments,
+        pending_payments=pending_payments,
         monthly_revenue=monthly_revenue,
     )
 

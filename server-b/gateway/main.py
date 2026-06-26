@@ -1872,7 +1872,9 @@ async def chat_send(req: ChatRequest, auth=Depends(verify_auth)):
         except Exception:
             pass  # Silent — memory classification is best-effort
     
-    asyncio.ensure_future(_smart_memory_routing())
+    # Fire-and-forget memory routing with proper task reference
+    _memory_task = asyncio.create_task(_smart_memory_routing())
+    _memory_task.add_done_callback(lambda t: t.exception() if not t.cancelled() else None)
     
     # ── 6. Record token usage with dual cost ──
     await _record_token_usage(
