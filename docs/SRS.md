@@ -1,124 +1,156 @@
-# Software Requirements Specification — StaffBot.my
+# SRS — StaffBot.my (keadaan sebenar)
 
-## 1. Introduction
+> Versi 2.0 (19 Okt 2026). Setiap keperluan diberi status berdasarkan kod sebenar, dengan rujukan `fail:baris`.
+> ✅ berfungsi · ⚠️ separa / ada bug · ❌ tiada · **[SAHKAN-SERVER]** perlu disemak di server.
 
-### 1.1 Purpose
-This document defines the software requirements for StaffBot.my, an AI Employee Platform for Malaysian businesses.
+## 1. Pengenalan
 
-### 1.2 Scope
-The system comprises API backend (FastAPI), Database (PostgreSQL 16), AI Gateway (Central Brain v2), WhatsApp handler (Baileys), Telegram handler, Client agent containers, Landing page, and Admin panel.
+### 1.1 Skop sistem
 
-### 1.3 Definitions
-- AI Agent: Dedicated container running per client with Hermes Agent runtime
-- Central Brain: Hybrid memory search system using pgvector with 4 strategies
-- Baileys: WhatsApp Web library for message handling (multi-session)
-- Client: Paying customer with a deployed container
+| Komponen | Kod | Container |
+| :--- | :--- | :--- |
+| API backend (FastAPI, 2 worker) | `api/app/` | `staffbot-api` :8000 |
+| Pangkalan data utama (Postgres 16 + pgvector) | — | `staffbot-db` :5433 |
+| Gateway AI (FastAPI tersuai, ReAct + tool) | `server-b/gateway/main.py` | `staffbot-gateway` :8080 |
+| Hermes gateway (NousResearch hermes-agent + API tersuai) | `hermes-gateway/` | Mungkin image yang sama nama **[SAHKAN-SERVER]** |
+| DB memori (pgvector) | `server-b/init-memory.sql` | `staffbot-memory-db` :5434 |
+| WhatsApp (Node + Baileys) | `server-b/baileys-manager/` | `staffbot-baileys` :8653 |
+| Telegram (Node) | `server-b/telegram-manager/` | `staffbot-telegram` :8654 |
+| Embeddings | ❌ tiada dalam repo | `staffbot-embeddings` **[SAHKAN-SERVER]** |
+| Container per klien | `server-b/core-image/` atau `sandbox/` | `staffbot-{client_id}` :9xxx |
+| Web UI (HTML + Tailwind CDN + vanilla JS) | `api/app/static/` | dihidang oleh `staffbot-api` |
 
-## 2. Functional Requirements
+### 1.2 Istilah
 
-### FR1: Client Management
-- FR1.1 Register new client with name, email, phone, company
-- FR1.2 Authenticate via JWT tokens
-- FR1.3 Update client profile
-- FR1.4 Admin list/search clients with filters
-- FR1.5 Admin force deploy client container
+| Istilah | Maksud |
+| :--- | :--- |
+| Client | Syarikat pelanggan, iaitu satu akaun dan satu tenant |
+| AI Staff / bot | Rekod dalam jadual `containers` |
+| Managed token | Kuota token yang dibayar melalui pakej, menggunakan kunci LLM milik platform |
+| BYOK | Bring Your Own Key |
+| Central Brain v2 | Carian memori hibrid dalam gateway |
 
-### FR2: Package Management
-- FR2.1 Create/edit packages with pricing
-- FR2.2 Assign skill and tool categories per package
-- FR2.3 Set token quotas per package
-- FR2.4 Package tiers: Basic (RM49), Business (RM99), Enterprise (RM499)
+## 2. Keperluan fungsian
 
-### FR3: Container Deployment
-- FR3.1 Generate unique subdomain from company name
-- FR3.2 Create Cloudflare DNS record
-- FR3.3 Deploy Docker container on Server B
-- FR3.4 Set resource limits (CPU, RAM, storage) per package
-- FR3.5 Update client status to active
-- FR3.6 Send deployment notifications (WhatsApp, email, in-app)
+### FR-AUTH: Pengesahan
 
-### FR4: WhatsApp Integration
-- FR4.1 Initiate Baileys session per client
-- FR4.2 Generate QR code for WhatsApp linking
-- FR4.3 Handle incoming text and media messages
-- FR4.4 Route messages to correct client container
-- FR4.5 Multi-session support for multiple clients
+| ID | Keperluan | Status | Bukti / nota |
+| :--- | :--- | :--- | :--- |
+| FR-AUTH-1 | Daftar akaun (status `pending`, rizab subdomain, cipta subscription) | ✅ | `routers/auth.py:28` |
+| FR-AUTH-2 | Login email + password, pulangkan JWT | ✅ | `auth.py:119`. Gunakan HS256, tamat dalam 24 jam, claim `sub`, `role`, `client_id` |
+| FR-AUTH-3 | Tukar password | ✅ | `auth.py:164` |
+| FR-AUTH-4 | Refresh token / logout di server | ❌ | Token hanya dipadam dari localStorage |
+| FR-AUTH-5 | Admin dikenal pasti | ⚠️ | Hanya melalui perbandingan email (`middleware/auth.py:53-66`), bukan dari claim `role` |
+| FR-AUTH-6 | Had cubaan login (brute force) | ❌ | `rate_limit.py` wujud tetapi tidak digunakan di mana-mana |
+| FR-AUTH-7 | Gantung akaun (`suspended`) | ✅ | Pengguna digantung mendapat respons 403 |
 
-### FR5: Telegram Integration
-- FR5.1 Register webhook for client bot token
-- FR5.2 Handle incoming Telegram messages
-- FR5.3 Route messages to correct client container
+### FR-BILL: Pakej, bayaran, kuota
 
-### FR6: Memory System (Central Brain v2)
-- FR6.1 4-strategy hybrid search (vector ILIKE, keyword tsvector, temporal, graph)
-- FR6.2 Save memory with metadata
-- FR6.3 RRF merge across all strategies
-- FR6.4 Optional cross-encoder rerank
-- FR6.5 Zero external LLM cost for memory operations
+| ID | Keperluan | Status | Nota |
+| :--- | :--- | :--- | :--- |
+| FR-BILL-1 | CRUD pakej (admin) | ⚠️ | Router memanggil lajur `memory_retention_days`/`memory_item_limit` yang tiada dalam model, jadi create mungkin gagal |
+| FR-BILL-2 | Checkout pakej Stripe (MYR, kad + FPX) | ✅ | `subscriptions.py:26`, `services/stripe_service.py` |
+| FR-BILL-3 | Webhook Stripe mengaktifkan langganan dan deploy | ✅ | `webhooks.py:30`. Hanya event `checkout.session.completed` |
+| FR-BILL-4 | Pembaharuan bulanan automatik | ❌ | Bayaran sekali. `managed_token_used` tidak pernah di-reset |
+| FR-BILL-5 | Top-up token | ✅ | `billing.py:46`; webhook menambah kuota |
+| FR-BILL-6 | Percubaan percuma | ❌ | `trial_days` hanya dipaparkan |
+| FR-BILL-7 | Kuota per penyedia (`package_providers.token_quota`) | ❌ | Disimpan tetapi tidak dikuatkuasakan |
+| FR-BILL-8 | Affiliate: klik, rujukan, bayaran | ⚠️ | Komisen tidak pernah dicipta secara automatik; `/affiliates/convert` terbuka tanpa auth |
 
-### FR7: OCR and Document Processing
-- FR7.1 Extract text from PDF files via pymupdf
-- FR7.2 OCR from images via tesseract
-- FR7.3 Support Bahasa Melayu OCR (tesseract-ocr-msa)
-- FR7.4 Extract text from Word documents via python-docx
-- FR7.5 Extract data from Excel files via openpyxl
+### FR-PROV: Provisioning
 
-### FR8: Notifications
-- FR8.1 Send WhatsApp notification on deployment complete
-- FR8.2 Send email notification on deployment complete
-- FR8.3 Notify admin on new registration
-- FR8.4 Notify admin on payment received
+| ID | Keperluan | Status | Nota |
+| :--- | :--- | :--- | :--- |
+| FR-PROV-1 | Jana subdomain | ✅ | `deployment_service.py:31-40` |
+| FR-PROV-2 | Rekod DNS Cloudflare | ⚠️ **Bug** | Nilai A-record diberi `staffbot.my`, bukan IP (`deployment_service.py:57`). Mungkin digantikan oleh rekod wildcard **[SAHKAN-SERVER]** |
+| FR-PROV-3 | Container per klien dengan had CPU/RAM | ✅ | `docker_service.py:125-259`. Ada hardening: cap_drop ALL, read-only, had PID |
+| FR-PROV-4 | Had storan | ❌ | Hanya dihantar sebagai env var |
+| FR-PROV-5 | Nginx map subdomain → port | ⚠️ | Menulis `/etc/nginx/ssl/subdomain_ports.map`; reload bergantung pada cron host yang tiada dalam repo **[SAHKAN-SERVER]** |
+| FR-PROV-6 | "Apply" had pakej pada container sedia ada | ❌ | `apply_container_limits` tidak mengubah apa-apa |
+| FR-PROV-7 | Buang DNS dan nginx map bila container dipadam | ❌ | |
 
-## 3. Non-Functional Requirements
+### FR-CHAT: Chat AI
 
-### NFR1: Performance
-- API response time under 200ms (p95)
-- Container deployment under 30 seconds
-- Memory search under 500ms
-- Concurrent support for 200+ clients
+| ID | Keperluan | Status | Nota |
+| :--- | :--- | :--- | :--- |
+| FR-CHAT-1 | Hantar mesej dan dapat jawapan | ✅ | `chat.py:176` → gateway `/v1/chat/completions` |
+| FR-CHAT-2 | Semak kuota sebelum panggil LLM | ✅ | `chat.py:208-242` |
+| FR-CHAT-3 | Guna BYOK yang disimpan | ❌ **Bug** | `is_byok` dikira tetapi diabaikan. Hanya `api_key` dalam body request yang digunakan |
+| FR-CHAT-4 | Pilih penyedia: diminta → pakej → fallback DeepSeek | ✅ | `chat.py:305-351`. UI sentiasa menghantar `provider: 'mimo'` |
+| FR-CHAT-5 | Moderasi sebelum LLM | ✅ | `content_moderation.py`. ⚠️ API key dihantar ke hos moderasi luar |
+| FR-CHAT-6 | Suntik memori ke dalam prompt | ✅ | Top 3 memori, setiap satu 500 aksara |
+| FR-CHAT-7 | Sejarah perbualan dihantar ke LLM | ❌ | Hanya system + mesej semasa |
+| FR-CHAT-8 | Streaming respons | ❌ | `stream: false`, timeout 120 s |
+| FR-CHAT-9 | Gelung tool ReAct (maks 3 pusingan) | ✅ | `server-b/gateway/main.py:1582-1644` |
+| FR-CHAT-10 | Tolak token selepas chat | ⚠️ | Hanya token pusingan terakhir yang dikira |
+| FR-CHAT-11 | Simpan mesej (`chat_messages`) | ✅ | |
+| FR-CHAT-12 | Audit setiap chat | ✅ | `audit_trail`, 8 laluan |
+| FR-CHAT-13 | Lampiran fail (PDF/DOCX/teks/imej, maks 10 MB) | ✅ | `chat.py:595` |
+| FR-CHAT-14 | Ekstrak kandungan dari URL | ⚠️ | Tiada perlindungan SSRF |
 
-### NFR2: Security
-- Passwords hashed with bcrypt
-- API keys encrypted at rest (AES-256)
-- JWT tokens with 24h expiry
-- CORS restricted to staffbot.my
-- All internal ports bound to localhost via Docker
+### FR-TOOL: Tool ejen (dalam gateway)
 
-### NFR3: Reliability
-- Database health checks every 5 seconds
-- Container auto-restart on failure (restart: unless-stopped)
-- Connection pooling for PostgreSQL
+| ID | Tool | Status | Had |
+| :--- | :--- | :--- | :--- |
+| FR-TOOL-1 | `search_memory`, `save_to_memory`, `get_current_time` | ✅ | — |
+| FR-TOOL-2 | `call_webhook` (konfigurasi per klien, auth disulitkan) | ✅ | 10/min; blok IP dalaman (⚠️ `100.64.0.0/10` tidak diblok) |
+| FR-TOOL-3 | `web_search` (DuckDuckGo/Brave/SerpAPI/Google CSE) | ✅ | 20/min |
+| FR-TOOL-4 | `send_email` (SMTP klien) | ✅ | 50/hari |
+| FR-TOOL-5 | `set_smtp_config` melalui chat | ✅ | ⚠️ Password SMTP melalui konteks LLM |
+| FR-TOOL-6 | `create_document` | ❌ | Dirancang |
+| FR-TOOL-7 | Setup webhook melalui chat | ❌ | Dirancang |
+| FR-TOOL-8 | Tool tugasan | ⚠️ | Hanya pada laluan Hermes; tiada dalam gateway utama |
 
-## 4. Database Tables
+### FR-MEM: Memori
 
-### Core Tables
-- clients (id, name, email, password_hash, company, phone, package, status, subdomain, container_port, container_id, telegram_token_encrypted, whatsapp_number, whatsapp_auth_path, created_at, updated_at)
-- subscriptions (id, client_id, stripe_session_id, package, status, managed_token_quota, start_date, end_date)
-- packages (id, name, display_name, description, price_monthly, bot_limit, sub_ejen_limit, managed_tokens, skill_category_ids, tool_category_ids, badge, trial_days, is_active)
-- skill_categories (id, name, display_name, icon, description, sort_order, is_active)
-- tool_categories (id, name, description)
+| ID | Keperluan | Status | Nota |
+| :--- | :--- | :--- | :--- |
+| FR-MEM-1 | Simpan memori | ✅ | Tanpa embedding |
+| FR-MEM-2 | Carian hibrid 4 strategi + RRF | ⚠️ | Strategi "vektor" sebenarnya ILIKE; strategi "graph" terdedah kepada **SQL injection** |
+| FR-MEM-3 | Embedding / carian semantik | ❌ | Tiada kod yang menjana embedding |
+| FR-MEM-4 | Upload dokumen → chunks → memori | ❌ **Rosak** | `memory_service.py` dan `memory_processor.py` tiada dalam repo **[SAHKAN-SERVER]** |
+| FR-MEM-5 | Klasifikasi auto (fakta/tugasan/keutamaan) | ✅ | `main.py:803` |
+| FR-MEM-6 | Had memori ikut pakej, retention | ⚠️ | Lajur tiada dalam model; tiada penjadual |
 
-### Support Tables
-- api_keys (id, client_id, provider, key_encrypted, key_prefix, is_active, is_managed)
-- containers (id, client_id, container_name, docker_id, status, port, subdomain)
-- token_usage_log (id, client_id, tokens, endpoint, created_at)
-- notification_channels (id, client_id, channel, config, is_active)
-- notifications_log (id, client_id, channel, subject, body, status, created_at)
-- client_memory (id, client_id, content, metadata, created_at, content_tsv)
+### FR-CH: Saluran
 
-## 5. API Endpoints Summary
+| ID | Keperluan | Status | Nota |
+| :--- | :--- | :--- | :--- |
+| FR-CH-1 | Sesi WhatsApp melalui QR | ✅ | `baileys-manager/index.js:234` |
+| FR-CH-2 | Mesej WhatsApp masuk → balasan AI | ❌ | Mesej dihantar ke container, tetapi container tiada route `/webhook/whatsapp` **[SAHKAN-SERVER]** |
+| FR-CH-3 | Pulihkan sesi WhatsApp selepas restart | ❌ | |
+| FR-CH-4 | Daftar webhook bot Telegram | ⚠️ | URL webhook tidak sepadan dengan route |
+| FR-CH-5 | Mesej Telegram masuk → balasan AI | ❌ | Sama seperti FR-CH-2 |
+| FR-CH-6 | Mesej suara, imej tanpa kapsyen, dokumen | ❌ | Diabaikan |
+| FR-CH-7 | Notifikasi keluar (WhatsApp, email, SMS, in-app) | ✅ | `notification_service.py` |
 
-### Public
-POST /api/v1/auth/register, POST /api/v1/auth/login, GET /api/v1/packages/public
+### FR-ADM: Admin
 
-### Admin
-GET /api/v1/clients, POST /api/v1/clients/{id}/deploy, PUT /api/v1/clients/{id}
+| ID | Keperluan | Status |
+| :--- | :--- | :--- |
+| FR-ADM-1 | Dashboard (statistik, kesihatan, aktiviti, penggunaan token) | ✅ |
+| FR-ADM-2 | CRUD pengguna (klien), deploy, padam dengan arkib `.json.gz` | ✅ |
+| FR-ADM-3 | CRUD penyedia LLM, uji sambungan, assign ke pakej | ✅ |
+| FR-ADM-4 | Subdomain, top-up, affiliate, tetapan | ✅ |
+| FR-ADM-5 | Polisi skill/tool global | ⚠️ Tiada override per klien |
+| FR-ADM-6 | Halaman `my-staff-ai`, butang `generate` dalam policy | ❌ Endpoint tidak wujud |
 
-### Client
-GET/PUT /api/v1/clients/{id}, POST /api/v1/clients/setup
-POST /api/v1/clients/{id}/platform/whatsapp
-POST /api/v1/clients/{id}/platform/telegram
+## 3. Keperluan bukan fungsian (keadaan sebenar)
 
-### Internal (Gateway)
-POST /api/memory/search, POST /api/memory/save
-POST /api/deploy, Container lifecycle endpoints
+| Kategori | Keadaan |
+| :--- | :--- |
+| Prestasi | Tiada pengukuran. Chat tanpa streaming, timeout 120 s |
+| Keselamatan transit | Cloudflare → nginx → port 127.0.0.1 |
+| Keselamatan at-rest | Fernet (AES-128-CBC + HMAC) untuk semua secret; kunci diterbitkan dengan SHA-256 dari `STAFFBOT_SECRET_KEY`; password menggunakan bcrypt |
+| Pengasingan tenant | Berdasarkan `client_id` dalam query. ⚠️ Ada laluan yang membenarkan penyamaran (lihat `SECURITY_FINDINGS.md`) |
+| Ketersediaan | `restart: unless-stopped`; satu server, tiada failover |
+| Migrasi DB | ❌ Tiada Alembic. `create_all()` + SQL manual |
+| Backup | Tiada dalam repo **[SAHKAN-SERVER]** |
+| Pemantauan | Hanya endpoint `/health` |
+| Ujian automatik | ❌ Tiada test suite; ada beberapa skrip ujian manual dalam `scripts/` |
+
+## 4. Kekangan
+
+- Satu server OVH dikongsi dengan pandaibot dan mail server.
+- Container API memasang `/var/run/docker.sock`, jadi ia ada akses root ke host.
+- Konfigurasi runtime penting disimpan dalam jadual `settings`: kunci Stripe dan `governance_policy`.

@@ -1,63 +1,189 @@
-# API Reference — StaffBot.my
+# Rujukan API — StaffBot.my
 
-Base URL: https://staffbot.my/api/v1
+> Dikemas kini 19 Okt 2026 berdasarkan `api/app/routers/`. Base URL: `https://staffbot.my`.
 
-## Authentication
-Most endpoints require JWT Bearer token: Authorization: Bearer <token>
-Get token via POST /api/v1/auth/login.
+**Legenda auth**
 
-## Auth Endpoints
-POST /auth/register - Create client account (201: {id, name, email, status})
-POST /auth/login - Get JWT token ({access_token, token_type})
-GET /auth/me - Current user profile (Auth required)
-POST /auth/change-password - Update password (Auth required)
+| Kod | Maksud |
+| :--- | :--- |
+| **P** | Awam, tiada auth |
+| **C** | JWT pelanggan (`Authorization: Bearer`) |
+| **A** | JWT admin (email = `STAFFBOT_ADMIN_EMAIL`) |
+| **C/I** | JWT pelanggan, atau `X-Internal-Key` + `X-Client-ID` |
+| **I** | `x-api-key` = `STAFFBOT_SERVER_B_API_KEY` |
+| **S** | Tandatangan Stripe |
 
-## Client Endpoints
-GET /clients - List all clients (Admin only)
-GET /clients/{id} - Get client details (Own profile or Admin)
-PUT /clients/{id} - Update client profile (Own profile)
-POST /clients/{id}/deploy - Force deploy container (Admin only)
-POST /clients/setup - Complete onboarding wizard (Auth required)
-GET /clients/{id}/api-keys - List API keys (Own keys)
-POST /clients/{id}/platform/whatsapp - Initiate WhatsApp (Auth required)
-POST /clients/{id}/platform/telegram - Register Telegram (Auth required)
+⚠️ menandakan isu keselamatan. Lihat `SECURITY_FINDINGS.md`.
 
-## Package Endpoints
-GET /packages/public - List public packages with pricing
+## Auth — `/api/v1/auth`
+| Method | Path | Auth | Fungsi |
+| :--- | :--- | :--- | :--- |
+| POST | /register | P | Daftar (status `pending`, rizab subdomain, cipta subscription) |
+| POST | /login | P | Body JSON `{email,password}` → `{access_token}` (JWT 24 jam) |
+| POST | /change-password | C | Tukar password |
+| GET | /me | C | Profil semasa |
+| GET | /office-token | C | Token untuk Agent Office |
 
-## Webhook Endpoints
-POST /webhooks/stripe - Stripe payment events
-POST /webhooks/deploy - Server B container status callback
+## Pelanggan — `/api/v1/clients`
+| Method | Path | Auth | Fungsi |
+| :--- | :--- | :--- | :--- |
+| GET | / | A | Senarai semua klien |
+| GET | /{id} | C (diri sendiri) / admin | Butiran klien |
+| PUT | /{id} | C | Kemas kini profil. ⚠️ Pelanggan boleh menukar `package`, `status` dan `email` sendiri |
+| POST | /setup | C | Onboarding: BYOK, token Telegram, nombor WhatsApp |
+| GET | /{id}/api-keys | C | Senarai API key |
+| POST | /{id}/platform/whatsapp | C | Mulakan sesi WhatsApp |
+| POST | /{id}/platform/telegram | C | Daftar bot Telegram |
+| POST | /{id}/deploy | A | Force deploy container |
+| GET/POST | /me/search-config/ | C | Konfigurasi carian web |
+| DELETE | /me/search-config/{id} | C | Padam konfigurasi carian web |
+| GET/POST | /me/email-config/ | C | Konfigurasi SMTP |
+| DELETE | /me/email-config/{id} | C | Padam konfigurasi SMTP |
 
-## Gateway Endpoints (Server B, internal)
-GET /health - Gateway health check
-POST /api/memory/search - Central Brain v2 hybrid search
-POST /api/memory/save - Save memory to Central Brain
-POST /api/deploy - Deploy client container
-POST /api/container/{name}/start|stop|restart - Container lifecycle
-DELETE /api/container/{name} - Remove container
-PUT /api/container/{name}/resources - Update resource limits
+## Bot ("AI Staff") — `/api/v1/containers`
+| Method | Path | Auth | Fungsi |
+| :--- | :--- | :--- | :--- |
+| GET/POST | / | C | Senarai / cipta bot (had `bot_limit` pakej) |
+| GET/PUT/DELETE | /{id} | C | Baca / kemas kini / padam. ⚠️ Padam akan membuang container yang dikongsi oleh semua bot klien |
 
-## Gateway Request/Response Examples
+## Chat — `/api/v1/chat`
+| Method | Path | Auth | Fungsi |
+| :--- | :--- | :--- | :--- |
+| POST | /send | C | Hantar mesej. Body: `{content, container_id, provider?, model?, api_key?, image_base64?}` |
+| GET | /history | C | Sejarah chat |
+| GET | /token-status | C | Status kuota |
+| POST | /upload | C/I | Ekstrak teks fail (≤10 MB) |
+| POST | /extract-link | C/I | Ambil kandungan URL. ⚠️ Tiada perlindungan SSRF |
 
-### Memory Search
-POST /api/memory/search
-Headers: X-API-Key: gw-staffbot-secret-2026, Content-Type: application/json
-Body: {"client_id": 1, "query": "customer inquiry", "limit": 5}
-Response: {"success": true, "results": [...], "sources": {"vector":N,"keyword":N,"temporal":N,"graph":N}, "reranked": false}
+## Tugasan — `/api/v1/tasks`
+| Method | Path | Auth | Fungsi |
+| :--- | :--- | :--- | :--- |
+| GET | /list | C/I | Senarai tugasan |
+| POST | /create | C/I | Cipta tugasan |
+| GET/PUT/DELETE | /{id} | C/I | Baca / kemas kini / padam tugasan |
+| GET | /stats/summary | C/I | Ringkasan statistik tugasan |
 
-### Memory Save
-POST /api/memory/save
-Headers: X-API-Key: gw-staffbot-secret-2026, Content-Type: application/json
-Body: {"client_id": 1, "content": "memory text", "metadata": {"type":"note"}}
-Response: {"success": true}
+## Memori — `/api/v1/memory`
+⚠️ Kebanyakan endpoint di sini mengimport modul yang tiada dalam repo (`memory_service`, `memory_processor`) **[SAHKAN-SERVER]**.
 
-### Deploy Container
-POST /api/deploy
-Headers: X-API-Key: gw-staffbot-secret-2026, Content-Type: application/json
-Body: {"client_id":1,"container_name":"staffbot-client-abc","subdomain":"abc123","env_vars":{...},"cpu_limit":1.0,"memory_limit_mb":512}
-Response: {"port":9000,"container_id":"abc123..."}
+| Method | Path | Auth | Fungsi |
+| :--- | :--- | :--- | :--- |
+| POST | /add | C | Tambah item memori |
+| POST | /upload | C | Upload dokumen, pecah kepada chunks |
+| POST | /extract-link | C | Ambil URL ke memori |
+| GET | /search | C | Carian |
+| GET | /recent | C | Item terkini |
+| GET | /stats | C | Statistik |
+| GET | /audit-log | C | Log audit memori |
+| GET/PUT/DELETE | /{id} | C | Baca / kemas kini / padam item |
+| DELETE | /type/{type} | C | Padam ikut jenis |
+| DELETE | /clear/all | C | Padam semua |
+| POST | /backfill-embeddings | C | Jana embedding untuk baris yang belum ada |
+| POST | /admin/retention-cleanup | A | Pembersihan ikut tempoh simpanan |
+| POST | /admin/delete-customer/{id} | A | Padam memori seorang pelanggan |
 
-## Error Responses
-All endpoints return: {"detail": "message"}
-200 Success, 201 Created, 400 Bad Request, 401 Unauthorized, 403 Forbidden, 404 Not Found, 409 Conflict, 500 Internal Error
+## Billing dan langganan
+| Method | Path | Auth | Fungsi |
+| :--- | :--- | :--- | :--- |
+| GET | /api/v1/billing/topup-packages | P | Pakej top-up |
+| POST | /api/v1/billing/topup-checkout?package_id= | C | Stripe checkout untuk top-up |
+| GET | /api/v1/billing/topup-history | C | Sejarah top-up |
+| GET | /api/v1/billing/usage | C | Kuota dan penggunaan |
+| POST | /api/v1/subscriptions/create-checkout?package= | C | Stripe checkout untuk pakej |
+| GET | /api/v1/subscriptions/{client_id} | C | Langganan |
+| PUT | /api/v1/subscriptions/{client_id}/tokens | ⚠️ **P (tiada auth)** | Tetapkan token yang telah digunakan |
+| GET | /api/v1/packages/public | P | Pakej untuk laman utama |
+
+## Penyedia LLM (pelanggan) — `/api/v1/providers`
+| Method | Path | Auth | Fungsi |
+| :--- | :--- | :--- | :--- |
+| GET | /available | C | Penyedia dalam pakej |
+| GET | /usage | C | Penggunaan per penyedia |
+| GET | /daily-usage | C | Penggunaan harian |
+| GET | /byok-status | C | Status BYOK |
+| POST | /toggle-byok | C | Simpan atau toggle kunci BYOK |
+
+## Notifikasi — `/api/v1/notifications`
+| Method | Path | Auth | Fungsi |
+| :--- | :--- | :--- | :--- |
+| GET/POST | /channels | C | Senarai / tambah saluran |
+| PUT/DELETE | /channels/{id} | C | Kemas kini / buang saluran |
+| GET | /log | C | Sejarah notifikasi |
+| POST | /test | C | Hantar notifikasi ujian |
+
+## Affiliate — `/api/v1/affiliates`
+| Method | Path | Auth | Fungsi |
+| :--- | :--- | :--- | :--- |
+| GET | /dashboard | C | Ringkasan |
+| GET | /profile | C | Profil |
+| GET | /referrals | C | Rujukan |
+| GET | /commissions | C | Komisen |
+| POST | /register | C | Daftar sebagai affiliate |
+| POST/GET | /payouts | C | Minta / senarai bayaran |
+| POST | /copywriting | C | Teks pemasaran (templat statik) |
+| GET | /leaderboard | P | Papan pendahulu |
+| POST | /track-click | P | Rekod klik |
+| POST | /convert | ⚠️ P | Kaitkan klien dengan affiliate |
+
+## Webhook masuk
+| Method | Path | Auth | Fungsi |
+| :--- | :--- | :--- | :--- |
+| POST | /api/v1/webhooks/stripe | S | `checkout.session.completed` (pakej atau top-up) |
+| POST | /api/v1/webhooks/server-b/status | `X-API-Key` | Status container. ⚠️ Lulus jika kunci kosong |
+| GET/POST | /api/v1/webhooks/config/ | C | Konfigurasi webhook keluar (untuk tool `call_webhook`) |
+| GET/PUT/DELETE | /api/v1/webhooks/config/{id} | C | Baca / kemas kini / padam satu konfigurasi |
+
+## Admin — `/api/v1/admin` (semua A, kecuali yang dinyatakan)
+| Kumpulan | Endpoint |
+| :--- | :--- |
+| Dashboard | `GET /dashboard`, `/dashboard/token-usage`, `/health`, `/usage/tokens`, `/activity`, `/billing/overview`, `/revenue`, `/usage/by-client` |
+| Pengguna (klien) | `GET/POST /users`, `GET/PUT/DELETE /users/{id}`, `POST /users/{id}/deploy`, `GET /users/{id}/token-usage`, `GET /users/container-stats`, `GET /users/containers/list` |
+| Pakej | `GET /packages` (⚠️ P), `GET /packages/all`, `GET /packages/categories`, `POST /packages`, `PUT/DELETE /packages/{id}`, `POST /packages/{id}/apply` (tiada kesan) |
+| Penyedia LLM | `GET/POST /providers/providers`, `GET/PUT/DELETE /providers/providers/{id}`, `POST /providers/providers/{id}/test`, `GET /providers/providers/active` (P), `GET/POST /providers/package-providers`, `PUT/DELETE /providers/package-providers/{id}` |
+| Subdomain | `GET/POST /subdomains`, `GET /subdomains/available`, `PUT/DELETE /subdomains/{id}` |
+| Tetapan | `GET/PUT /settings` (⚠️ GET memulangkan kunci Stripe dalam bentuk nyahsulit) |
+| Bayaran | `GET /payments/status`, `GET /payments/transactions` |
+| Top-up | `GET/POST /topup-packages`, `PUT/DELETE /topup-packages/{id}`, `GET /topup-packages/history` |
+| Polisi | `GET/PUT /policy/skills`, `GET/PUT /policy/tools`, `GET/PUT /policy/policy` |
+| Affiliate | `GET /affiliates`, `/affiliates/leaderboard`, `/affiliates/{id}`, `PUT /affiliates/{id}`, `/affiliates/{id}/referrals`, `/affiliates/{id}/commissions`, `/affiliates/payouts/all`, `PUT /affiliates/payouts/{id}`, `/affiliates/stats/summary` |
+
+## Dalaman (gateway → API) — `/api/v1/internal` (semua I)
+| Method | Path | Fungsi |
+| :--- | :--- | :--- |
+| POST | /provider/resolve | Konfigurasi penyedia **dengan kunci nyahsulit** |
+| GET | /provider/list | Senarai penyedia aktif |
+| POST | /client/{id}/telegram/setup | Arahan `/connect` dari Telegram |
+| POST | /client/{id}/tasks/create | Cipta tugasan dari pengelas |
+| POST | /webhook/resolve | Konfigurasi webhook dengan nilai auth nyahsulit |
+| POST | /search-config/resolve | Konfigurasi carian dengan kunci nyahsulit |
+| POST | /email-config/resolve | Konfigurasi SMTP dengan password nyahsulit |
+| POST | /email-config/upsert | Simpan konfigurasi SMTP |
+| POST | /audit/log | Tulis audit |
+
+## Gateway (`staffbot-gateway:8080`, dalaman sahaja)
+Auth: `x-api-key` atau `Authorization: Bearer` = `AUTH_KEY` gateway. **Jangan tulis nilai kunci dalam dokumen.**
+
+| Method | Path | Fungsi |
+| :--- | :--- | :--- |
+| GET | /health | Semak kesihatan |
+| POST | /v1/chat/completions | Proksi LLM serasi OpenAI + ReAct + tool (laluan utama) |
+| POST | /api/chat/send | Chat lama (digunakan oleh container klien) |
+| GET | /api/chat/history | Sejarah chat |
+| POST | /api/memory/search | Carian Central Brain v2. Body `{client_id, query, limit}` |
+| POST | /api/memory/save | Simpan memori. Body `{client_id, content, metadata}` |
+| POST | /api/memory/classify-and-save | Klasifikasi pertukaran dan simpan |
+| POST | /api/deploy | Deploy container |
+| POST | /api/container/{name}/action | start/stop/restart/delete. ⚠️ Nama tidak disahkan |
+| GET | /api/container/{name}/status | Status container |
+| GET | /api/containers | Senarai container |
+| POST | /api/container/{name}/update-resources | Kemas kini had CPU/RAM |
+| POST | /api/notify/whatsapp[/{cid}] | Hantar notifikasi WhatsApp |
+| POST | /api/notify/telegram/{cid} | Hantar notifikasi Telegram |
+| POST | /api/incoming/whatsapp/{cid} | Mesej masuk WhatsApp (`x-gateway-key`) |
+| POST | /api/incoming/telegram/{cid} | Mesej masuk Telegram (`x-gateway-key`) |
+
+## Halaman web
+- Pelanggan (`/customer/*.html`): login, dashboard, bots, chat, tasks, billing, usage, settings, affiliates, providers, office.
+- Admin (`/admin/*.html`): login, dashboard, users, user-detail, subdomains, packages, billing, usage, payments, providers, token-topups, policy, settings, affiliates (6 halaman), chat, my-staff-ai.
+
+JWT disimpan dalam `localStorage['staffbot_token']`.
