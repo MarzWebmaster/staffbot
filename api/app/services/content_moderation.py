@@ -7,6 +7,7 @@ Layer 3: Conversation-Level Context (tracks patterns across messages, escalation
 Supports: English, Malay, Manglish, Bahasa gaul.
 """
 import json
+import os
 import re
 import time
 import logging
@@ -25,7 +26,10 @@ from app.models.subscription import Subscription
 logger = logging.getLogger(__name__)
 
 # ── Mimo API for AI classification ───────────────────────────────
-MIMO_URL = "https://jemaahapi.tail5cfbb9.ts.net/v1/chat/completions"
+MIMO_URL = os.getenv("MODERATION_URL") or "https://jemaahapi.tail5cfbb9.ts.net/v1/chat/completions"
+# Platform-owned key for Layer 2. A customer's BYOK key is never used here:
+# it belongs to a different provider and must not leave for this host.
+MODERATION_API_KEY = os.getenv("MODERATION_API_KEY") or os.getenv("HERMES_API_KEY", "")
 
 MODERATION_SYSTEM_PROMPT = """You are a content moderation classifier. Classify the user message into ONE of these categories:
 
@@ -234,14 +238,11 @@ async def _ai_classify(
 ) -> Optional[dict]:
     """
     Call Mimo v2.5 Pro for lightweight content classification.
-    Uses user's own API key (BYOK) or falls back to system key.
+    Uses the platform moderation key only (api_key is ignored, kept for
+    call compatibility).
     Returns {"category": str, "confidence": float, "reason": str} or None on failure.
     """
-    # Use provided API key or fall back to env
-    key = api_key
-    if not key:
-        import os
-        key = os.getenv("HERMES_KEY")
+    key = MODERATION_API_KEY
     if not key:
         logger.debug("No API key for AI moderation, skipping Layer 2")
         return None

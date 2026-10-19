@@ -16,6 +16,7 @@ from app.models.client import Client
 from app.models.subscription import Subscription
 from app.schemas.subscription import SubscriptionResponse, TokenUsageUpdate
 from app.middleware.auth import get_current_client, get_current_admin
+from app.routers.internal import verify_internal
 from app.services.stripe_service import StripeService
 from app.config import get_settings
 
@@ -88,8 +89,9 @@ async def update_token_usage(
     client_id: int,
     data: TokenUsageUpdate,
     db: AsyncSession = Depends(get_db),
+    _auth: bool = Depends(verify_internal),
 ):
-    """Update token usage (called by Gateway container)."""
+    """Update token usage (called by Gateway container, internal key required)."""
     result = await db.execute(
         select(Subscription).where(Subscription.client_id == client_id)
     )

@@ -4,6 +4,8 @@ All deployment is local (same server). Two modes:
 1. Local Docker SDK — docker.from_env() directly (production path)
 2. Simulated — demo/test mode when Docker unavailable
 """
+import hashlib
+import hmac
 import os
 import socket
 import re
@@ -152,7 +154,16 @@ class DockerService:
             "SKILL_CATEGORIES": ",".join(str(s) for s in skill_categories),
             "TOOL_CATEGORIES": ",".join(str(t) for t in tool_categories),
             "GATEWAY_URL": f"http://staffbot-gateway:8080",
-            "GATEWAY_AUTH_KEY": settings.SERVER_B_API_KEY or "local-dev",
+            # Per-client token (same derivation as client_token() in the gateway),
+            # never the gateway master key.
+            "GATEWAY_AUTH_KEY": (
+                hmac.new(
+                    settings.SERVER_B_API_KEY.encode(),
+                    f"staffbot-client:{client_id}".encode(),
+                    hashlib.sha256,
+                ).hexdigest()
+                if settings.SERVER_B_API_KEY else "local-dev"
+            ),
         }
 
         # --- Local Docker SDK (PRIMARY — same server, direct Docker socket) ---

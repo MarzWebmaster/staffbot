@@ -4,16 +4,20 @@
 > Nilai rahsia sengaja **tidak** ditulis di sini.
 > Keutamaan: 🔴 Kritikal (betulkan segera) · 🟠 Tinggi · 🟡 Sederhana.
 
+## Status pembetulan
+
+S-01 hingga S-06 (✅) **sudah dibetulkan di branch `claude/staffbot-my-review-i3w7be`**, 19 Okt 2026, dan diuji (28 ujian lulus). **Belum di-deploy ke production.** Langkah deploy ada di §Deploy di bawah.
+
 ## 🔴 Kritikal
 
 | ID | Isu | Lokasi | Kesan | Cadangan |
 | :--- | :--- | :--- | :--- | :--- |
-| S-01 | Endpoint tetapkan penggunaan token **tanpa auth** | `routers/subscriptions.py:86` `PUT /subscriptions/{id}/tokens` | Sesiapa boleh reset kuota mana-mana klien, iaitu chat percuma tanpa had | Tambah auth dalaman (`verify_internal`), atau buang endpoint ini |
-| S-02 | Pelanggan boleh tukar `package`, `status` dan `email` sendiri | `routers/clients.py:91` + `schemas/client.py:38-45` | Naik taraf pakej tanpa bayar; aktifkan akaun sendiri; mungkin ambil alih email admin jika akaun admin belum wujud | Hadkan `ClientUpdate` kepada name/company/phone sahaja |
-| S-03 | Kunci dalaman (`X-Internal-Key`) ada **nilai default hardcoded**, dan nama env var tidak sepadan (`GATEWAY_API_KEY` dalam kod, `STAFFBOT_GATEWAY_API_KEY` dalam compose) | `middleware/auth.py:13`, `69-102` | Sesiapa yang tahu nilai default boleh menyamar sebagai mana-mana klien pada `/tasks/*`, `/chat/upload`, `/chat/extract-link` | Buang default; gagal tertutup jika tidak ditetapkan; betulkan nama env |
-| S-04 | **SQL injection** dalam carian memori "graph" (kata kunci dimasukkan dengan f-string) | `server-b/gateway/main.py:667-673` | Mesej chat boleh memintas penapis `client_id`, jadi **memori tenant lain** boleh bocor ke dalam prompt | Guna parameter bind (`$n`) |
-| S-05 | Kunci induk gateway (`AUTH_KEY`) disuntik ke **setiap container klien** | `docker_service.py:154`, `gateway/main.py:276` | Jika satu container dicerobohi, penyerang boleh baca memori semua klien dan start/stop/padam **mana-mana container** di host (nama tidak disahkan). Gateway ada `docker.sock`, jadi ini bermakna akses root host | Token berasingan per klien; whitelist nama container `staffbot-*` |
-| S-06 | API key pengguna (BYOK) atau kunci Hermes dihantar ke **hos moderasi luar** (Tailscale funnel) | `services/content_moderation.py:28`, `chat.py:272` | Kunci pelanggan bocor ke pihak ketiga atau hos peribadi | Guna kunci moderasi khusus milik platform |
+| S-01 ✅ | Endpoint tetapkan penggunaan token **tanpa auth** | `routers/subscriptions.py:86` `PUT /subscriptions/{id}/tokens` | Sesiapa boleh reset kuota mana-mana klien, iaitu chat percuma tanpa had | Tambah auth dalaman (`verify_internal`), atau buang endpoint ini |
+| S-02 ✅ | Pelanggan boleh tukar `package`, `status` dan `email` sendiri | `routers/clients.py:91` + `schemas/client.py:38-45` | Naik taraf pakej tanpa bayar; aktifkan akaun sendiri; mungkin ambil alih email admin jika akaun admin belum wujud | Hadkan `ClientUpdate` kepada name/company/phone sahaja |
+| S-03 ✅ | Kunci dalaman (`X-Internal-Key`) ada **nilai default hardcoded**, dan nama env var tidak sepadan (`GATEWAY_API_KEY` dalam kod, `STAFFBOT_GATEWAY_API_KEY` dalam compose) | `middleware/auth.py:13`, `69-102` | Sesiapa yang tahu nilai default boleh menyamar sebagai mana-mana klien pada `/tasks/*`, `/chat/upload`, `/chat/extract-link` | Buang default; gagal tertutup jika tidak ditetapkan; betulkan nama env |
+| S-04 ✅ | **SQL injection** dalam carian memori "graph" (kata kunci dimasukkan dengan f-string) | `server-b/gateway/main.py:667-673` | Mesej chat boleh memintas penapis `client_id`, jadi **memori tenant lain** boleh bocor ke dalam prompt | Guna parameter bind (`$n`) |
+| S-05 ✅ | Kunci induk gateway (`AUTH_KEY`) disuntik ke **setiap container klien** | `docker_service.py:154`, `gateway/main.py:276` | Jika satu container dicerobohi, penyerang boleh baca memori semua klien dan start/stop/padam **mana-mana container** di host (nama tidak disahkan). Gateway ada `docker.sock`, jadi ini bermakna akses root host | Token berasingan per klien; whitelist nama container `staffbot-*` |
+| S-06 ✅ | API key pengguna (BYOK) atau kunci Hermes dihantar ke **hos moderasi luar** (Tailscale funnel) | `services/content_moderation.py:28`, `chat.py:272` | Kunci pelanggan bocor ke pihak ketiga atau hos peribadi | Guna kunci moderasi khusus milik platform |
 
 ## 🟠 Tinggi
 
@@ -72,3 +76,16 @@
 4. Putar `AUTH_KEY` gateway dan semua kunci default; buang default dari kod (S-05, S-16).
 5. Tukar kunci moderasi (S-06).
 6. Tambah penapis SSRF pada `extract-link` (S-07, S-08).
+
+## Deploy pembetulan S-01 hingga S-06
+
+1. **Env var** (dalam `.env` di server):
+   - `STAFFBOT_GATEWAY_API_KEY` mesti ditetapkan, dan nilainya sama dengan `GATEWAY_API_KEY` dalam container Hermes gateway (jika tool Hermes digunakan). Nilai default lama dalam kod sudah dibuang, jadi jika ia tidak ditetapkan, tool Hermes (`/tasks/*`, `/chat/upload`) akan ditolak.
+   - `STAFFBOT_SERVER_B_API_KEY` mesti sama dengan `GATEWAY_AUTH_KEY` (AUTH_KEY gateway).
+   - Pilihan: `MODERATION_API_KEY`. Jika kosong, `HERMES_API_KEY` digunakan.
+2. **Rebuild** `staffbot-api` dan `staffbot-gateway`.
+3. **Cipta semula container klien** supaya kunci induk lama dalam env mereka diganti dengan token per klien. Container sedia ada masih berfungsi dengan kunci lama, tetapi risiko S-05 kekal sehingga ia dicipta semula.
+4. **Putar `GATEWAY_AUTH_KEY`**, kerana kunci induk lama sudah berada dalam setiap container klien.
+5. Perubahan tingkah laku untuk pengguna:
+   - pelanggan tidak lagi boleh menukar email sendiri di halaman Settings (medan kini read-only; tukar melalui admin);
+   - moderasi pengguna BYOK kini menggunakan kunci platform.

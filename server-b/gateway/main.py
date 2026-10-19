@@ -14,6 +14,8 @@ Handles:
 """
 import os
 import json
+import hmac
+import hashlib
 import socket
 import re
 import httpx
@@ -238,6 +240,34 @@ async def verify_auth(x_api_key: str = Header(None)):
     return True
 
 
+def client_token(client_id: int, key: str = AUTH_KEY) -> str:
+    """Per-client gateway token. Client containers get this instead of AUTH_KEY,
+    so a compromised container can only act as its own client."""
+    return hmac.new(key.encode(), f"staffbot-client:{client_id}".encode(), hashlib.sha256).hexdigest()
+
+
+def verify_master_or_client(x_api_key: Optional[str], client_id: int) -> None:
+    """Accept the master AUTH_KEY, or the client token for this client_id."""
+    if x_api_key:
+        if hmac.compare_digest(x_api_key, AUTH_KEY):
+            return
+        for key in {AUTH_KEY, SERVER_B_API_KEY}:
+            if key and hmac.compare_digest(x_api_key, client_token(client_id, key)):
+                return
+    raise HTTPException(status_code=401, detail="Invalid API key")
+
+
+def _get_client_container(name: str):
+    """Look up a container by name, refusing anything that is not a client container."""
+    try:
+        container = docker_client.containers.get(name)
+    except docker.errors.NotFound:
+        raise HTTPException(status_code=404, detail=f"Container {name} not found")
+    if (container.labels or {}).get("staffbot.type") != "client":
+        raise HTTPException(status_code=403, detail=f"Container {name} is not a client container")
+    return container
+
+
 @app.get("/health")
 async def health():
     return {"status": "ok", "service": "StaffBot.my Server B", "docker": _docker_ok()}
@@ -273,7 +303,7 @@ async def deploy_container(req: DeployRequest, auth=Depends(verify_auth)):
         "CLIENT_ID": str(req.client_id),
         "SUBDOMAIN": req.subdomain,
         "GATEWAY_URL": "http://staffbot-gateway:8080",
-        "GATEWAY_AUTH_KEY": AUTH_KEY,
+        "GATEWAY_AUTH_KEY": client_token(req.client_id),
         "SKILLS": ",".join(req.skills),
         # Resource limits as env vars for container awareness
         "CPU_LIMIT": str(req.cpu_limit),
@@ -328,10 +358,7 @@ async def deploy_container(req: DeployRequest, auth=Depends(verify_auth)):
 
 @app.post("/api/container/{name}/action")
 async def container_action(name: str, action: ContainerAction, auth=Depends(verify_auth)):
-    try:
-        container = docker_client.containers.get(name)
-    except docker.errors.NotFound:
-        raise HTTPException(status_code=404, detail=f"Container {name} not found")
+    container = _get_client_container(name)
 
     try:
         if action.action == "start": container.start()
@@ -349,6 +376,8 @@ async def container_action(name: str, action: ContainerAction, auth=Depends(veri
 async def container_status(name: str, auth=Depends(verify_auth)):
     try:
         container = docker_client.containers.get(name)
+        if (container.labels or {}).get("staffbot.type") != "client":
+            raise HTTPException(status_code=403, detail=f"Container {name} is not a client container")
         return {"status": container.status, "image": container.image.tags[0] if container.image.tags else "unknown", "ports": _get_port(container), "created": container.attrs.get("Created", "")}
     except docker.errors.NotFound:
         return {"status": "not_found"}
@@ -362,12 +391,9 @@ async def list_containers(auth=Depends(verify_auth)):
 
 @app.put("/api/container/{name}")
 async def update_container(name: str, data: dict, auth=Depends(verify_auth)):
-    try:
-        docker_client.containers.get(name)
-        env_vars = data.get("env_vars", {})
-        return {"success": True, "message": "Env vars recorded. Restart container to apply."}
-    except docker.errors.NotFound:
-        raise HTTPException(status_code=404, detail=f"Container {name} not found")
+    _get_client_container(name)
+    env_vars = data.get("env_vars", {})
+    return {"success": True, "message": "Env vars recorded. Restart container to apply."}
 
 
 @app.post("/api/container/{name}/update-resources")
@@ -376,10 +402,7 @@ async def update_container_resources(name: str, req: UpdateResourcesRequest, aut
 
     Storage limit changes require container recreation — docker update does NOT support --storage-opt.
     """
-    try:
-        container = docker_client.containers.get(name)
-    except docker.errors.NotFound:
-        raise HTTPException(status_code=404, detail=f"Container {name} not found")
+    container = _get_client_container(name)
 
     # Calculate docker params
     cpu_period = 100000
@@ -663,13 +686,18 @@ async def _graph_search(conn, client_id: int, query: str, limit: int) -> list:
         if not keywords:
             return []
 
-        # Search by keyword overlap in content
-        conditions = " OR ".join(f"content ILIKE '%{k}%'" for k in keywords)
+        # Search by keyword overlap in content. Keywords come from user input, so
+        # they are bound as a parameter (never interpolated into the SQL) and
+        # LIKE wildcards inside them are escaped.
+        patterns = [
+            "%" + k.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%"
+            for k in keywords
+        ]
         rows = await conn.fetch(
-            f"SELECT id, content, metadata, created_at FROM client_memory "
-            f"WHERE client_id=$1 AND ({conditions}) "
-            f"ORDER BY created_at DESC LIMIT $2",
-            client_id, limit
+            "SELECT id, content, metadata, created_at FROM client_memory "
+            "WHERE client_id=$1 AND content ILIKE ANY($3::text[]) "
+            "ORDER BY created_at DESC LIMIT $2",
+            client_id, limit, patterns
         )
         return [dict(r) for r in rows]
     except Exception:
@@ -1645,7 +1673,7 @@ async def openai_chat_completions(req: OpenAICompatRequest, auth=Depends(verify_
 
 
 @app.post("/api/chat/send")
-async def chat_send(req: ChatRequest, auth=Depends(verify_auth)):
+async def chat_send(req: ChatRequest, x_api_key: str = Header(None)):
     """Chat endpoint — LLM proxy with token tracking + quota enforcement.
     
     Flow:
@@ -1657,6 +1685,7 @@ async def chat_send(req: ChatRequest, auth=Depends(verify_auth)):
     6. Update managed_token_used
     7. Return response
     """
+    verify_master_or_client(x_api_key, req.client_id)
     client_id = req.client_id
     provider_name = req.provider
     model = req.model
@@ -1908,8 +1937,9 @@ async def chat_send(req: ChatRequest, auth=Depends(verify_auth)):
 
 
 @app.get("/api/chat/history")
-async def chat_history(client_id: int, container_id: Optional[int] = None, limit: int = 50, auth=Depends(verify_auth)):
+async def chat_history(client_id: int, container_id: Optional[int] = None, limit: int = 50, x_api_key: str = Header(None)):
     """Get chat history for a client."""
+    verify_master_or_client(x_api_key, client_id)
     conn = None
     try:
         conn = await asyncpg.connect(DATABASE_URL)

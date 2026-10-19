@@ -38,7 +38,7 @@
                 <form onsubmit="return updateProfile(event)">
                     <div class="grid-2">
                         <div class="form-group"><label>Name</label><input type="text" class="form-input" id="pName" required></div>
-                        <div class="form-group"><label>Email</label><input type="email" class="form-input" id="pEmail" required></div>
+                        <div class="form-group"><label>Email</label><input type="email" class="form-input" id="pEmail" readonly title="Hubungi admin untuk tukar email"></div>
                         <div class="form-group"><label>Company</label><input type="text" class="form-input" id="pCompany"></div>
                         <div class="form-group"><label>Phone</label><input type="text" class="form-input" id="pPhone"></div>
                     </div>
@@ -143,7 +143,6 @@
         e.preventDefault();
         await api(`/clients/${userData.id}`, { method: 'PUT', body: JSON.stringify({
             name: document.getElementById('pName').value,
-            email: document.getElementById('pEmail').value,
             company: document.getElementById('pCompany').value,
             phone: document.getElementById('pPhone').value,
         })});

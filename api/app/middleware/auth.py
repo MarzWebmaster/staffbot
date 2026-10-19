@@ -1,3 +1,4 @@
+import hmac
 import os
 from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordBearer
@@ -10,7 +11,9 @@ from app.utils.security import decode_access_token
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login")
 oauth2_scheme_optional = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login", auto_error=False)
 
-GATEWAY_INTERNAL_KEY = os.getenv("GATEWAY_API_KEY", "hermes-gateway-key-2024-secure")
+# Shared secret for gateway tools (X-Internal-Key). No default: when it is not
+# configured, internal impersonation is disabled and only JWT auth works.
+GATEWAY_INTERNAL_KEY = os.getenv("STAFFBOT_GATEWAY_API_KEY") or os.getenv("GATEWAY_API_KEY", "")
 
 
 async def get_current_client(
@@ -82,7 +85,12 @@ async def get_current_client_or_internal(
     internal_key = request.headers.get("X-Internal-Key")
     client_id_str = request.headers.get("X-Client-ID")
 
-    if internal_key and internal_key == GATEWAY_INTERNAL_KEY and client_id_str:
+    if (
+        GATEWAY_INTERNAL_KEY
+        and internal_key
+        and client_id_str
+        and hmac.compare_digest(internal_key, GATEWAY_INTERNAL_KEY)
+    ):
         try:
             client_id = int(client_id_str)
         except ValueError:

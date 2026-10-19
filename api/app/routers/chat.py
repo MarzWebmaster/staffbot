@@ -268,13 +268,11 @@ async def chat_send(
     )
 
     # ── 4b. Content moderation — 3-layer scan before AI forward ────
-    # Layer 2 uses user's own API key for AI classification (token quota)
-    moderation_api_key = data.api_key or HERMES_KEY
+    # Layer 2 uses the platform moderation key, never the user's BYOK key
     violation = await moderate_message(
         message=data.content,
         client_id=client_id,
         db=db,
-        api_key=moderation_api_key,
     )
     if violation:
         await log_audit(client_id=client_id, action="chat_request", resource="moderation", detail={"categories": violation.get("categories", []), "action": violation.get("action")}, ip_address=request.client.host if request.client else None, status="blocked")

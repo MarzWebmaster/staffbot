@@ -36,12 +36,11 @@ class ClientLogin(BaseModel):
 
 
 class ClientUpdate(BaseModel):
+    # Self-service profile fields only. email (login identity), package and
+    # status are changed by admin endpoints or the Stripe webhook, never here.
     name: Optional[str] = None
-    email: Optional[EmailStr] = None
     company: Optional[str] = None
     phone: Optional[str] = None
-    package: Optional[str] = None
-    status: Optional[str] = None
     whatsapp_number: Optional[str] = None
 
 
