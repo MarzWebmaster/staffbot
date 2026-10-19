@@ -37,7 +37,7 @@ StaffBot.my is Malaysia's AI Employee Platform. Each client gets a dedicated, is
 
 ## Architecture
 
-Server A (Tencent Cloud):
+Production server (OVH, single host):
 - staffbot-api (FastAPI, port 8000)
 - staffbot-db (PostgreSQL 16, port 5433)
 - staffbot-gateway (Central Brain v2, port 8080)

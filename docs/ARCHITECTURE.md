@@ -2,18 +2,23 @@
 
 ## High-Level Architecture
 
-Two-server topology:
+Single-server topology (verified Oct 2026):
 
-Server A (Tencent Cloud - 43.156.204.227:333):
-- Runs all core StaffBot services
+Production server (OVH, "OVH 2", hostname mail.pandaibot.my):
+- Runs ALL StaffBot services as one Docker stack (the former "Server A" and
+  "Server B" services: staffbot-api, staffbot-db, staffbot-gateway,
+  staffbot-memory-db, staffbot-baileys, staffbot-telegram, staffbot-embeddings)
 - Client containers (isolated per client, ports 9xxx)
-- Public-facing HTTPS via Cloudflare CDN
-- SSH key: /home/marz/.hermes/theceo_key.pem
+- Public-facing HTTPS via Cloudflare CDN; nginx vhosts in /etc/nginx/conf.d/
+- Shared host: also runs pandaibot (PHP, scheduler, Redis, MySQL) and a mail
+  server (Postfix/Dovecot)
+- Admin access: SSH over Tailscale only (node: ovh-staffbot)
 
-Server B (Contabo - 144.126.131.215:333):
-- Legacy infrastructure
-- ERPNext, Chatwoot, NextCloud instances
-- SSH key: /home/marz/.ssh/contabo
+Server IPs, SSH ports and credentials are deliberately NOT kept in this repo.
+Store them in the team password manager.
+
+Note: earlier versions of this doc listed a Tencent Cloud "Server A" and a
+Contabo "Server B". Those entries are outdated.
 
 ## Service Topology
 
@@ -80,7 +85,7 @@ Resource limits per package:
 User sends WhatsApp -> Baileys Manager receives event -> Forwards to Gateway -> Gateway routes to client container -> AI processes and responds -> Response back via Baileys.
 
 ### New Client Registration
-Client registers via landing page -> Auth creates client (pending) -> Admin force-deploys -> DeploymentService generates subdomain -> Cloudflare DNS created -> Container deployed on Server B -> Client status active -> Notifications sent.
+Client registers via landing page -> Auth creates client (pending) -> Admin force-deploys -> DeploymentService generates subdomain -> Cloudflare DNS created -> Container deployed on the production server -> Client status active -> Notifications sent.
 
 ### Memory Save and Search
 Agent calls /api/memory/save -> Gateway stores in client_memory table with tsvector.

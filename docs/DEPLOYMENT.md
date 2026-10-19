@@ -1,10 +1,17 @@
 # Deployment Guide — StaffBot.my
 
 ## Production Server
-IP: 43.156.204.227 (Tencent Cloud)
-SSH Key: /home/marz/.hermes/theceo_key.pem
-SSH Port: 333
-Domain: staffbot.my, api.staffbot.my
+Provider: OVH ("OVH 2"), hostname mail.pandaibot.my
+Access: SSH over Tailscale only (node: ovh-staffbot)
+Domain: staffbot.my, api.staffbot.my, *.staffbot.my (via Cloudflare)
+Shared host: also runs pandaibot and the mail server, so take care with
+restarts and port changes.
+
+Server IPs, SSH ports and credentials are deliberately NOT kept in this repo.
+Store them in the team password manager.
+
+Note: the paths below (/root/staffbot) date from the old Tencent server and
+have not yet been re-verified on the OVH server.
 
 ## Initial Setup
 Clone repo: git clone https://github.com/MarzWebmaster/staffbot.git /root/staffbot
