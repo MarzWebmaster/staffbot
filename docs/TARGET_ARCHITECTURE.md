@@ -34,6 +34,8 @@ StaffBot.my ialah **Hermes Agent yang diurus oleh provider (Marz)**.
 | D14 | **Satu control plane** (`staffbot-api`) untuk login, billing, admin dan provisioning | Satu sistem auth; mobile dan web memanggil API yang sama |
 | D15 | **Saluran (WhatsApp/Telegram/Web) melalui channel router pusat**, yang menghantar mesej ke container pelanggan | Satu titik untuk wake-on-message, kuota dan audit |
 | D16 | **Buang tiga enjin AI berlebihan.** `server-b/gateway` dikecilkan menjadi LLM proxy + channel router; logik ReAct-nya digantikan oleh Hermes | Kurangkan kod yang perlu diselenggara |
+| D17 | **Pelanggan mengurus Hermes melalui Web Console dalam Portal Pelanggan** (Hermes CLI), bukan SSH | Satu login, tiada port atau key SSH, sesi diaudit, akses ikut pakej (§7A) |
+| D18 | **Dua portal: Superadmin dan Pelanggan.** Semua atribut pakej boleh di-CRUD oleh superadmin tanpa ubah kod | Pakej boleh dilaras mengikut pasaran (§7.1) |
 
 ## 3. Gambaran seni bina
 
@@ -121,28 +123,64 @@ Prinsip: **sempadan keselamatan ialah container + firewall + proxy, bukan senara
 
 Tool StaffBot sedia ada (webhook, carian, email, tugasan dalam `server-b/gateway`) dipindahkan ke **plugin/MCP server** dalam image Hermes. **[SAHKAN-HERMES]** sama ada mekanisme plugin atau MCP lebih sesuai.
 
-## 7. Pakej (contoh — angka belum muktamad)
+## 7. Pakej (cadangan v1, 22 Okt 2026 — Remy akan laraskan)
 
-| | Starter | Professional | Enterprise |
-| :--- | :--- | :--- | :--- |
-| Harga | RM49 | RM149 | RM499 |
-| LLM | Model asas | + premium | Semua |
-| Token terurus / bulan | 100k | 500k | 2M |
-| BYOK | ✔ | ✔ | ✔ |
-| Lapis 1 Teras | ✔ | ✔ | ✔ |
-| Lapis 2 Katalog | Asas | Kebanyakan | Semua |
-| Terminal / kod | ✖ atau terhad | ✔ | ✔ |
-| Skill custom (teks) | ✔ | ✔ | ✔ |
-| Kod / MCP custom | ✖ | ✔ | ✔ |
-| Sentiasa hidup | ✖ (tidur bila idle) | ✖ | ✔ |
-| CPU / RAM / Disk | 0.5 / 1 GB / 5 GB | 1 / 2 GB / 20 GB | 2 / 4 GB / 50 GB |
-| Pilih masa upgrade | ✖ | ✖ | ✔ |
+| | Percubaan | Starter | Professional | Enterprise |
+| :--- | :--- | :--- | :--- | :--- |
+| Harga / bulan | Percuma 7 hari | RM49 | RM149 | RM499 |
+| AI Staff (ejen) | 1 | 1 | 3 | 10 |
+| Token terurus / bulan | 200k | 2M | 8M | 30M |
+| Model LLM | Ekonomi | Ekonomi | + Premium (terhad) | Semua |
+| BYOK | ✖ | ✔ | ✔ | ✔ |
+| Saluran | Web | Web + 1 WhatsApp + Telegram | + 2 WhatsApp | + 5 WhatsApp |
+| Web Console (Hermes CLI) | ✖ | ✔ `hermes` sahaja | ✔ shell penuh | ✔ shell penuh |
+| Ejen boleh guna terminal / kod | ✖ | ✖ | ✔ | ✔ |
+| Lapis 1 Teras | ✔ | ✔ | ✔ | ✔ |
+| Lapis 2 Katalog | Asas | Asas (±20) | Semua | Semua |
+| Lapis 3 Skill custom (teks/SOP) | ✔ | ✔ | ✔ | ✔ |
+| Lapis 3 Kod / MCP custom | ✖ | ✖ | ✔ | ✔ |
+| CPU / RAM / Disk | 0.5 / 1 GB / 2 GB | 0.5 / 1 GB / 5 GB | 1 / 2 GB / 20 GB | 2 / 4 GB / 50 GB |
+| Tidur selepas idle | 15 min | 30 min | 60 min | Sentiasa hidup |
+| Simpanan backup | — | 7 hari | 14 hari | 30 hari |
+| Pilih masa upgrade | ✖ | ✖ | ✖ | ✔ |
+| Sokongan | — | Email | Email + WhatsApp | Keutamaan |
+
+**Nota:**
+- **Token.** Hermes ialah ejen yang memanggil tool berulang kali dengan system prompt yang panjang, jadi satu tugasan boleh menggunakan puluhan ribu token. Kuota 100k/500k/2M dalam sistem sekarang terlalu kecil. Angka di atas mengandaikan model ekonomi (cth DeepSeek). **Semak harga penyedia dan margin sebelum muktamad.**
+- **Pilihan:** kira kuota dalam **kredit RM**, bukan token, kerana harga setiap model berbeza.
+- **AI Staff berbilang** dalam satu container menggunakan profil Hermes. **[SAHKAN-HERMES]**
+- **"Web Console `hermes` sahaja"** bermaksud console menjalankan `hermes` terus, bukan bash. **[SAHKAN-HERMES]** sama ada CLI Hermes membenarkan pelarian ke shell.
 
 **Bagaimana had pakej dikuatkuasakan:**
 - model dan token: di `llm-proxy`;
 - CPU, RAM dan disk: di Docker;
 - toolset: dalam config asas read-only;
+- console: di control plane;
 - tidur/hidup: di orchestrator.
+
+### 7.1 Superadmin CRUD pakej
+
+- **Setiap baris dalam jadual di atas ialah medan dalam jadual `packages`**, dan boleh dicipta, dibaca, dikemas kini dan dipadam dari Portal Superadmin, tanpa mengubah kod.
+- Medan baharu yang perlu ditambah (migrasi Alembic): `ai_staff_limit`, `allowed_models`, `channel_limits`, `byok_allowed`, `console_mode` (none/hermes/shell), `agent_terminal`, `catalog_tier`, `custom_code_allowed`, `idle_sleep_minutes` (null = sentiasa hidup), `backup_retention_days`, `upgrade_window`, `support_level`.
+- CRUD sedia ada (`api/app/routers/admin/packages.py`, `static/admin/packages.html`) diguna semula. **Bug B-11 mesti dibetulkan dahulu.**
+- Apabila pakej dikemas kini, orchestrator menjana semula config asas dan had sumber untuk semua pelanggan pakej itu (berperingkat, seperti rolling update).
+- Pakej yang masih ada pelanggan tidak boleh dipadam; ia hanya boleh dinyahaktifkan (`is_active=false`, tidak dipaparkan kepada pelanggan baharu).
+
+## 7A. Portal dan akses
+
+| Pengguna | Antara muka | Fungsi |
+| :--- | :--- | :--- |
+| **Superadmin (Marz)** | Portal Superadmin (web) | CRUD pakej; urus pelanggan; penyedia LLM + harga model; katalog skill/tool; polisi guardrail; versi Hermes + rollout (canary/rolling); status, sumber dan log container; billing; audit |
+| **Pelanggan** | Portal Pelanggan (web) | Langganan dan bayaran; dashboard penggunaan (token, kredit, saluran); BYOK; sambung WhatsApp (QR) dan Telegram; hidup/matikan skill katalog; skill custom; senarai AI Staff; chat web |
+| **Pelanggan** | **Web Console** dalam portal, yang menjalankan **Hermes CLI** | Urus Hermes Agent sendiri seperti dalam VPS sendiri |
+
+**Web Console (keputusan D17):**
+- Terminal dalam browser (xterm.js) melalui WebSocket, kemudian `docker exec` ke container pelanggan. Login menggunakan akaun portal yang sama.
+- Tiada port SSH dibuka dan tiada SSH key per pelanggan.
+- Setiap sesi direkod dalam audit (siapa dan bila); sesi tamat selepas idle.
+- Mod ikut `packages.console_mode`: `none` / `hermes` (jalankan `hermes` sahaja) / `shell` (bash penuh dalam container).
+- Membuka console akan membangunkan container jika ia sedang tidur.
+- SSH sebenar boleh ditawarkan kemudian untuk Enterprise sahaja (keputusan masa depan).
 
 ## 8. LLM, BYOK dan kuota
 
@@ -199,7 +237,7 @@ Panel admin: pilih versi, pilih kumpulan (canary atau semua), kemudian **Update*
 | # | Perkara | Siapa |
 | :--- | :--- | :--- |
 | P1 | Angka pakej sebenar (harga, token, CPU/RAM/disk) | Remy |
-| P2 | Starter dapat terminal atau tidak | Remy |
+| P2 | Angka pakej v1 (§7) dan mod console Starter | Remy |
 | P3 | Tempoh idle sebelum tidur; sasaran masa bangun | Remy + ujian |
 | P4 | Server khusus untuk node pelanggan (penyedia, saiz) | Remy, selepas ukur RAM sebenar satu Hermes |
 | P5 | Versi Hermes yang dipin + **semak lesen** untuk hosting komersial | Teknikal |
