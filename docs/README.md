@@ -8,6 +8,7 @@
 | :--- | :--- | :--- |
 | [PRD.md](PRD.md) | Apa produk ini, untuk siapa, ciri yang **benar-benar wujud** sekarang | Pemilik, pengurus, sales |
 | [SRS.md](SRS.md) | Keperluan fungsian dan bukan fungsian, dengan status sebenar setiap satu (✅ / ⚠️ / ❌) | Developer, QA |
+| [TARGET_ARCHITECTURE.md](TARGET_ARCHITECTURE.md) | **Seni bina sasaran**: managed Hermes per pelanggan, keputusan D1–D16, pakej, upgrade, pelan peralihan | Pemilik, developer |
 | [ARCHITECTURE.md](ARCHITECTURE.md) | Komponen, container, aliran chat, aliran WhatsApp/Telegram, provisioning | Developer, DevOps |
 | [DATABASE.md](DATABASE.md) | Semua jadual dan lajur, penyulitan, isu skema | Developer |
 | [API.md](API.md) | Senarai penuh endpoint dan jenis auth | Developer, mobile/web dev |
