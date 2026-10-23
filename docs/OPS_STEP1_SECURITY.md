@@ -14,17 +14,17 @@ Buat dari komputer awak, melalui Tailscale.
 
 1. **Tukar password `ubuntu`:**
    ```bash
-   ssh -p 333 ubuntu@100.83.136.71
+   ssh -p 333 ubuntu@<IP-tailscale-ovh-staffbot>
    passwd                      # masukkan password baru yang kuat; simpan dalam password manager
    ```
 2. **Pasang SSH key**, jika belum ada. Dari komputer awak:
    ```bash
    ssh-keygen -t ed25519 -C "remy-ovh"          # jika belum ada key
-   ssh-copy-id -p 333 ubuntu@100.83.136.71
+   ssh-copy-id -p 333 ubuntu@<IP-tailscale-ovh-staffbot>
    ```
 3. **Uji login dengan key dalam terminal BARU**, sambil sesi lama masih terbuka:
    ```bash
-   ssh -p 333 -o PasswordAuthentication=no ubuntu@100.83.136.71 'echo KEY-OK'
+   ssh -p 333 -o PasswordAuthentication=no ubuntu@<IP-tailscale-ovh-staffbot> 'echo KEY-OK'
    ```
    Teruskan ke langkah 4 **hanya jika** keluar `KEY-OK`.
 4. **Matikan login password**, masih dalam sesi lama:
