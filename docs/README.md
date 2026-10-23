@@ -15,6 +15,7 @@
 | [SECURITY_FINDINGS.md](SECURITY_FINDINGS.md) | Isu keselamatan dan bug yang ditemui, mengikut keutamaan | Pemilik, developer |
 | [GAP_ANALYSIS_HERMES_HUB.md](GAP_ANALYSIS_HERMES_HUB.md) | Perbandingan StaffBot sedia ada dengan PRD v2 (Enterprise Hermes Hub) | Pemilik |
 | [HERMES_VOICE_PROJECT_BRIEF.md](HERMES_VOICE_PROJECT_BRIEF.md) | Brief projek Enterprise Hermes Hub (PRD v2) daripada Remy | Rujukan |
+| [OPS_STEP1_SECURITY.md](OPS_STEP1_SECURITY.md) | **Langkah 1**: tukar password/SSH key + deploy pembetulan S-01–S-06 (untuk bot, berfasa) | Remy, DevOps |
 | [RUNBOOK_MANAGED_HERMES.md](RUNBOOK_MANAGED_HERMES.md) | **Langkah deploy** managed Hermes: image, DB, firewall, pilot, migrasi, upgrade, rollback | DevOps |
 | [../api/tests/integration/](../api/tests/integration/README.md) | 162 ujian integrasi (`run_all.sh`) | Developer |
 | [SERVER_VERIFICATION.md](SERVER_VERIFICATION.md) | Arahan baca sahaja untuk mengesahkan dokumen ini di server | DevOps |
