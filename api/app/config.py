@@ -51,6 +51,9 @@ class Settings(BaseSettings):
     # Gateway (Internal API — same Docker network)
     SERVER_B_API_URL: str = "http://staffbot-gateway:8080"  # Gateway on same Docker network (NOT a separate server)
     SERVER_B_API_KEY: str = ""  # Auth key for Gateway (same server, NOT external)
+    # Signs per-customer tokens that Hermes containers use to call the LLM proxy.
+    # Separate from SECRET_KEY so it can be rotated without breaking encryption.
+    LLM_PROXY_SECRET: str = ""
     
     # SMTP / Email
     SMTP_HOST: str = ""

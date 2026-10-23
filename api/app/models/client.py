@@ -23,6 +23,8 @@ class Client(Base):
     subdomain = Column(String(255), nullable=True, unique=True)
     container_port = Column(Integer, nullable=True)
     container_id = Column(String(255), nullable=True)
+    # Bump to revoke the customer's LLM proxy token (app/llm_proxy/tokens.py)
+    llm_token_version = Column(Integer, default=1)
     telegram_token_encrypted = Column(Text, nullable=True)
     whatsapp_number = Column(String(50), nullable=True)          # e.g., "60123456789"
     whatsapp_auth_path = Column(String(255), nullable=True)      # e.g., "/auth/client_5"

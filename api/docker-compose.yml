@@ -55,6 +55,29 @@ services:
     networks:
       - staffbot-network
 
+  # LLM proxy for customer Hermes containers (docs/TARGET_ARCHITECTURE.md §8).
+  # Same image as the API. LLM_PROXY_BIND should be the host-side gateway IP
+  # of the customer network (see docs/RUNBOOK_MANAGED_HERMES.md), never 0.0.0.0.
+  llm-proxy:
+    build: ./api
+    container_name: staffbot-llm-proxy
+    restart: unless-stopped
+    command: ["uvicorn", "app.llm_proxy.main:app", "--host", "0.0.0.0", "--port", "8090", "--workers", "2"]
+    ports:
+      - "${LLM_PROXY_BIND:-127.0.0.1}:8090:8090"
+    environment:
+      - STAFFBOT_DATABASE_URL=${STAFFBOT_DATABASE_URL}
+      - STAFFBOT_SECRET_KEY=${STAFFBOT_SECRET_KEY}
+      - STAFFBOT_LLM_PROXY_SECRET=${STAFFBOT_LLM_PROXY_SECRET}
+      - MODERATION_API_KEY=${MODERATION_API_KEY:-}
+      - MODERATION_URL=${MODERATION_URL:-}
+      - HERMES_API_KEY=${HERMES_API_KEY}
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - staffbot-network
+
   gateway:
     image: staffbot-gateway:latest
     container_name: staffbot-gateway
