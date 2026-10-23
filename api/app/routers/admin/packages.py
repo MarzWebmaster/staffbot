@@ -1,5 +1,5 @@
 """Admin packages router — CRUD for pricing packages with skill/tool categories."""
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, text
 from typing import Optional
@@ -12,7 +12,6 @@ from app.models.package import Package
 from app.models.llm_provider import PackageProvider
 from app.schemas.admin import PackageCreate, PackageUpdate
 from app.middleware.auth import get_current_admin
-from app.services.docker_service import DockerService
 
 import logging
 logger = logging.getLogger(__name__)
@@ -165,91 +164,43 @@ async def update_package(
 @router.post("/{package_id}/apply")
 async def apply_package_resources(
     package_id: int,
+    background: BackgroundTasks,
     admin: Client = Depends(get_current_admin),
     db: AsyncSession = Depends(get_db),
 ):
-    """Apply CPU/RAM limits to all running containers with this package."""
+    """Apply this package's limits and Hermes settings to its customers' containers.
+
+    Each managed Hermes container gets a re-rendered managed config and is
+    recreated with the new CPU/RAM limits (same data volume), one after another.
+    """
     result = await db.execute(select(Package).where(Package.id == package_id))
     pkg = result.scalar_one_or_none()
     if not pkg:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Package not found")
 
-    cpu_limit = pkg.cpu_limit or 1.0
-    ram_mb = pkg.memory_limit_mb or 512
-    storage_gb = pkg.storage_limit_gb or 10
-
-    # Find clients with this package
-    from app.models.client import Client
-    clients_result = await db.execute(
-        select(Client).where(Client.package == pkg.name, Client.status == "active")
-    )
-    clients_with_pkg = clients_result.scalars().all()
-
-    updated_cpu_ram = []
-    storage_warnings = []
-
-    docker = DockerService()
-
-    for cl in clients_with_pkg:
-        try:
-            # Find their container
-            container_info = docker.get_client_container(cl.id)
-            if not container_info:
-                storage_warnings.append({
-                    "client_id": cl.id,
-                    "client_name": cl.name,
-                    "warning": "No running container found",
-                })
-                continue
-
-            container_name = container_info.get("name", "")
-            if not container_name:
-                storage_warnings.append({
-                    "client_id": cl.id,
-                    "client_name": cl.name,
-                    "warning": "Container name not found",
-                })
-                continue
-
-            # Apply limits
-            apply_result = docker.apply_container_limits(
-                container_name=container_name,
-                cpu_limit=cpu_limit,
-                memory_limit_mb=ram_mb,
-            )
-
-            updated_cpu_ram.append({
-                "client_id": cl.id,
-                "client_name": cl.name,
-                "container_name": container_name,
-                "result": apply_result,
-            })
-
-            # Storage warnings (requires recreation)
-            storage_warnings.append({
-                "client_id": cl.id,
-                "client_name": cl.name,
-                "container_name": container_name,
-                "warning": f"Storage change to {storage_gb}GB requires container recreation",
-            })
-
-        except Exception as e:
-            storage_warnings.append({
-                "client_id": cl.id,
-                "client_name": cl.name,
-                "error": str(e),
-            })
-
+    from app.models.hermes_instance import HermesInstance
+    client_ids = [cid for (cid,) in (await db.execute(
+        select(HermesInstance.client_id)
+        .join(Client, Client.id == HermesInstance.client_id)
+        .where(Client.package == pkg.name, HermesInstance.status.in_(["running", "sleeping"]))
+        .order_by(HermesInstance.client_id)
+    )).all()]
+    background.add_task(_apply_to_clients, client_ids)
     return {
-        "message": f"Applied limits for {pkg.display_name or pkg.name}",
-        "new_limits": {
-            "cpu": cpu_limit,
-            "ram_mb": ram_mb,
-            "storage_gb": storage_gb,
-        },
-        "updated_cpu_ram": updated_cpu_ram,
-        "storage_warnings": storage_warnings,
+        "message": f"Applying {pkg.display_name or pkg.name} to {len(client_ids)} customer container(s)",
+        "client_ids": client_ids,
     }
+
+
+async def _apply_to_clients(client_ids: list[int]) -> None:
+    from app.database import async_session_factory
+    from app.services import hermes_orchestrator as orch
+    for cid in client_ids:
+        async with async_session_factory() as db:
+            try:
+                await orch.apply_package(db, cid)
+            except Exception as e:
+                logger.warning("apply_package failed for client %s: %s", cid, e)
 
 
 @router.delete("/{package_id}")

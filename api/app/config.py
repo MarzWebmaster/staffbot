@@ -54,6 +54,23 @@ class Settings(BaseSettings):
     # Signs per-customer tokens that Hermes containers use to call the LLM proxy.
     # Separate from SECRET_KEY so it can be rotated without breaking encryption.
     LLM_PROXY_SECRET: str = ""
+    # URL customer containers use to reach the LLM proxy (host side of the
+    # customer network), e.g. http://172.30.0.1:8090
+    LLM_PROXY_PUBLIC_URL: str = "http://172.30.0.1:8090"
+
+    # Managed Hermes containers (docs/TARGET_ARCHITECTURE.md, docs/RUNBOOK_MANAGED_HERMES.md)
+    HERMES_IMAGE: str = "staffbot-hermes:0.22.4-sb1"
+    HERMES_RUNTIME: str = ""                  # "runsc" for gVisor; empty = Docker default
+    CUSTOMER_NETWORK: str = "staffbot-customers"
+    CUSTOMER_SUBNET: str = "172.30.0.0/16"
+    CUSTOMER_GATEWAY_IP: str = "172.30.0.1"   # host side; proxy and customer API ports bind here
+    HERMES_MANAGED_DIR: str = "/srv/staffbot/managed"   # host path, mounted at the same path in the API
+    HERMES_BACKUP_DIR: str = "/srv/staffbot/backups"    # host path, mounted at the same path in the API
+    HERMES_PIDS_LIMIT: int = 512
+    HERMES_WAKE_TIMEOUT: int = 60             # seconds to wait for the API server after start
+    # When true, new deployments get a managed Hermes container instead of the
+    # legacy staffbot-core container (docs/TARGET_ARCHITECTURE.md §13).
+    MANAGED_HERMES_ENABLED: bool = False
     
     # SMTP / Email
     SMTP_HOST: str = ""

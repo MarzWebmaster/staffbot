@@ -17,3 +17,4 @@ from app.models.audit_trail import AuditTrail
 from app.models.client_webhook import ClientWebhook
 from app.models.client_search_config import ClientSearchConfig
 from app.models.client_email_config import ClientEmailConfig
+from app.models.hermes_instance import HermesInstance

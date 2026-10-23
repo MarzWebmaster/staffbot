@@ -51,6 +51,24 @@ class DeploymentService:
         if not subdomain:
             subdomain = DeploymentService.generate_subdomain(company, client_id)
 
+        if settings.MANAGED_HERMES_ENABLED:
+            # Managed Hermes: the customer's Hermes API is private (reached by the
+            # channel router), so no per-customer DNS record or nginx route.
+            from app.database import async_session_factory
+            from app.services import hermes_orchestrator
+            async with async_session_factory() as db:
+                inst = await hermes_orchestrator.provision(db, client_id)
+            return {
+                "subdomain": f"{subdomain}.{settings.DOMAIN}",
+                "subdomain_raw": subdomain,
+                "port": inst.api_port,
+                "container_id": inst.container_name,
+                "container_name": inst.container_name,
+                "dns": {"skipped": "managed hermes"},
+                "container": {"success": True, "managed_hermes": True, "image": inst.image},
+                "nginx": {"skipped": "managed hermes"},
+            }
+
         # 1. Create DNS record
         dns_result = await CloudflareService.create_dns_record(
             subdomain=subdomain,

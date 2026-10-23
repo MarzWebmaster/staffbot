@@ -42,6 +42,11 @@ services:
       - MIMO_API_KEY=${MIMO_API_KEY}
       - MIMO_BASE_URL=${MIMO_BASE_URL}
       - STAFFBOT_SECRET_KEY=${STAFFBOT_SECRET_KEY}
+      - STAFFBOT_LLM_PROXY_SECRET=${STAFFBOT_LLM_PROXY_SECRET}
+      - STAFFBOT_LLM_PROXY_PUBLIC_URL=${STAFFBOT_LLM_PROXY_PUBLIC_URL:-http://172.30.0.1:8090}
+      - STAFFBOT_HERMES_IMAGE=${STAFFBOT_HERMES_IMAGE:-staffbot-hermes:0.22.4-sb1}
+      - STAFFBOT_HERMES_RUNTIME=${STAFFBOT_HERMES_RUNTIME:-}
+      - STAFFBOT_MANAGED_HERMES_ENABLED=${STAFFBOT_MANAGED_HERMES_ENABLED:-false}
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - /root/staffbot/containers:/root/staffbot/containers
@@ -49,6 +54,9 @@ services:
       - /etc/nginx/ssl:/etc/nginx/ssl
       - /root/staffbot/profiles:/app/data/profiles
       - /root/staffbot/data/deleted-users:/app/data/deleted-users
+      # Managed Hermes: same paths as on the host (the Docker daemon mounts them into customer containers)
+      - /srv/staffbot/managed:/srv/staffbot/managed
+      - /srv/staffbot/backups:/srv/staffbot/backups
     depends_on:
       db:
         condition: service_healthy
@@ -72,6 +80,29 @@ services:
       - MODERATION_API_KEY=${MODERATION_API_KEY:-}
       - MODERATION_URL=${MODERATION_URL:-}
       - HERMES_API_KEY=${HERMES_API_KEY}
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - staffbot-network
+
+  # Managed Hermes worker: idle sleep + daily volume backups (one instance only).
+  hermes-worker:
+    build: ./api
+    container_name: staffbot-hermes-worker
+    restart: unless-stopped
+    command: ["python", "-m", "app.services.hermes_orchestrator", "worker"]
+    environment:
+      - STAFFBOT_DATABASE_URL=${STAFFBOT_DATABASE_URL}
+      - STAFFBOT_SECRET_KEY=${STAFFBOT_SECRET_KEY}
+      - STAFFBOT_LLM_PROXY_SECRET=${STAFFBOT_LLM_PROXY_SECRET}
+      - STAFFBOT_LLM_PROXY_PUBLIC_URL=${STAFFBOT_LLM_PROXY_PUBLIC_URL:-http://172.30.0.1:8090}
+      - STAFFBOT_HERMES_IMAGE=${STAFFBOT_HERMES_IMAGE:-staffbot-hermes:0.22.4-sb1}
+      - STAFFBOT_HERMES_RUNTIME=${STAFFBOT_HERMES_RUNTIME:-}
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /srv/staffbot/managed:/srv/staffbot/managed
+      - /srv/staffbot/backups:/srv/staffbot/backups
     depends_on:
       db:
         condition: service_healthy

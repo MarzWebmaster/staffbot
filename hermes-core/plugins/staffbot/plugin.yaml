@@ -1,0 +1,4 @@
+name: staffbot
+version: "1.0.0"
+description: "StaffBot.my core tools: tasks, customer webhooks (APIs) and email, executed by the StaffBot platform."
+author: "Marz Technology and Trading"

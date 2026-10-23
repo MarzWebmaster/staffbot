@@ -29,6 +29,11 @@ from app.services.content_moderation import moderate_message
 logger = logging.getLogger("llm_proxy")
 app = FastAPI(title="StaffBot.my LLM Proxy", version="1.0.0")
 
+# Core tools for the StaffBot Hermes plugin are served here too, so customer
+# containers only ever need to reach this one platform endpoint.
+from app.routers.agent_tools import router as agent_tools_router  # noqa: E402
+app.include_router(agent_tools_router, prefix="/api/v1/agent-tools", tags=["Agent Tools"])
+
 UPSTREAM_TIMEOUT = httpx.Timeout(300.0, connect=10.0)
 # Fields some clients send that providers reject or that we must not forward
 STRIPPED_FIELDS = {"api_key", "base_url", "client_id"}

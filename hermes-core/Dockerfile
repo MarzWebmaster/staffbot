@@ -1,87 +1,28 @@
-# StaffBot.my — Hermes Core Image
-# ================================
-# Installs Hermes Agent from source + StaffBot customizations:
-#   - Soul injection from pgvector (per-client personality)
-#   - Package-based skill filtering (basic/pro/enterprise)
-#   - Client-specific config.yaml generation
-#   - Managed LLM support (no BYOK needed)
+# StaffBot customer image: official Hermes Agent + StaffBot core plugin/skills.
+# One container per customer (docs/TARGET_ARCHITECTURE.md D1).
 #
-# Build:
-#   docker build -t staffbot-hermes-core:v1.0.0 .
-#
-# Run (example):
-#   docker run -d \
-#     --name staffbot-client-1 \
-#     -e CLIENT_ID=1 \
-#     -e PACKAGE=pro \
-#     -e STAFFBOT_LLM_KEY=sk-... \
-#     staffbot-hermes-core:v1.0.0
+# Pin the upstream image. Prefer a digest for exact deployments:
+#   docker build --build-arg HERMES_IMAGE=nousresearch/hermes-agent:0.22.4@sha256:<digest> \
+#     -t staffbot-hermes:0.22.4-sb1 hermes-core/
+ARG HERMES_IMAGE=nousresearch/hermes-agent:0.22.4
+FROM ${HERMES_IMAGE}
 
-FROM python:3.11-slim
+USER root
 
-LABEL maintainer="StaffBot.my <support@staffbot.my>"
-LABEL staffbot.type="client-container"
-LABEL description="StaffBot.my — Per-client Hermes Agent container with soul injection"
+# Core tools as a bundled plugin: root-owned inside the image, not in the
+# customer's data volume. Enabled via plugins.enabled in the managed config.
+COPY plugins/staffbot /opt/hermes/plugins/staffbot
 
-# ── System dependencies ────────────────────────────────────────────────
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    git \
-    curl \
-    ca-certificates \
-    gosu \
-    && rm -rf /var/lib/apt/lists/*
+# Core skills, read-only, wired in via skills.external_dirs in managed config.
+COPY skills /opt/staffbot/skills
 
-# ── Create hermes user/group (required by official entrypoint) ────────
-RUN groupadd -g 10000 hermes && \
-    useradd -u 10000 -g hermes -m -d /home/hermes -s /bin/bash hermes
+RUN chown -R root:root /opt/hermes/plugins/staffbot /opt/staffbot \
+    && chmod -R a+rX,go-w /opt/hermes/plugins/staffbot /opt/staffbot
 
-# ── Install Hermes Agent from GitHub source ────────────────────────────
-# Clone with depth=1 for minimal size, install in editable mode
-WORKDIR /opt
-RUN git clone --depth 1 https://github.com/NousResearch/hermes-agent.git /opt/hermes-agent && \
-    cd /opt/hermes-agent && \
-    pip install --no-cache-dir -e .
+LABEL org.opencontainers.image.title="staffbot-hermes" \
+      org.opencontainers.image.description="Hermes Agent for StaffBot.my managed customers"
 
-# ── Symlink for official entrypoint compatibility ─────────────────────
-# Official docker/entrypoint.sh hardcodes INSTALL_DIR="/opt/hermes"
-RUN ln -s /opt/hermes-agent /opt/hermes
-
-# ── Create venv (required by official entrypoint) ─────────────────────
-# Official entrypoint activates /opt/hermes/.venv before running Hermes
-RUN python3 -m venv /opt/hermes/.venv && \
-    /opt/hermes/.venv/bin/pip install --no-cache-dir -e /opt/hermes-agent
-
-# ── Verify Hermes installation ─────────────────────────────────────────
-RUN hermes --version && \
-    python3 -c "import hermes; print(f'Hermes OK: {hermes.__file__}')" 2>/dev/null || true
-
-# ── Install StaffBot-specific dependencies ────────────────────────────
-RUN pip install --no-cache-dir \
-    asyncpg \
-    psycopg2-binary \
-    pyyaml
-
-# ── Copy StaffBot scripts ─────────────────────────────────────────────
-COPY scripts/ /opt/staffbot/scripts/
-COPY templates/ /opt/staffbot/templates/
-RUN chmod +x /opt/staffbot/scripts/*.py
-
-# ── StaffBot entrypoint ───────────────────────────────────────────────
-# Our script runs BEFORE the final `exec hermes "$@"` to:
-#   1. Load soul from pgvector -> generate config.yaml + SOUL.md
-#   2. Filter skills based on PACKAGE env var
-#   3. Set up managed LLM if applicable
-COPY docker/staffbot-entrypoint.sh /opt/hermes-agent/docker/staffbot-entrypoint.sh
-RUN chmod +x /opt/hermes-agent/docker/staffbot-entrypoint.sh
-
-ENV STAFFBOT_HOME=/app/data
-ENV STAFFBOT_SCRIPTS=/opt/staffbot/scripts
-ENV STAFFBOT_TEMPLATES=/opt/staffbot/templates
-
-# Prepare Hermes home directories
-RUN mkdir -p /app/data/{cron,sessions,logs,hooks,memories,skills,skins,plans,workspace,home}
-
-# Default: run Hermes in headless gateway mode
-# Override by passing different CMD (e.g., "chat -q 'hello'")
-ENTRYPOINT ["/opt/hermes-agent/docker/staffbot-entrypoint.sh"]
-CMD ["gateway"]
+# Managed scope (/etc/hermes/config.yaml and /etc/hermes/.env) is generated per
+# customer by the control plane and bind-mounted read-only as two files, so the
+# image's own /etc/hermes files stay visible. Entrypoint and CMD are upstream's;
+# run with:  gateway run

@@ -164,6 +164,8 @@ from app.routers.memory import router as memory_router
 from app.routers.client_webhooks import router as client_webhooks_router
 from app.routers.client_search_configs import router as client_search_configs_router
 from app.routers.client_email_configs import router as client_email_configs_router
+from app.routers.agent_tools import router as agent_tools_router
+from app.routers.admin.hermes import router as admin_hermes_router
 
 app.include_router(auth.router, prefix="/api/v1/auth", tags=["Authentication"])
 app.include_router(billing_router, prefix="/api/v1/billing", tags=["Billing"])
@@ -193,3 +195,5 @@ app.include_router(memory_router, prefix="/api/v1/memory", tags=["Memory"])
 app.include_router(client_webhooks_router, prefix="/api/v1/webhooks/config", tags=["Webhooks — Config"])
 app.include_router(client_search_configs_router, prefix="/api/v1/clients/me/search-config", tags=["Search — Config"])
 app.include_router(client_email_configs_router, prefix="/api/v1/clients/me/email-config", tags=["Email — Config"])
+app.include_router(agent_tools_router, prefix="/api/v1/agent-tools", tags=["Agent Tools — Hermes plugin"])
+app.include_router(admin_hermes_router, prefix="/api/v1/admin/hermes", tags=["Admin Hermes"])
