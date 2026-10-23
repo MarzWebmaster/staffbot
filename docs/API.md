@@ -182,6 +182,32 @@ Auth: `x-api-key` atau `Authorization: Bearer` = `AUTH_KEY` gateway. **Jangan tu
 | POST | /api/incoming/whatsapp/{cid} | Mesej masuk WhatsApp (`x-gateway-key`) |
 | POST | /api/incoming/telegram/{cid} | Mesej masuk Telegram (`x-gateway-key`) |
 
+## Managed Hermes (baharu, 23 Okt 2026)
+
+| Method | Path | Auth | Fungsi |
+| :--- | :--- | :--- | :--- |
+| POST | /api/v1/channels/incoming/{whatsapp\|telegram}/{client_id} | `x-gateway-key` (pengurus) | Mesej masuk. Pelanggan tanpa Hermes dihantar ke gateway lama |
+| POST | /api/v1/channels/web/chat | C | Chat web dengan Hermes pelanggan (SSE). Body `{message, conversation}` |
+| GET | /api/v1/agent/me | C | Status Hermes + ciri pakej |
+| POST | /api/v1/agent/wake | C | Hidupkan container |
+| WS | /api/v1/agent/console?token=JWT | C | Web Console (mesej JSON `input`/`resize`; output binari). Kod tutup 4403 jika tidak dibenarkan |
+| GET | /api/v1/admin/hermes/instances | A | Semua container pelanggan |
+| POST | /api/v1/admin/hermes/{client_id}/{provision\|wake\|sleep\|backup\|apply-package\|deprovision} | A | Tindakan per pelanggan |
+| POST | /api/v1/admin/hermes/rollout | A | Upgrade image: `{image, client_ids?, percent?, batch_size}` |
+| POST | /api/v1/admin/packages/{id}/apply | A | Guna tetapan pakej pada semua container pelanggannya |
+
+**Agent tools** (dipanggil oleh plugin StaffBot dalam container; auth `Bearer sbk_...` token pelanggan; dilayan oleh API dan LLM proxy):
+
+| Method | Path | Fungsi |
+| :--- | :--- | :--- |
+| POST/GET | /api/v1/agent-tools/tasks | Cipta / senarai tugasan |
+| PATCH | /api/v1/agent-tools/tasks/{id} | Kemas kini tugasan |
+| GET | /api/v1/agent-tools/webhooks | Senarai API perniagaan yang disambung (tanpa rahsia) |
+| POST | /api/v1/agent-tools/webhook | Panggil API pelanggan (SSRF dikawal, 10/min) |
+| POST | /api/v1/agent-tools/email | Hantar email melalui SMTP pelanggan (50/hari) |
+
+**LLM proxy** (`staffbot-llm-proxy:8090`, untuk container pelanggan sahaja): `POST /v1/chat/completions` (stream dan bukan stream), `GET /v1/models`, `GET /health`. Auth: `Bearer sbk_<id>_<versi>_<hmac>`.
+
 ## Halaman web
 - Pelanggan (`/customer/*.html`): login, dashboard, bots, chat, tasks, billing, usage, settings, affiliates, providers, office.
 - Admin (`/admin/*.html`): login, dashboard, users, user-detail, subdomains, packages, billing, usage, payments, providers, token-topups, policy, settings, affiliates (6 halaman), chat, my-staff-ai.

@@ -89,3 +89,20 @@ S-01 hingga S-06 (✅) **sudah dibetulkan di branch `claude/staffbot-my-review-i
 5. Perubahan tingkah laku untuk pengguna:
    - pelanggan tidak lagi boleh menukar email sendiri di halaman Settings (medan kini read-only; tukar melalui admin);
    - moderasi pengguna BYOK kini menggunakan kunci platform.
+
+## Status selepas pembinaan Managed Hermes (23 Okt 2026, belum deploy)
+
+| ID | Status | Nota |
+| :--- | :--- | :--- |
+| B-03 | ✅ dalam laluan baharu | LLM proxy benar-benar menggunakan BYOK yang disimpan (jika pakej membenarkan). Laluan chat lama (`routers/chat.py`) belum diubah dan akan dibuang selepas migrasi |
+| B-07 | ✅ dalam laluan baharu | Proxy mengira token **setiap pusingan** ejen |
+| B-08 | ✅ dalam laluan baharu | Channel router menghantar mesej WhatsApp/Telegram ke Hermes pelanggan dan membalas |
+| B-11 | ✅ | Create pakej dibetulkan; lajur ditambah melalui Alembic |
+| — | ✅ | Setup WhatsApp/Telegram dahulu memanggil route gateway yang tidak wujud; kini memanggil pengurus terus |
+| S-07/S-08 | ✅ untuk tool baharu | `staffbot_call_webhook` blok semua alamat bukan awam (termasuk `100.64/10`), DNS gagal = tolak, tiada redirect. `/chat/extract-link` lama masih belum dibetulkan |
+
+**Pertimbangan keselamatan reka bentuk baharu:**
+- Pelanggan yang ada shell (Web Console atau `!cmd` dalam CLI Hermes) boleh membaca token proxy mereka sendiri dalam `/etc/hermes/.env`. Ini **dijangka**: token hanya membenarkan kuota pelanggan itu sendiri, dan semua had dikuatkuasakan di proxy.
+- Semakan SSRF webhook ada tetingkap DNS rebinding (alamat disemak, kemudian httpx resolve semula). Risiko rendah kerana firewall host juga menyekat rangkaian dalaman dari API. Boleh diperketatkan dengan sambung terus ke IP yang disemak.
+- Keupayaan (capabilities) container `CHOWN, SETUID, SETGID, DAC_OVERRIDE, FOWNER, KILL` dikekalkan untuk boot s6 imej Hermes. **[UJI-STAGING]** cuba buang `DAC_OVERRIDE`/`FOWNER`/`KILL` jika imej masih boot.
+- Firewall bergantung pada `iptables` dan rantai `DOCKER-USER`. Semak semula selepas setiap upgrade Docker (runbook §6.3).

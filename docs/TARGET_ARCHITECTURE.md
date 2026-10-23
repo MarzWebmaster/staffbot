@@ -2,7 +2,31 @@
 
 > Versi 1.0, 22 Okt 2026. Status: **dipersetujui secara prinsip oleh Remy**. Angka pakej dan perkara di §12 masih perlu dimuktamadkan.
 > Dokumen berkaitan: `ARCHITECTURE.md` (keadaan sekarang), `SECURITY_FINDINGS.md`, `GAP_ANALYSIS_HERMES_HUB.md`.
-> **[SAHKAN-HERMES]** = andaian tentang keupayaan Hermes Agent yang perlu diuji dengan versi yang dipilih.
+> **[SAHKAN-HERMES]** = andaian tentang Hermes Agent. Kebanyakannya sudah disahkan dari kod sumber Hermes v0.22.4 (23 Okt 2026); yang masih perlu diuji pada container sebenar ditanda **[UJI-STAGING]**.
+
+## 0. Status pelaksanaan (23 Okt 2026)
+
+Semua kod Fasa 0–5 dan alat Fasa 6–8 sudah siap di branch `claude/staffbot-my-review-i3w7be` dan diuji (159 ujian, `api/tests/integration/`). **Belum di-deploy.** Langkah deploy ada dalam `RUNBOOK_MANAGED_HERMES.md`.
+
+| Fasa | Status | Di mana |
+| :--- | :--- | :--- |
+| 0. Asas | ✅ Kod siap: Alembic, medan pakej, B-11. ⏳ Deploy, staging, ukur RAM | `api/migrations/`, `api/app/models/package.py` |
+| 1. Image Hermes | ✅ `FROM nousresearch/hermes-agent:0.22.4` + plugin + skill teras | `hermes-core/` |
+| 2. LLM proxy | ✅ | `api/app/llm_proxy/` |
+| 3. Orchestrator | ✅ + worker + skrip firewall | `api/app/services/hermes_orchestrator.py`, `scripts/managed-hermes/` |
+| 4. Channel router | ✅ | `api/app/services/channel_router.py`, `api/app/routers/channels.py` |
+| 5. Portal + Web Console | ✅ | `customer/agent.html`, `admin/hermes.html`, `api/app/routers/agent_portal.py` |
+| 6. Pilot | ⏳ Perlu server | Runbook §8 |
+| 7. Migrasi | ✅ Skrip siap. ⏳ Jalankan | `api/scripts/migrate_to_managed_hermes.py` |
+| 8. Bersihkan | ✅ Kod mati dibuang. ⏳ Sistem lama dibuang selepas migrasi | Runbook §11 |
+
+**Penemuan dari kod sumber Hermes yang mengubah reka bentuk:**
+- Config polisi menggunakan **managed scope** rasmi Hermes (`/etc/hermes/config.yaml` dan `/etc/hermes/.env`, milik root, di-mount read-only sebagai dua fail). Hermes memberi keutamaan kepada nilai ini berbanding config pelanggan. Menjadikan `config.yaml` pelanggan read-only (rancangan asal) akan merosakkan Hermes kerana ia menulis semula fail itu.
+- `.env` dalam volume pelanggan **mengatasi** `docker run -e`. Oleh itu semua nilai yang mesti dikunci diletakkan dalam `/etc/hermes/.env`.
+- CLI Hermes ada `!cmd` (shell) yang **tidak boleh dimatikan**. Mod console "hermes sahaja" ialah kemudahan UX, **bukan** sekatan keselamatan. Ia tetap selamat kerana shell itu hanya dalam container pelanggan sendiri.
+- Gateway Hermes yang idle menggunakan kira-kira **270 MB RAM** (dari kod Hermes; ukur sebenar di staging).
+- Lesen Hermes Agent: **MIT**, jadi hosting komersial dibenarkan (P5 selesai).
+
 
 ## 1. Ringkasan
 
@@ -33,7 +57,7 @@ StaffBot.my ialah **Hermes Agent yang diurus oleh provider (Marz)**.
 | D13 | **Container pelanggan diletak dalam server khusus**, bukan server OVH yang dikongsi dengan mail server dan pandaibot. Reka bentuk sedia untuk berbilang node | Keselamatan dan kapasiti |
 | D14 | **Satu control plane** (`staffbot-api`) untuk login, billing, admin dan provisioning | Satu sistem auth; mobile dan web memanggil API yang sama |
 | D15 | **Saluran (WhatsApp/Telegram/Web) melalui channel router pusat**, yang menghantar mesej ke container pelanggan | Satu titik untuk wake-on-message, kuota dan audit |
-| D16 | **Buang tiga enjin AI berlebihan.** `server-b/gateway` dikecilkan menjadi LLM proxy + channel router; logik ReAct-nya digantikan oleh Hermes | Kurangkan kod yang perlu diselenggara |
+| D16 | **Buang tiga enjin AI berlebihan.** LLM proxy dan channel router ditulis baru dalam `api/` (bukan mengubah gateway lama yang masih melayan pelanggan semasa migrasi). Gateway lama dibuang selepas migrasi | Kurangkan kod yang perlu diselenggara; sistem lama berjalan selari tanpa risiko |
 | D17 | **Pelanggan mengurus Hermes melalui Web Console dalam Portal Pelanggan** (Hermes CLI), bukan SSH | Satu login, tiada port atau key SSH, sesi diaudit, akses ikut pakej (§7A) |
 | D18 | **Dua portal: Superadmin dan Pelanggan.** Semua atribut pakej boleh di-CRUD oleh superadmin tanpa ubah kod | Pakej boleh dilaras mengikut pasaran (§7.1) |
 
@@ -78,16 +102,19 @@ StaffBot.my ialah **Hermes Agent yang diurus oleh provider (Marz)**.
 
 ## 4. Komponen
 
-| Komponen | Peranan | Dari kod sekarang |
+| Komponen | Peranan | Kod |
 | :--- | :--- | :--- |
-| `staffbot-api` | Control plane: auth, billing, pakej, admin, provisioning, simpan BYOK (disulitkan) | `api/` (kekal; dikemas) |
-| `llm-proxy` | Proksi serasi OpenAI. Mengesahkan token per pelanggan, memilih kunci (BYOK atau terurus), menguatkuasakan model dan kuota pakej, guardrail, dan log | Dikecilkan dari `server-b/gateway/main.py` (`/v1/chat/completions`, kuota, `token_usage_log`) + `content_moderation.py` |
-| `channel-router` | Menerima mesej Web/WhatsApp/Telegram, membangunkan container jika tidur, dan menghantar ke API Hermes pelanggan | `server-b/gateway` (bahagian `/api/incoming/*`) + `baileys-manager` + `telegram-manager` |
-| `orchestrator` | Cipta, tidur, bangun, upgrade, backup dan padam container | `api/app/services/docker_service.py` + `deployment_service.py` (dilanjutkan) |
-| `hermes-client` image | Hermes Agent (versi ditetapkan) + tool teras StaffBot + config asas | `hermes-core/` (dihidupkan semula) |
-| Postgres | Data platform: klien, langganan, penggunaan, audit, konfigurasi | `staffbot-db` |
+| `staffbot-api` | Control plane: auth, billing, pakej, admin, portal, BYOK (disulitkan); juga **channel router** dan **orchestrator** | `api/` |
+| `staffbot-llm-proxy` | Proksi serasi OpenAI: token per pelanggan, BYOK atau kunci terurus, model dan kuota pakej, guardrail, log. Juga melayan `/api/v1/agent-tools` supaya container hanya perlu sampai ke satu alamat | `api/app/llm_proxy/` (imej sama dengan API) |
+| `staffbot-hermes-worker` | Tidurkan container idle, backup harian | `python -m app.services.hermes_orchestrator worker` |
+| Channel router | Web/WhatsApp/Telegram → bangunkan container → API Hermes pelanggan → balas. Pelanggan yang belum dipindahkan dihantar ke gateway lama | `api/app/services/channel_router.py`, `api/app/routers/channels.py` |
+| Orchestrator | Cipta, tidur, bangun, apply pakej, upgrade, backup, padam container | `api/app/services/hermes_orchestrator.py`, `api/app/routers/admin/hermes.py` |
+| Image `staffbot-hermes` | Hermes Agent rasmi (versi dipin) + plugin StaffBot + skill teras | `hermes-core/` |
+| Managed config | `/etc/hermes/{config.yaml,.env}` per pelanggan | `api/app/services/hermes_config.py` |
+| Postgres | Data platform: klien, langganan, penggunaan, audit, `hermes_instances` | `staffbot-db` |
 
-**Akan dibuang selepas peralihan:** `hermes-gateway/`, `server-b/core-image/`, `sandbox/`, `server-b/hybrid-brain/`, `api/app_old/`, fail `.bak`, skrip patch sekali guna dalam `scripts/`, dan logik ReAct/tool dalam gateway.
+**Sudah dibuang:** `server-b/hybrid-brain/`, `api/app_old/`, fail `.bak`, skrip patch sekali guna.
+**Dibuang selepas migrasi selesai:** `server-b/gateway/` (gateway lama), `server-b/core-image/`, `sandbox/`, `hermes-gateway/`, laluan chat lama (`api/app/routers/chat.py`).
 
 ## 5. Keselamatan dan pengasingan
 
@@ -102,13 +129,13 @@ StaffBot.my ialah **Hermes Agent yang diurus oleh provider (Marz)**.
 | Rangkaian antara pelanggan | Satu rangkaian Docker per pelanggan; tiada laluan antara container |
 | Kunci LLM | Disimpan dalam control plane sahaja (disulitkan). Container hanya memegang **token per pelanggan** untuk `llm-proxy` |
 | Token per pelanggan | HMAC per `client_id` (sudah dilaksanakan dalam pembetulan S-05); boleh dibatalkan |
-| Config asas | Fail config asas di-mount **read-only**: endpoint LLM = `llm-proxy`, toolset ikut pakej, polisi. **[SAHKAN-HERMES]** cara Hermes menggabungkan config asas dengan config pelanggan |
+| Config asas | **Managed scope** Hermes: `/etc/hermes/config.yaml` dan `.env` dijana per pelanggan oleh control plane (`api/app/services/hermes_config.py`) dan di-mount read-only. Mengunci: endpoint LLM = `llm-proxy`, semua model auxiliary = main, tiada fallback provider, toolset ikut pakej, plugin + skill teras, API server. Pelanggan yang ada shell boleh menjalankan proses Hermes sendiri dengan config lain; itu hanya menjejaskan container mereka sendiri kerana semua LLM tetap melalui proxy |
 | Guardrail | Di `llm-proxy`: moderasi input (regex + AI), tapisan output, polisi sistem yang disuntik pada setiap panggilan |
 | Audit | Setiap panggilan LLM, tindakan admin dan perubahan pakej direkod dalam `audit_trail` |
 
 ### 5.2 Apa yang dianggap "bahaya" (dimatikan untuk semua pakej)
 - Akses ke host, Docker dan rangkaian dalaman (disekat oleh mekanisme di atas, bukan oleh Hermes).
-- Toolset Hermes yang memerlukan akses host atau desktop, contohnya `computer_use` **[SAHKAN-HERMES]** senarai penuh toolset untuk versi yang dipilih.
+- Toolset Hermes yang memerlukan akses host atau desktop, contohnya `computer_use`. Tanpa `agent_terminal`: `terminal` dan `code_execution` juga dimatikan. Katalog asas: `browser`, `image_gen`, `video_gen` dan `tts` dimatikan (RAM/kos).
 - Menghantar email terus melalui port 25 (mesti melalui SMTP pelanggan atau relay kita yang ada had).
 
 ## 6. Tools dan skills: model 3 lapis
@@ -121,7 +148,7 @@ StaffBot.my ialah **Hermes Agent yang diurus oleh provider (Marz)**.
 
 Prinsip: **sempadan keselamatan ialah container + firewall + proxy, bukan senarai skill.** Skill custom berjalan dalam container pelanggan sendiri; jika ia rosak, hanya container pelanggan itu yang terjejas.
 
-Tool StaffBot sedia ada (webhook, carian, email, tugasan dalam `server-b/gateway`) dipindahkan ke **plugin/MCP server** dalam image Hermes. **[SAHKAN-HERMES]** sama ada mekanisme plugin atau MCP lebih sesuai.
+Tool StaffBot sedia ada (webhook, carian, email, tugasan dalam `server-b/gateway`) dipindahkan ke **plugin Hermes terbina dalam** (`/opt/hermes/plugins/staffbot`, milik root dalam image). Plugin ialah klien nipis: kerja sebenar dibuat oleh `/api/v1/agent-tools` di platform, jadi kunci webhook dan password SMTP tidak pernah masuk container. Tool: `staffbot_create_task`, `staffbot_list_tasks`, `staffbot_update_task`, `staffbot_list_webhooks`, `staffbot_call_webhook`, `staffbot_send_email`. Carian web menggunakan toolset `web` Hermes sendiri.
 
 ## 7. Pakej (cadangan v1, 22 Okt 2026 — Remy akan laraskan)
 
@@ -148,8 +175,8 @@ Tool StaffBot sedia ada (webhook, carian, email, tugasan dalam `server-b/gateway
 **Nota:**
 - **Token.** Hermes ialah ejen yang memanggil tool berulang kali dengan system prompt yang panjang, jadi satu tugasan boleh menggunakan puluhan ribu token. Kuota 100k/500k/2M dalam sistem sekarang terlalu kecil. Angka di atas mengandaikan model ekonomi (cth DeepSeek). **Semak harga penyedia dan margin sebelum muktamad.**
 - **Pilihan:** kira kuota dalam **kredit RM**, bukan token, kerana harga setiap model berbeza.
-- **AI Staff berbilang** dalam satu container menggunakan profil Hermes. **[SAHKAN-HERMES]**
-- **"Web Console `hermes` sahaja"** bermaksud console menjalankan `hermes` terus, bukan bash. **[SAHKAN-HERMES]** sama ada CLI Hermes membenarkan pelarian ke shell.
+- **AI Staff berbilang** dalam satu container menggunakan profil Hermes (disahkan wujud: `/p/<profile>/v1/...`, setiap profil ada kunci API sendiri). **Belum dilaksanakan**: v1 menggunakan satu profil (default).
+- **"Web Console `hermes` sahaja"** menjalankan `hermes` terus, bukan bash. **Disahkan:** CLI Hermes membenarkan `!cmd` ke shell, dan ini tidak boleh dimatikan. Jadi mod ini hanya beza UX, bukan sekatan.
 
 **Bagaimana had pakej dikuatkuasakan:**
 - model dan token: di `llm-proxy`;
@@ -184,7 +211,7 @@ Tool StaffBot sedia ada (webhook, carian, email, tugasan dalam `server-b/gateway
 
 ## 8. LLM, BYOK dan kuota
 
-1. Hermes dalam container memanggil `llm-proxy` (endpoint serasi OpenAI) dengan token per pelanggan. **[SAHKAN-HERMES]** Hermes menyokong `custom_providers` dengan `base_url` tersuai. Repo sekarang sudah menggunakannya.
+1. Hermes dalam container memanggil `llm-proxy` (endpoint serasi OpenAI) dengan token per pelanggan: `model.provider: custom`, `model.base_url: <proxy>/v1`, `model.key_env: STAFFBOT_LLM_TOKEN` (disahkan dari dokumentasi Hermes).
 2. Proxy mengenal pasti pelanggan dari token, kemudian memilih kunci:
    - **BYOK** jika pelanggan menyimpannya dan menghidupkannya. Kuota terurus tidak dipotong.
    - Jika tidak, **kunci terurus kita**, dan kuota pakej disemak.
@@ -240,10 +267,10 @@ Panel admin: pilih versi, pilih kumpulan (canary atau semua), kemudian **Update*
 | P2 | Angka pakej v1 (§7) dan mod console Starter | Remy |
 | P3 | Tempoh idle sebelum tidur; sasaran masa bangun | Remy + ujian |
 | P4 | Server khusus untuk node pelanggan (penyedia, saiz) | Remy, selepas ukur RAM sebenar satu Hermes |
-| P5 | Versi Hermes yang dipin + **semak lesen** untuk hosting komersial | Teknikal |
-| P6 | Mekanisme tool teras: plugin Hermes atau MCP server | Teknikal (uji) |
-| P7 | Cara config asas read-only digabungkan dengan config pelanggan | Teknikal (uji) |
-| P8 | Telegram: melalui router pusat (D15) atau gateway native Hermes per pelanggan | Teknikal |
+| P5 | ✅ **Selesai:** `nousresearch/hermes-agent:0.22.4` (pin dengan digest semasa build); lesen MIT | — |
+| P6 | ✅ **Selesai:** plugin terbina dalam + `/api/v1/agent-tools` | — |
+| P7 | ✅ **Selesai:** managed scope Hermes (`/etc/hermes`) | — |
+| P8 | ✅ **Selesai:** router pusat, menggunakan API server Hermes dengan `X-Hermes-Session-Id` per chat | — |
 | P9 | Tempoh simpanan data selepas langganan tamat (PDPA) | Remy |
 
 ## 13. Pelan peralihan (dari sistem sekarang)

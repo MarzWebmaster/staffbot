@@ -16,7 +16,7 @@
 - **Masa**: `DateTime` naif (UTC). Pengecualian: `client_email_configs.created_at` (timezone-aware) dan `subdomains` (waktu tempatan server).
 - **Wang**: semuanya `Float`, bukan `Numeric`.
 - **Tenant**: lajur `client_id` FK → `clients.id`.
-- **Migrasi**: ❌ tiada Alembic. `Base.metadata.create_all()` dijalankan semasa startup (`database.py:34`). Fungsi ini **tidak mengubah jadual sedia ada**, jadi perubahan lajur dibuat dengan `psql` secara manual.
+- **Migrasi**: ✅ **Alembic** (`api/alembic.ini`, `api/migrations/`), ditambah 23 Okt 2026. DB sedia ada di-`stamp 0001_baseline` sekali, kemudian `alembic upgrade head`. Migrasi ditulis idempotent (`IF NOT EXISTS`) kerana DB baharu masih dicipta oleh `create_all()` semasa startup.
 
 ## 3. Jadual teras
 
@@ -91,6 +91,16 @@
   - **menjadikan semua secret yang disulitkan tidak boleh dibaca**.
 - Jika `STAFFBOT_SECRET_KEY` tidak ditetapkan, kunci diambil dari `/app/data/.secret_key` atau dijana secara automatik. Jika `/app/data` tidak kekal, semua secret hilang.
 - Lajur disulitkan (🔒): `clients.telegram_token_encrypted`, `api_keys.key_encrypted`, `llm_providers.api_key_encrypted`, `settings.value` (bila `encrypted`), `client_webhooks.auth_value`, `client_search_configs.api_key`, `client_email_configs.smtp_pass`.
+
+## 7A. Tambahan Managed Hermes (Alembic 0002–0004)
+
+| Jadual | Lajur baharu |
+| :--- | :--- |
+| `packages` | `allowed_models` (JSON; `["*"]` = semua), `channel_limits` (JSON), `byok_allowed`, `console_mode` (none/hermes/shell), `agent_terminal`, `catalog_tier` (basic/all), `custom_code_allowed`, `idle_sleep_minutes` (0 = sentiasa hidup), `backup_retention_days`, `upgrade_window`, `support_level`, serta `memory_retention_days`, `memory_item_limit`, `knowledge_item_limit` |
+| `clients` | `llm_token_version` (naikkan untuk membatalkan token proxy pelanggan) |
+| `hermes_instances` (baharu) | `client_id` (unik), `container_name`, `volume_name`, `image`, `api_port`, `api_server_key_encrypted` 🔒, `status` (provisioning/running/sleeping/upgrading/stopped/error), `last_error`, `last_active_at`, `last_backup_at`, `created_at`, `updated_at` |
+
+Data Hermes setiap pelanggan (memori, skill, sesi, fail) **tidak** disimpan dalam Postgres; ia berada dalam volume Docker `staffbot-hermes-<id>` (`/opt/data`).
 
 ## 8. Konsep yang TIADA
 
