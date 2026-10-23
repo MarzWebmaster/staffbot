@@ -5,6 +5,7 @@ browser: a WebSocket bridged to `docker exec` inside the customer's own
 container, running `hermes` or a shell depending on packages.console_mode.
 Sessions are audited and time out when idle.
 
+Open with ?ticket= from POST /api/v1/agent/console-ticket (60 s, single use).
 WebSocket protocol (browser -> server, JSON text frames):
   {"type": "input", "data": "<keystrokes>"}
   {"type": "resize", "cols": 120, "rows": 32}
@@ -13,7 +14,9 @@ Server -> browser: binary frames with terminal output.
 import asyncio
 import json
 import logging
+import secrets
 import time
+from datetime import timedelta
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, WebSocket, WebSocketDisconnect
@@ -25,7 +28,7 @@ from app.middleware.auth import get_current_client
 from app.models.client import Client
 from app.services import hermes_orchestrator as orch
 from app.services.audit import log_audit
-from app.utils.security import decode_access_token
+from app.utils.security import create_access_token, decode_access_token
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -34,6 +37,8 @@ settings = get_settings()
 CONSOLE_IDLE_SECONDS = 15 * 60
 CONSOLE_MAX_SECONDS = 2 * 60 * 60
 CONSOLE_COMMANDS = {"hermes": ["hermes"], "shell": ["/bin/bash", "-l"]}
+CONSOLE_TICKET_SECONDS = 60
+_used_tickets: dict[str, float] = {}  # jti -> expiry (per worker)
 
 
 @router.get("/me")
@@ -66,9 +71,32 @@ async def wake_agent(client: Client = Depends(get_current_client), db: AsyncSess
     return {"status": inst.status}
 
 
-async def _console_client(token: str) -> Optional[tuple[Client, str]]:
-    payload = decode_access_token(token or "")
-    if not payload or not payload.get("sub"):
+@router.post("/console-ticket")
+async def console_ticket(client: Client = Depends(get_current_client)):
+    """Short-lived, single-use ticket for opening the console WebSocket, so the
+    login token never appears in a URL (proxy/CDN access logs)."""
+    ticket = create_access_token(
+        {"sub": client.email, "purpose": "console", "jti": secrets.token_hex(16)},
+        expires_delta=timedelta(seconds=CONSOLE_TICKET_SECONDS),
+    )
+    return {"ticket": ticket, "expires_in": CONSOLE_TICKET_SECONDS}
+
+
+def _claim_ticket(payload: dict) -> bool:
+    now = time.time()
+    for jti, exp in list(_used_tickets.items()):
+        if exp < now:
+            _used_tickets.pop(jti, None)
+    jti = payload.get("jti")
+    if not jti or jti in _used_tickets:
+        return False
+    _used_tickets[jti] = float(payload.get("exp", now + CONSOLE_TICKET_SECONDS))
+    return True
+
+
+async def _console_client(ticket: str) -> Optional[tuple[Client, str]]:
+    payload = decode_access_token(ticket or "")
+    if not payload or not payload.get("sub") or payload.get("purpose") != "console" or not _claim_ticket(payload):
         return None
     from sqlalchemy import select
     async with async_session_factory() as db:
@@ -94,9 +122,10 @@ def open_exec(container: str, mode: str, dk=None):
 
 
 @router.websocket("/console")
-async def console(ws: WebSocket, token: str = Query("")):
-    """Browsers cannot set headers on WebSockets, so the JWT comes as ?token=."""
-    found = await _console_client(token)
+async def console(ws: WebSocket, ticket: str = Query("")):
+    """Browsers cannot set headers on WebSockets, so a single-use ticket from
+    POST /console-ticket comes as ?ticket=."""
+    found = await _console_client(ticket)
     await ws.accept()  # accept first: a close code is only delivered after the handshake
     if not settings.MANAGED_HERMES_ENABLED or not found:
         await ws.close(code=4403, reason="console not allowed")

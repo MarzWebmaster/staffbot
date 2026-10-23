@@ -199,7 +199,7 @@
         return false;
     }
 
-    function openConsole() {
+    async function openConsole() {
         if (typeof Terminal === 'undefined') { showToast('Terminal belum dimuatkan, cuba lagi', 'error'); return; }
         document.getElementById('consoleTitle').textContent = AGENT.package.console_mode === 'shell' ? 'Console — shell' : 'Console — Hermes CLI';
         openModal('consoleModal');
@@ -212,8 +212,11 @@
         }
         term.reset(); fit.fit();
         term.writeln('Menyambung ke ejen anda…');
+        let ticket;
+        try { ticket = (await api('/agent/console-ticket', { method: 'POST' })).ticket; }
+        catch (_) { term.writeln('Tidak dapat membuka console.'); return; }
         const proto = location.protocol === 'https:' ? 'wss' : 'ws';
-        sock = new WebSocket(`${proto}://${location.host}${API_BASE}/agent/console?token=${encodeURIComponent(AUTH_TOKEN)}`);
+        sock = new WebSocket(`${proto}://${location.host}${API_BASE}/agent/console?ticket=${encodeURIComponent(ticket)}`);
         sock.binaryType = 'arraybuffer';
         sock.onopen = () => { sendSize(); term.focus(); };
         sock.onmessage = ev => term.write(typeof ev.data === 'string' ? ev.data : new Uint8Array(ev.data));

@@ -109,10 +109,19 @@ with sync_playwright() as p:
     pg2.goto(BASE + "/customer/login.html"); pg2.evaluate(f"localStorage.setItem('staffbot_token', '{tok('t@x.my')}')")
     pg2.goto(BASE + "/customer/agent.html"); pg2.wait_for_selector("#agentGrid", state="visible", timeout=15000); pg2.wait_for_timeout(600)
     check("trial: console hidden + note", not pg2.is_visible("#consoleBtn") and "tidak termasuk" in pg2.inner_text("#consoleNote"))
-    code = pg2.evaluate(f"""new Promise(r => {{ const s = new WebSocket('ws://127.0.0.1:8766/api/v1/agent/console?token={tok('t@x.my')}'); s.onclose = e => r(e.code); }})""")
-    check("trial: console websocket refused (4403)", code == 4403, code)
-    code = pg2.evaluate("""new Promise(r => { const s = new WebSocket('ws://127.0.0.1:8766/api/v1/agent/console?token=bad'); s.onclose = e => r(e.code); })""")
-    check("bad token: console websocket refused", code == 4403, code)
+    import httpx
+    def ticket(email):
+        return httpx.post(BASE + "/api/v1/agent/console-ticket", headers={"Authorization": "Bearer " + tok(email)}).json()["ticket"]
+    def ws_close(q):
+        return pg2.evaluate("q => new Promise(r => { const s = new WebSocket('ws://127.0.0.1:8766/api/v1/agent/console?' + q); s.onclose = e => r(e.code); })", q)
+    check("trial: console websocket refused (4403)", ws_close("ticket=" + ticket("t@x.my")) == 4403)
+    check("bad ticket refused", ws_close("ticket=bad") == 4403)
+    check("login JWT is not accepted as a console ticket", ws_close("ticket=" + tok("ali@x.my")) == 4403)
+    t1 = ticket("ali@x.my")
+    check("ticket cannot be used as an API bearer token", httpx.get(BASE + "/api/v1/agent/me", headers={"Authorization": "Bearer " + t1}).status_code == 401)
+    pg2.evaluate("q => new Promise(r => { const s = new WebSocket('ws://127.0.0.1:8766/api/v1/agent/console?' + q); s.onopen = () => { s.close(); r(1); }; s.onclose = () => r(0); })", "ticket=" + t1)
+    time.sleep(0.5)
+    check("ticket is single-use (replay refused)", ws_close("ticket=" + t1) == 4403)
 
     # admin page
     pg3 = b.new_page(viewport={"width": 1280, "height": 800}); errs3 = []

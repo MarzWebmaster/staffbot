@@ -6,7 +6,7 @@
 
 ## 0. Status pelaksanaan (23 Okt 2026)
 
-Semua kod Fasa 0–5 dan alat Fasa 6–8 sudah siap di branch `claude/staffbot-my-review-i3w7be` dan diuji (159 ujian, `api/tests/integration/`). **Belum di-deploy.** Langkah deploy ada dalam `RUNBOOK_MANAGED_HERMES.md`.
+Semua kod Fasa 0–5 dan alat Fasa 6–8 sudah siap di branch `claude/staffbot-my-review-i3w7be` dan diuji (162 ujian, `api/tests/integration/`). **Belum di-deploy.** Langkah deploy ada dalam `RUNBOOK_MANAGED_HERMES.md`.
 
 | Fasa | Status | Di mana |
 | :--- | :--- | :--- |

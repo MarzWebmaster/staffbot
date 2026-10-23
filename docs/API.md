@@ -190,7 +190,8 @@ Auth: `x-api-key` atau `Authorization: Bearer` = `AUTH_KEY` gateway. **Jangan tu
 | POST | /api/v1/channels/web/chat | C | Chat web dengan Hermes pelanggan (SSE). Body `{message, conversation}` |
 | GET | /api/v1/agent/me | C | Status Hermes + ciri pakej |
 | POST | /api/v1/agent/wake | C | Hidupkan container |
-| WS | /api/v1/agent/console?token=JWT | C | Web Console (mesej JSON `input`/`resize`; output binari). Kod tutup 4403 jika tidak dibenarkan |
+| POST | /api/v1/agent/console-ticket | C | Tiket console sekali guna (60 s) |
+| WS | /api/v1/agent/console?ticket=TIKET | tiket | Web Console (mesej JSON `input`/`resize`; output binari). Kod tutup 4403 jika tidak dibenarkan. JWT login tidak diterima di sini, dan tiket tidak diterima sebagai token API |
 | GET | /api/v1/admin/hermes/instances | A | Semua container pelanggan |
 | POST | /api/v1/admin/hermes/{client_id}/{provision\|wake\|sleep\|backup\|apply-package\|deprovision} | A | Tindakan per pelanggan |
 | POST | /api/v1/admin/hermes/rollout | A | Upgrade image: `{image, client_ids?, percent?, batch_size}` |

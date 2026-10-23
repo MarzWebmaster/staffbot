@@ -28,6 +28,13 @@ async def get_current_client(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
+    if payload.get("purpose"):
+        # Purpose-bound tokens (e.g. console tickets) are not login sessions
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or expired token",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
     email = payload.get("sub")
     role = payload.get("role")
     if email is None:

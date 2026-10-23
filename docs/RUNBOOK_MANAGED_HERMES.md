@@ -1,7 +1,7 @@
 # Runbook — Deploy Managed Hermes (Fasa 6–8)
 
 > 23 Okt 2026. Untuk sesiapa yang ada akses root ke server (SSH melalui Tailscale).
-> Kod sudah siap dan diuji (159 ujian, `api/tests/integration/`). **Semua langkah di bawah belum pernah dijalankan pada server sebenar**, jadi ikut urutan dan semak hasil setiap langkah.
+> Kod sudah siap dan diuji (162 ujian, `api/tests/integration/`). **Semua langkah di bawah belum pernah dijalankan pada server sebenar**, jadi ikut urutan dan semak hasil setiap langkah.
 > Peraturan: buat di **staging dahulu**. Production hanya selepas semua semakan staging lulus.
 
 ## 0. Ringkasan apa yang akan berjalan
