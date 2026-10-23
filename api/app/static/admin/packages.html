@@ -115,6 +115,32 @@
                     </div>
                 </div>
 
+                <div style="border-top:1px solid var(--border);margin:12px 0;padding-top:12px">
+                    <p style="font-size:12px;font-weight:600;margin-bottom:8px;color:var(--text-light);text-transform:uppercase">🤖 Hermes Agent</p>
+                    <div class="grid-3">
+                        <div class="form-group"><label>Web Console</label>
+                            <select class="form-input" id="pkgConsole"><option value="none">Tiada</option><option value="hermes">Hermes CLI sahaja</option><option value="shell">Shell penuh</option></select></div>
+                        <div class="form-group"><label>Katalog skill</label>
+                            <select class="form-input" id="pkgCatalog"><option value="basic">Asas</option><option value="all">Semua</option></select></div>
+                        <div class="form-group"><label>Sokongan</label>
+                            <select class="form-input" id="pkgSupport"><option value="none">Tiada</option><option value="email">Email</option><option value="email_whatsapp">Email + WhatsApp</option><option value="priority">Keutamaan</option></select></div>
+                        <div class="form-group"><label>WhatsApp (bil. nombor)</label><input type="number" class="form-input" id="pkgWa" value="1" min="0"></div>
+                        <div class="form-group"><label>Telegram (bil. bot)</label><input type="number" class="form-input" id="pkgTg" value="1" min="0"></div>
+                        <div class="form-group"><label>Tidur selepas idle (min, 0 = sentiasa hidup)</label><input type="number" class="form-input" id="pkgIdle" value="30" min="0"></div>
+                        <div class="form-group"><label>Simpanan backup (hari)</label><input type="number" class="form-input" id="pkgBackup" value="7" min="0"></div>
+                        <div class="form-group"><label>Memori: simpanan (hari)</label><input type="number" class="form-input" id="pkgMemDays" value="7" min="0"></div>
+                        <div class="form-group"><label>Memori: had item</label><input type="number" class="form-input" id="pkgMemItems" value="50" min="0"></div>
+                    </div>
+                    <div class="form-group"><label>Model dibenarkan (satu baris setiap model; kosong = model penyedia pakej; * = semua)</label>
+                        <textarea class="form-input" id="pkgModels" rows="2" placeholder="deepseek-chat"></textarea></div>
+                    <div style="display:flex;flex-wrap:wrap;gap:16px;font-size:13px">
+                        <label><input type="checkbox" id="pkgByok" checked> BYOK dibenarkan</label>
+                        <label><input type="checkbox" id="pkgAgentTerm"> Ejen boleh guna terminal/kod</label>
+                        <label><input type="checkbox" id="pkgCustomCode"> Kod / MCP custom</label>
+                        <label><input type="checkbox" id="pkgUpgradeWin"> Pilih masa upgrade</label>
+                    </div>
+                </div>
+
                 <!-- Skills Categories — Category-level toggle only -->
                 <div style="border-top:1px solid var(--border);margin:12px 0;padding-top:12px">
                     <p class="section-title">🧠 Skills Categories <span class="section-sub">(enable/disable whole category — all skills inside follow)</span></p>
@@ -206,6 +232,44 @@
         }).join('');
     }
 
+    // Hermes Agent fields (docs/TARGET_ARCHITECTURE.md §7.1)
+    function setHermesFields(p) {
+        const ch = p.channel_limits || {};
+        document.getElementById('pkgConsole').value = p.console_mode || 'none';
+        document.getElementById('pkgCatalog').value = p.catalog_tier || 'basic';
+        document.getElementById('pkgSupport').value = p.support_level || 'email';
+        document.getElementById('pkgWa').value = ch.whatsapp ?? 1;
+        document.getElementById('pkgTg').value = ch.telegram ?? 1;
+        document.getElementById('pkgIdle').value = p.idle_sleep_minutes ?? 30;
+        document.getElementById('pkgBackup').value = p.backup_retention_days ?? 7;
+        document.getElementById('pkgMemDays').value = p.memory_retention_days ?? 7;
+        document.getElementById('pkgMemItems').value = p.memory_item_limit ?? 50;
+        document.getElementById('pkgModels').value = (p.allowed_models || []).join('\n');
+        document.getElementById('pkgByok').checked = p.byok_allowed ?? true;
+        document.getElementById('pkgAgentTerm').checked = !!p.agent_terminal;
+        document.getElementById('pkgCustomCode').checked = !!p.custom_code_allowed;
+        document.getElementById('pkgUpgradeWin').checked = !!p.upgrade_window;
+    }
+
+    function getHermesFields() {
+        const num = (id) => parseInt(document.getElementById(id).value) || 0;
+        return {
+            console_mode: document.getElementById('pkgConsole').value,
+            catalog_tier: document.getElementById('pkgCatalog').value,
+            support_level: document.getElementById('pkgSupport').value,
+            channel_limits: { web: true, whatsapp: num('pkgWa'), telegram: num('pkgTg') },
+            idle_sleep_minutes: num('pkgIdle'),
+            backup_retention_days: num('pkgBackup'),
+            memory_retention_days: num('pkgMemDays'),
+            memory_item_limit: num('pkgMemItems'),
+            allowed_models: document.getElementById('pkgModels').value.split('\n').map(m => m.trim()).filter(Boolean),
+            byok_allowed: document.getElementById('pkgByok').checked,
+            agent_terminal: document.getElementById('pkgAgentTerm').checked,
+            custom_code_allowed: document.getElementById('pkgCustomCode').checked,
+            upgrade_window: document.getElementById('pkgUpgradeWin').checked,
+        };
+    }
+
     function showAddPackage() {
         document.getElementById('pkgModalTitle').textContent = 'Add Package';
         document.getElementById('pkgId').value = '';
@@ -224,6 +288,7 @@
         document.getElementById('pkgDesc').value = '';
         document.getElementById('pkgFeatures').value = '';
         document.getElementById('pkgSort').value = '0';
+        setHermesFields({});
         selectedSkillCats = [];
         selectedToolCats = [];
         renderSkills();
@@ -250,6 +315,7 @@
         document.getElementById('pkgDesc').value = pkg.description || '';
         document.getElementById('pkgFeatures').value = (pkg.features || []).join('\n');
         document.getElementById('pkgSort').value = pkg.sort_order || 0;
+        setHermesFields(pkg);
         selectedSkillCats = pkg.allowed_skill_categories || pkg.skill_category_ids || [];
         selectedToolCats = pkg.allowed_tool_categories || pkg.tool_category_ids || [];
         renderSkills();
@@ -283,6 +349,7 @@
             enabled_skills: [],
             enabled_tools: [],
             sort_order: parseInt(document.getElementById('pkgSort').value) || 0,
+            ...getHermesFields(),
         };
 
         try {

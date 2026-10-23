@@ -94,33 +94,11 @@ async def create_package(
     db: AsyncSession = Depends(get_db),
 ):
     """Create a new package."""
-    pkg = Package(
-        name=data.name,
-        display_name=data.display_name,
-        price_monthly=data.price_monthly,
-        price_yearly=data.price_yearly,
-        description=data.description,
-        features=data.features,
-        bot_limit=data.bot_limit,
-        sub_ejen_limit=data.sub_ejen_limit,
-        managed_tokens=data.managed_tokens,
-        cpu_limit=data.cpu_limit,
-        memory_limit_mb=data.memory_limit_mb,
-        storage_limit_gb=data.storage_limit_gb,
-        memory_retention_days=data.memory_retention_days,
-        memory_item_limit=data.memory_item_limit,
-        skill_category_ids=data.skill_category_ids,
-        tool_category_ids=data.tool_category_ids,
-        allowed_skill_categories=data.allowed_skill_categories,
-        allowed_tool_categories=data.allowed_tool_categories,
-        enabled_skills=data.enabled_skills,
-        enabled_tools=data.enabled_tools,
-        sort_order=data.sort_order,
-        is_active=True,
-        trial_days=data.trial_days,
-        is_public=data.is_public,
-        badge=data.badge,
-    )
+    values = data.model_dump()
+    existing = await db.execute(select(Package).where(Package.name == data.name))
+    if existing.scalar_one_or_none():
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=f"Package '{data.name}' already exists")
+    pkg = Package(**values, is_active=True)
     db.add(pkg)
     await db.commit()
     await db.refresh(pkg)
@@ -280,11 +258,25 @@ async def delete_package(
     admin: Client = Depends(get_current_admin),
     db: AsyncSession = Depends(get_db),
 ):
-    """Hard-delete a package and its provider assignments."""
+    """Hard-delete a package and its provider assignments.
+
+    Refused while any client is on the package: deactivate it instead
+    (PUT is_active=false) so existing customers keep their plan.
+    """
     result = await db.execute(select(Package).where(Package.id == package_id))
     pkg = result.scalar_one_or_none()
     if not pkg:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Package not found")
+
+    from sqlalchemy import func
+    in_use = (await db.execute(
+        select(func.count()).select_from(Client).where(Client.package == pkg.name)
+    )).scalar_one()
+    if in_use:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Package '{pkg.name}' is used by {in_use} client(s). Deactivate it instead of deleting.",
+        )
 
     # Delete package-provider assignments first (FK constraint)
     from sqlalchemy import delete as sqla_delete
@@ -322,6 +314,19 @@ def _pkg_to_dict(pkg: Package, admin: bool = False) -> dict:
         "allowed_tool_categories": pkg.allowed_tool_categories or [],
         "enabled_skills": pkg.enabled_skills or [],
         "enabled_tools": pkg.enabled_tools or [],
+        "knowledge_item_limit": pkg.knowledge_item_limit if pkg.knowledge_item_limit is not None else 50,
+        "trial_days": pkg.trial_days or 0,
+        "allowed_models": pkg.allowed_models or [],
+        "channel_limits": pkg.channel_limits or {},
+        "byok_allowed": pkg.byok_allowed if pkg.byok_allowed is not None else True,
+        "console_mode": pkg.console_mode or "none",
+        "agent_terminal": bool(pkg.agent_terminal),
+        "catalog_tier": pkg.catalog_tier or "basic",
+        "custom_code_allowed": bool(pkg.custom_code_allowed),
+        "idle_sleep_minutes": pkg.idle_sleep_minutes if pkg.idle_sleep_minutes is not None else 30,  # 0 = always on
+        "backup_retention_days": pkg.backup_retention_days if pkg.backup_retention_days is not None else 7,
+        "upgrade_window": bool(pkg.upgrade_window),
+        "support_level": pkg.support_level or "email",
     }
     if admin:
         data.update({

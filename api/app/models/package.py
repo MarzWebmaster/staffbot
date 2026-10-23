@@ -37,3 +37,21 @@ class Package(Base):
     is_active = Column(Boolean, default=True)
     badge = Column(String(50), nullable=True)
     created_at = Column(DateTime, default=utcnow)
+
+    # Memory limits (used by routers/memory.py; previously only in the live DB)
+    memory_retention_days = Column(Integer, default=7)
+    memory_item_limit = Column(Integer, default=50)
+    knowledge_item_limit = Column(Integer, default=50)
+
+    # Managed Hermes (docs/TARGET_ARCHITECTURE.md §7). bot_limit = AI Staff limit.
+    allowed_models = Column(JSON, default=list)          # [] = models of providers assigned to the package; ["*"] = any
+    channel_limits = Column(JSON, default=dict)          # {"web": true, "whatsapp": 1, "telegram": 1}
+    byok_allowed = Column(Boolean, default=True)
+    console_mode = Column(String(20), default="none")    # none | hermes | shell
+    agent_terminal = Column(Boolean, default=False)      # agent may use terminal/code toolsets
+    catalog_tier = Column(String(20), default="basic")   # basic | all
+    custom_code_allowed = Column(Boolean, default=False) # custom code / MCP servers
+    idle_sleep_minutes = Column(Integer, default=30)     # 0 = always on
+    backup_retention_days = Column(Integer, default=7)
+    upgrade_window = Column(Boolean, default=False)      # customer may choose upgrade time
+    support_level = Column(String(20), default="email")  # none | email | email_whatsapp | priority

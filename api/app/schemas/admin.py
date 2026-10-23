@@ -1,5 +1,5 @@
 from pydantic import BaseModel, EmailStr, Field
-from typing import Optional, List
+from typing import Literal, Optional, List
 
 
 class AdminLogin(BaseModel):
@@ -48,6 +48,20 @@ class PackageCreate(BaseModel):
     trial_days: int = 0
     is_public: bool = True
     badge: Optional[str] = None
+    memory_retention_days: int = 7
+    memory_item_limit: int = 50
+    knowledge_item_limit: int = 50
+    allowed_models: list[str] = []
+    channel_limits: dict = {}
+    byok_allowed: bool = True
+    console_mode: Literal["none", "hermes", "shell"] = "none"
+    agent_terminal: bool = False
+    catalog_tier: Literal["basic", "all"] = "basic"
+    custom_code_allowed: bool = False
+    idle_sleep_minutes: int = Field(30, ge=0)  # 0 = always on
+    backup_retention_days: int = Field(7, ge=0)
+    upgrade_window: bool = False
+    support_level: Literal["none", "email", "email_whatsapp", "priority"] = "email"
 
 
 class PackageUpdate(BaseModel):
@@ -73,6 +87,20 @@ class PackageUpdate(BaseModel):
     trial_days: Optional[int] = None
     is_public: Optional[bool] = None
     badge: Optional[str] = None
+    memory_retention_days: Optional[int] = None
+    memory_item_limit: Optional[int] = None
+    knowledge_item_limit: Optional[int] = None
+    allowed_models: Optional[list[str]] = None
+    channel_limits: Optional[dict] = None
+    byok_allowed: Optional[bool] = None
+    console_mode: Optional[Literal["none", "hermes", "shell"]] = None
+    agent_terminal: Optional[bool] = None
+    catalog_tier: Optional[Literal["basic", "all"]] = None
+    custom_code_allowed: Optional[bool] = None
+    idle_sleep_minutes: Optional[int] = Field(None, ge=0)  # 0 = always on
+    backup_retention_days: Optional[int] = Field(None, ge=0)
+    upgrade_window: Optional[bool] = None
+    support_level: Optional[Literal["none", "email", "email_whatsapp", "priority"]] = None
 
 
 class SettingUpdate(BaseModel):
