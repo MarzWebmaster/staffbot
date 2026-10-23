@@ -28,6 +28,9 @@ const path = require('path');
 const HTTP_PORT = parseInt(process.env.HTTP_PORT || '8653');
 const GATEWAY_URL = process.env.GATEWAY_URL || 'http://staffbot-gateway:8080';
 const GATEWAY_AUTH_KEY = process.env.GATEWAY_AUTH_KEY || 'staffbot-secret-key';
+// Where incoming messages go. Managed Hermes: the API channel router
+// (http://staffbot-api:8000/api/v1/channels/incoming). Default: legacy gateway.
+const INCOMING_URL = process.env.INCOMING_URL || `${GATEWAY_URL}/api/incoming`;
 const LOG_LEVEL = process.env.LOG_LEVEL || 'info';
 const AUTH_BASE = process.env.AUTH_BASE || '/root/staffbot/auth/whatsapp';
 
@@ -46,7 +49,7 @@ function getAuthPath(clientId) {
 // --- Helper: Notify Gateway about incoming message ---
 async function notifyGateway(clientId, msgData) {
     try {
-        await axios.post(`${GATEWAY_URL}/api/incoming/whatsapp/${clientId}`, msgData, {
+        await axios.post(`${INCOMING_URL}/whatsapp/${clientId}`, msgData, {
             headers: { 'X-API-Key': GATEWAY_AUTH_KEY, 'x-gateway-key': GATEWAY_AUTH_KEY },
             timeout: 5000,
         });

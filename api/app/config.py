@@ -71,6 +71,11 @@ class Settings(BaseSettings):
     # When true, new deployments get a managed Hermes container instead of the
     # legacy staffbot-core container (docs/TARGET_ARCHITECTURE.md §13).
     MANAGED_HERMES_ENABLED: bool = False
+    # Channel managers (reply path) and the key they send on incoming messages
+    BAILEYS_MANAGER_URL: str = "http://staffbot-baileys:8653"
+    TELEGRAM_MANAGER_URL: str = "http://staffbot-telegram:8654"
+    CHANNEL_INCOMING_KEY: str = ""            # = GATEWAY_AUTH_KEY of the managers
+    HERMES_REQUEST_TIMEOUT: int = 300
     
     # SMTP / Email
     SMTP_HOST: str = ""

@@ -47,6 +47,9 @@ services:
       - STAFFBOT_HERMES_IMAGE=${STAFFBOT_HERMES_IMAGE:-staffbot-hermes:0.22.4-sb1}
       - STAFFBOT_HERMES_RUNTIME=${STAFFBOT_HERMES_RUNTIME:-}
       - STAFFBOT_MANAGED_HERMES_ENABLED=${STAFFBOT_MANAGED_HERMES_ENABLED:-false}
+      - STAFFBOT_CHANNEL_INCOMING_KEY=${GATEWAY_AUTH_KEY}
+      - STAFFBOT_BAILEYS_MANAGER_URL=${STAFFBOT_BAILEYS_MANAGER_URL:-http://staffbot-baileys:8653}
+      - STAFFBOT_TELEGRAM_MANAGER_URL=${STAFFBOT_TELEGRAM_MANAGER_URL:-http://staffbot-telegram:8654}
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - /root/staffbot/containers:/root/staffbot/containers
