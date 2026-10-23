@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="ms">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hermes Agents — StaffBot.my Admin</title>
+    <script src="https://cdn.tailwindcss.com" defer></script>
+    <link rel="stylesheet" href="/static/css/app.css?v=1780499994">
+    <style>
+        .tbl { width:100%; border-collapse:collapse; font-size:13px; }
+        .tbl th, .tbl td { padding:8px 10px; border-bottom:1px solid var(--border); text-align:left; vertical-align:top; }
+        .tbl th { font-size:11px; text-transform:uppercase; color:var(--text-light); }
+        .pill { display:inline-block; padding:2px 8px; border-radius:999px; font-size:11px; font-weight:600; }
+        .p-running { background:#D1FAE5; color:#065F46; } .p-sleeping { background:#E0E7FF; color:#3730A3; }
+        .p-error { background:#FEE2E2; color:#991B1B; } .p-other { background:#F3F4F6; color:#374151; }
+        .acts button { font-size:11px; padding:3px 8px; margin:2px; }
+        .scroll-x { overflow-x:auto; }
+    </style>
+</head>
+<body>
+    <button class="sidebar-toggle" onclick="toggleSidebar()">☰</button>
+    <div class="sidebar-overlay" onclick="toggleSidebar()"></div>
+    <div class="app-layout">
+        <div class="sidebar" style="background:#111827">
+            <div class="sidebar-brand"><h2>StaffBot.my</h2><span>Admin Panel</span></div>
+            <nav class="sidebar-nav" id="sidebar-nav"></nav>
+            <div id="sidebar-user" style="padding:16px 20px;border-top:1px solid rgba(255,255,255,0.1);margin-top:auto"></div>
+        </div>
+        <div class="main-content">
+            <div class="topbar">
+                <h1>🧠 Hermes Agents</h1>
+                <button class="btn btn-secondary" onclick="loadInstances()">↻ Muat semula</button>
+            </div>
+
+            <div class="card" style="padding:16px;margin-bottom:16px">
+                <h3 style="margin-bottom:8px">🚀 Rollout versi Hermes</h3>
+                <p style="font-size:12px;color:var(--text-light);margin-bottom:10px">
+                    Setiap container di-snapshot dahulu, kemudian dicipta semula dengan image baru (data pelanggan kekal).
+                    Mulakan dengan canary. Untuk rollback, buat rollout dengan image lama.
+                </p>
+                <form onsubmit="return startRollout(event)" style="display:flex;flex-wrap:wrap;gap:8px;align-items:flex-end">
+                    <div class="form-group" style="flex:2;min-width:220px"><label>Image</label>
+                        <input class="form-input" id="roImage" placeholder="staffbot-hermes:0.23.0-sb1" required></div>
+                    <div class="form-group" style="flex:1;min-width:140px"><label>Mod</label>
+                        <select class="form-input" id="roMode" onchange="roModeChanged()">
+                            <option value="percent">Canary (%)</option><option value="ids">Canary (ID pelanggan)</option><option value="all">Semua</option>
+                        </select></div>
+                    <div class="form-group" style="flex:1;min-width:140px" id="roValueBox"><label id="roValueLabel">Peratus</label>
+                        <input class="form-input" id="roValue" value="5"></div>
+                    <div class="form-group" style="width:110px"><label>Batch</label>
+                        <input class="form-input" id="roBatch" type="number" value="10" min="1" max="100"></div>
+                    <button class="btn btn-primary" type="submit">Mula rollout</button>
+                </form>
+            </div>
+
+            <div class="card" style="padding:0">
+                <div class="scroll-x">
+                    <table class="tbl">
+                        <thead><tr><th>Pelanggan</th><th>Pakej</th><th>Status</th><th>Image</th><th>Aktif terakhir</th><th>Backup</th><th>Tindakan</th></tr></thead>
+                        <tbody id="rows"><tr><td colspan="7" style="text-align:center;color:var(--text-light)">Loading…</td></tr></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="toast-container" class="toast-container"></div>
+    <script src="/static/js/app.js?v=1780499994" defer></script>
+    <script>
+    const ACTIONS = [['wake', 'Hidupkan'], ['sleep', 'Tidurkan'], ['backup', 'Backup'], ['apply-package', 'Guna pakej'], ['provision', 'Cipta semula']];
+
+    function fmt(s) { return s ? new Date(s + 'Z').toLocaleString('ms-MY') : '—'; }
+
+    async function loadInstances() {
+        const rows = await api('/admin/hermes/instances');
+        const tb = document.getElementById('rows');
+        if (!rows.length) { tb.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--text-light)">Belum ada container Hermes.</td></tr>'; return; }
+        tb.innerHTML = rows.map(r => {
+            const cls = { running: 'p-running', sleeping: 'p-sleeping', error: 'p-error' }[r.status] || 'p-other';
+            const err = r.last_error ? `<div style="color:#991B1B;font-size:11px;max-width:260px">${escapeHtml(r.last_error.slice(0, 200))}</div>` : '';
+            const acts = ACTIONS.map(([a, l]) => `<button class="btn btn-secondary" onclick="act(${r.client_id}, '${a}', this)">${l}</button>`).join('');
+            return `<tr>
+                <td><strong>#${r.client_id}</strong> ${escapeHtml(r.client_name || '')}</td>
+                <td>${escapeHtml(r.package || '')}</td>
+                <td><span class="pill ${cls}">${escapeHtml(r.status)}</span>${err}</td>
+                <td style="font-family:monospace;font-size:12px">${escapeHtml(r.image)}</td>
+                <td>${fmt(r.last_active_at)}</td>
+                <td>${fmt(r.last_backup_at)}</td>
+                <td class="acts">${acts}</td></tr>`;
+        }).join('');
+    }
+
+    async function act(cid, action, btn) {
+        if (['provision', 'apply-package'].includes(action) && !confirm(`${action} untuk pelanggan #${cid}? Container akan dimulakan semula.`)) return;
+        btn.disabled = true;
+        try { await api(`/admin/hermes/${cid}/${action}`, { method: 'POST' }); showToast(`${action}: selesai`, 'success'); }
+        finally { btn.disabled = false; loadInstances(); }
+    }
+
+    function roModeChanged() {
+        const m = document.getElementById('roMode').value;
+        document.getElementById('roValueBox').style.display = m === 'all' ? 'none' : 'block';
+        document.getElementById('roValueLabel').textContent = m === 'ids' ? 'ID (cth 3,7,12)' : 'Peratus';
+        document.getElementById('roValue').value = m === 'ids' ? '' : '5';
+    }
+
+    async function startRollout(e) {
+        e.preventDefault();
+        const mode = document.getElementById('roMode').value, val = document.getElementById('roValue').value;
+        const body = { image: document.getElementById('roImage').value.trim(), batch_size: parseInt(document.getElementById('roBatch').value) || 10 };
+        if (mode === 'percent') body.percent = parseInt(val);
+        if (mode === 'ids') body.client_ids = val.split(',').map(x => parseInt(x.trim())).filter(Boolean);
+        if (mode === 'all' && !confirm('Upgrade SEMUA pelanggan ke ' + body.image + '?')) return false;
+        const r = await api('/admin/hermes/rollout', { method: 'POST', body: JSON.stringify(body) });
+        showToast(`Rollout dimulakan untuk ${r.customers.length} pelanggan`, 'success');
+        setTimeout(loadInstances, 3000);
+        return false;
+    }
+
+    document.addEventListener('DOMContentLoaded', async () => {
+        const user = await checkAdminAuth('/admin/login.html');
+        if (!user) return;
+        renderSidebar('hermes');
+        renderSidebarUser(user);
+        await loadInstances();
+    });
+    </script>
+</body>
+</html>

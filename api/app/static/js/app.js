@@ -138,6 +138,7 @@ function renderSidebar(active) {
         },
         { href: 'subdomains.html', icon: '🌐', label: 'Subdomains', id: 'subdomains' },
         { href: 'packages.html', icon: '📦', label: 'Package', id: 'packages' },
+        { href: 'hermes.html', icon: '🧠', label: 'Hermes Agents', id: 'hermes' },
         { 
             href: 'billing.html',
             icon: '💰', label: 'Billing', id: 'billing', submenu: [

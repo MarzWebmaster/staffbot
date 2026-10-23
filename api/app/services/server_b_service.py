@@ -196,14 +196,11 @@ class GatewayService:
         """Request Baileys Manager to initialize a WhatsApp session for a client.
         Returns QR code data for the client to scan.
         """
-        if not GatewayService.is_configured():
-            return {"success": True, "test_mode": True, "qr_url": None, "message": "Simulated session init"}
-
+        # The Baileys Manager serves this itself; the gateway never had this route.
         async with httpx.AsyncClient() as client:
             try:
                 resp = await client.post(
-                    f"{settings.SERVER_B_API_URL}/api/whatsapp/session/init",
-                    headers=GatewayService._headers(),
+                    f"{settings.BAILEYS_MANAGER_URL}/api/session/init",
                     json={"client_id": client_id, "auth_path": auth_path},
                     timeout=30.0,
                 )
@@ -220,14 +217,11 @@ class GatewayService:
         bot_token: str,
     ) -> dict:
         """Register a Telegram webhook so messages route to this client's container."""
-        if not GatewayService.is_configured():
-            return {"success": True, "test_mode": True, "webhook_url": f"https://staffbot.my/api/incoming/telegram/{client_id}"}
-
+        # The Telegram Manager serves this itself; the gateway never had this route.
         async with httpx.AsyncClient() as client:
             try:
                 resp = await client.post(
-                    f"{settings.SERVER_B_API_URL}/api/telegram/webhook/register",
-                    headers=GatewayService._headers(),
+                    f"{settings.TELEGRAM_MANAGER_URL}/api/webhook/register",
                     json={"client_id": client_id, "bot_token": bot_token},
                     timeout=15.0,
                 )
