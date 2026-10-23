@@ -285,6 +285,35 @@ def backup(client_id: int, retention_days: int, dk=None) -> Optional[str]:
     return os.path.join(host_dir, name)
 
 
+def write_files_to_volume(client_id: int, files: dict[str, str], dk=None) -> None:
+    """Copy text files into the customer's HERMES_HOME volume (paths relative to /opt/data).
+
+    Files are staged on the host and copied by a throwaway helper container, then
+    owned by the hermes user (uid 10000) so the agent can manage them.
+    """
+    import shutil
+    dk = dk or _docker()
+    stage = os.path.join(settings.HERMES_BACKUP_DIR, "_staging", str(client_id))
+    shutil.rmtree(stage, ignore_errors=True)
+    for rel, content in files.items():
+        if rel.startswith("/") or ".." in rel.split("/"):
+            raise OrchestratorError(f"bad path {rel}")
+        path = os.path.join(stage, rel)
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "w") as f:
+            f.write(content)
+    top = sorted({rel.split("/")[0] for rel in files})
+    script = "cp -r /stage/. /data/ && " + " && ".join(f"chown -R 10000:10000 /data/{t}" for t in top)
+    try:
+        dk.containers.run(
+            BACKUP_HELPER_IMAGE, ["sh", "-c", script],
+            volumes={volume_name(client_id): {"bind": "/data", "mode": "rw"}, stage: {"bind": "/stage", "mode": "ro"}},
+            remove=True, network_disabled=True,
+        )
+    finally:
+        shutil.rmtree(stage, ignore_errors=True)
+
+
 async def upgrade(db: AsyncSession, client_id: int, image: str, dk=None) -> HermesInstance:
     """Snapshot, then recreate the container on a new image. Data volume is kept."""
     dk = dk or _docker()

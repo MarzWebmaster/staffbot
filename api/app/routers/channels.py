@@ -9,11 +9,16 @@
 import hmac
 from typing import Optional
 
+import httpx
 from fastapi import APIRouter, BackgroundTasks, Depends, Header, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
+from sqlalchemy import select
+
 from app.config import get_settings
+from app.database import async_session_factory
+from app.models.hermes_instance import HermesInstance
 from app.middleware.auth import get_current_client
 from app.models.client import Client
 from app.services import channel_router
@@ -30,10 +35,31 @@ async def incoming(platform: str, client_id: int, data: dict, background: Backgr
         raise HTTPException(status_code=401, detail="Invalid gateway key")
     if platform not in ("whatsapp", "telegram"):
         raise HTTPException(status_code=404, detail="Unknown platform")
+    if not await _has_hermes(client_id):
+        # Not migrated yet: hand the event to the legacy gateway unchanged, so
+        # managers can point at this router before every customer has moved.
+        return await _forward_legacy(platform, client_id, data, x_gateway_key)
     if data.get("type", "message") != "message":
         return {"ok": True, "ignored": data.get("type")}
     background.add_task(channel_router.handle_incoming, client_id, platform, data)
     return {"ok": True, "queued": True}
+
+
+async def _has_hermes(client_id: int) -> bool:
+    async with async_session_factory() as db:
+        return (await db.execute(
+            select(HermesInstance.id).where(HermesInstance.client_id == client_id)
+        )).first() is not None
+
+
+async def _forward_legacy(platform: str, client_id: int, data: dict, key: str) -> dict:
+    try:
+        async with httpx.AsyncClient(timeout=30) as http:
+            r = await http.post(f"{settings.SERVER_B_API_URL}/api/incoming/{platform}/{client_id}",
+                                json=data, headers={"x-gateway-key": key})
+        return {"ok": True, "legacy": True, "status": r.status_code}
+    except httpx.HTTPError:
+        return {"ok": False, "legacy": True, "error": "legacy gateway unreachable"}
 
 
 class WebChat(BaseModel):
